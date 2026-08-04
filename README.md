@@ -6,7 +6,7 @@
 
 It does not post. The work of this system ends on the screen: a human copies the body and the chosen title, pastes them into the posting form, reads them once more and publishes. There is no code path to the posting site and no place to hand it a credential.
 
-The generated text is Japanese, and so is every screen, because the medium is. The code, the comments and the documents below are English.
+The repository is written in English: the code, the comments, the screens, the documents and the prompts. Only the generated post itself is Japanese, because the medium is.
 
 - Requirements: [doc/REQUIREMENTS.md](doc/REQUIREMENTS.md)
 - Basic design: [doc/BASIC_DESIGN.md](doc/BASIC_DESIGN.md)

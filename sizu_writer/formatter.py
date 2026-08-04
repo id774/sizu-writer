@@ -30,6 +30,8 @@
 import re
 from typing import List, Tuple
 
+# The phrases are Japanese because the generated post is: they are the
+# openings and closings the writing policy rules out.
 BOILERPLATE = (
     "いかがだったでしょうか",
     "いかがでしたでしょうか",
@@ -79,13 +81,13 @@ def normalize_body(text: str) -> Tuple[str, List[str]]:
     body = _strip_outer_fence(text)
     body, demoted = _demote_headings(body)
     if demoted:
-        notices.append("本文の見出し階層を調整しました。")
+        notices.append("The heading level of the body was adjusted.")
 
     body = re.sub(r"\n{3,}", "\n\n", body).strip()
 
     if any(phrase in body for phrase in BOILERPLATE):
-        notices.append("定型的な導入や締めの表現が含まれている可能性があります。")
+        notices.append("The body may contain a formulaic opening or closing.")
     if any(phrase in body for phrase in INSTRUCTION_LEAKS):
-        notices.append("作業説明にあたる表現が混じっている可能性があります。")
+        notices.append("The body may contain a remark about the work itself.")
 
     return body, notices

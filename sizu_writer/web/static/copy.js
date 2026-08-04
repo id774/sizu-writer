@@ -30,13 +30,13 @@
     }
     try {
       if (document.execCommand("copy")) {
-        notify(button, "コピーしました");
+        notify(button, "Copied");
         return;
       }
     } catch (error) {
       // Fall through to the manual instruction below.
     }
-    notify(button, "コピーできませんでした。選択してコピーしてください");
+    notify(button, "Could not copy. Select the text and copy it by hand.");
   }
 
   document.addEventListener("click", function (event) {
@@ -61,7 +61,7 @@
     var element = document.getElementById(copyId);
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(textOf(element)).then(function () {
-        notify(button, "コピーしました");
+        notify(button, "Copied");
       }, function () {
         fallback(button, element);
       });

@@ -26,7 +26,7 @@ class NormalizeBodyTest(unittest.TestCase):
         body, notices = normalize_body("# 見出し\n\n本文です。")
 
         self.assertEqual("## 見出し\n\n本文です。", body)
-        self.assertEqual(["本文の見出し階層を調整しました。"], notices)
+        self.assertEqual(["The heading level of the body was adjusted."], notices)
 
     def test_collapses_runs_of_blank_lines(self):
         body, _ = normalize_body("一段落目。\n\n\n\n二段落目。")
@@ -39,7 +39,7 @@ class NormalizeBodyTest(unittest.TestCase):
         body, notices = normalize_body(source)
 
         self.assertEqual(source, body)
-        self.assertIn("定型的な導入や締めの表現が含まれている可能性があります。", notices)
+        self.assertIn("The body may contain a formulaic opening or closing.", notices)
 
 
 if __name__ == "__main__":

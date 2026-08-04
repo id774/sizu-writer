@@ -1,9 +1,9 @@
-次の本文に対するタイトル案を作ってください。本文は書き換えないでください。
+Write title candidates for the body below. Do not rewrite the body.
 
-## もとになったメモ
+## The memo it came from
 
 {{input}}
 
-## 本文
+## The body
 
 {{body}}

@@ -1,4 +1,4 @@
-次の入力をもとに、投稿本文の全文とタイトル案を作ってください。
+Write the post body and the title candidates from the memo below.
 
 ---
 

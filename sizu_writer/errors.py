@@ -6,10 +6,10 @@
 #
 #  Description:
 #  Every failure the user is allowed to see is represented here as an
-#  exception carrying a Japanese message and an HTTP status code. The
-#  screen shows user_message only: the exception text, the traceback,
-#  the endpoint URL and the model name stay in the server log, so that
-#  an error page cannot leak internal information.
+#  exception carrying a message and an HTTP status code. The screen
+#  shows user_message only: the exception text, the traceback, the
+#  endpoint URL and the model name stay in the server log, so that an
+#  error page cannot leak internal information.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -30,14 +30,14 @@
 class SizuWriterError(Exception):
     """ Base of every error the user is allowed to see. """
 
-    user_message = "処理に失敗しました。"
+    user_message = "The request could not be completed."
     status_code = 500
 
 
 class EmptyInputError(SizuWriterError):
     """ Raised when the input is empty or blank. """
 
-    user_message = "短文を入力してください。"
+    user_message = "Enter a memo first."
     status_code = 400
 
 
@@ -47,40 +47,40 @@ class InputTooLongError(SizuWriterError):
     status_code = 400
 
     def __init__(self, limit: int) -> None:
-        self.user_message = "入力が長すぎます。{0} 字以内にしてください。".format(limit)
+        self.user_message = "The memo is too long. Keep it within {0} characters.".format(limit)
         super().__init__(self.user_message)
 
 
 class UpstreamConnectionError(SizuWriterError):
     """ Raised when the endpoint cannot be reached. """
 
-    user_message = "文章生成サービスへ接続できませんでした。時間をおいて再度お試しください。"
+    user_message = "The generation service could not be reached. Try again in a while."
     status_code = 502
 
 
 class UpstreamTimeoutError(SizuWriterError):
     """ Raised when one request exceeds OPENAI_TIMEOUT. """
 
-    user_message = "生成に時間がかかりすぎたため中断しました。入力を短くするか、時間をおいてお試しください。"
+    user_message = "Generation took too long and was stopped. Shorten the memo, or try again in a while."
     status_code = 504
 
 
 class UpstreamStatusError(SizuWriterError):
     """ Raised on a 4xx or 5xx answer, including auth and rate limits. """
 
-    user_message = "文章生成サービスがエラーを返しました。時間をおいて再度お試しください。"
+    user_message = "The generation service answered with an error. Try again in a while."
     status_code = 502
 
 
 class InvalidResponseError(SizuWriterError):
     """ Raised when the answer cannot be read as the expected result. """
 
-    user_message = "生成結果を読み取れませんでした。もう一度生成してください。"
+    user_message = "The result could not be read. Generate it once more."
     status_code = 502
 
 
 class InternalError(SizuWriterError):
     """ Raised for every unexpected failure inside the server. """
 
-    user_message = "サーバー内部で処理に失敗しました。"
+    user_message = "The server failed to handle the request."
     status_code = 500

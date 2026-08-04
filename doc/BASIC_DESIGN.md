@@ -1,182 +1,182 @@
-# しずかなインターネット向け文章生成システム 基本設計
+# Basic design: a writing system for Shizuka na Internet
 
-対象要件: [`REQUIREMENTS.md`](REQUIREMENTS.md)（2026-08-04 版）
+Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md) (2026-08-04).
 
-本書は要件定義書を実装可能な単位まで落とした基本設計である。詳細設計（各関数の実装、CSS の細部、プロンプト本文の確定）は本書の決定に従って行う。本システムは新規リポジトリで開発し、設計思想・コーディング規約・文書構成は [id774/ai-digest](https://github.com/id774/ai-digest) を踏襲する。
+This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout follow [id774/ai-digest](https://github.com/id774/ai-digest).
 
 ---
 
-## 1. リポジトリ名の案
+## 1. Repository name
 
-| 案 | 読み・意図 | 備考 |
+| Candidate | Intent | Note |
 | --- | --- | --- |
-| **`sizu-writer`**（推奨） | 「しずかなインターネット」向けの文章を書く道具 | 要件定義書のファイル名と一致し、以後の呼称がぶれない。`ai-digest` と同じ小文字ハイフン形式 |
-| `sizu-draft` | 生成物は投稿ではなく下書きであることを名前で示す | 「自動投稿しない」という本システムの一線が名前に出る。推奨案に次ぐ |
-| `quiet-writer` | しずかなインターネット＝quiet internet の英語化 | 媒体名に依存しないため、将来ほかの媒体へ広げても名前が古びない。反面、何向けかが名前から消える |
-| `sizuka-compose` | 媒体名を明示しつつ「組み立てる」を強調 | やや長い |
-| `shizuka-writer` | ヘボン式表記 | `sizu-writer` と重複するので、表記の好みで択一 |
+| **`sizu-writer`** (recommended) | A tool that writes for Shizuka na Internet | Matches the file name of the requirements document, so the name never drifts. Lowercase and hyphenated, like `ai-digest` |
+| `sizu-draft` | Says in the name that the output is a draft, not a post | Puts the line this system draws into its name. Second choice |
+| `quiet-writer` | The English reading of the medium | Does not age if the system later serves another medium, but loses what it is for |
+| `sizuka-compose` | Names the medium and stresses assembling | Slightly long |
+| `shizuka-writer` | Hepburn spelling | Overlaps `sizu-writer`; pick one |
 
-推奨は **`sizu-writer`**。理由は次の三点。
+**`sizu-writer`** is recommended, for three reasons.
 
-- 要件定義書（`20260804_sizu_writer_requirements.md`）の呼称をそのまま引き継げる。
-- Python パッケージ名 `sizu_writer`、systemd ユニット名 `sizu-writer.service`、Apache の location `/sizu/` が機械的に決まる。
-- `ai-digest` と同じ「用途 + 動作」の二語構成で、id774 のリポジトリ群の中で浮かない。
+- It carries over the name used in the requirements document (`20260804_sizu_writer_requirements.md`).
+- The Python package `sizu_writer`, the systemd unit `sizu-writer.service` and the Apache location `/sizu/` all follow mechanically.
+- Like `ai-digest`, it is "purpose plus action" in two words, so it does not stand out among the id774 repositories.
 
-以降、本書ではリポジトリ名 `sizu-writer`、Python パッケージ名 `sizu_writer` を前提に記述する。名称を変える場合は、この二つと `deploy/` 配下のファイル名を置換すればよい。
-
----
-
-## 2. 設計方針
-
-### 2.1 本システムが引く線
-
-要件 2、13、14 から、設計上の不変条件を先に固定する。以下は設定でも拡張でも越えない。
-
-1. 投稿先へのネットワーク送信を行わない。HTTP クライアントの向き先は OpenAI 互換エンドポイントだけである。
-2. 投稿先の認証情報を受け取らない。設定項目にもフォーム項目にも存在させない。
-3. ブラウザ自動操作の依存を持ち込まない。`playwright`、`selenium` を `requirements.txt` に入れない。
-4. API キーはサーバープロセスの外に出さない。テンプレート、JavaScript、レスポンスヘッダ、エラー画面のいずれにも現れない。
-5. 生成した本文に、AI への指示、編集理由、内部メモ、レビュー結果を混入させない。画面上でも本文領域と補助情報領域を構造的に分離する。
-
-### 2.2 ai-digest から継承する規約
-
-新規リポジトリでも `doc/POLICY` を置き、次を ai-digest から引き継ぐ。相違点だけ後述する。
-
-- モジュール先頭の定型ヘッダ（Description / Usage / Options / Routes / Requirements / Version History と Author・Source Code・License・Contact）。
-- コメントは英語、命令形、簡潔に。
-- 設定は `config.py` の `Config` データクラスに集約し、環境変数（任意で `.env`）から読む。`config.py` はネットワークにも `.env` 以外のファイルにも触れない。
-- `logging` を使い、`print` で状態を出さない。ログ設定はエントリポイントで一度だけ行う。
-- テストは `tests/test_*.py`、`unittest` と `unittest.mock` のみ、ネットワーク・API 呼び出しなし。
-- モジュール版数は `major.minor` の二桁、`minor` が 10 に達する前に繰り上げ。リポジトリ版数は `doc/VERSIONS` に記録。
-- Python 3.9 以降、`str.format()` を `f-string` より優先、型ヒントを付ける。
-- ライセンスは GPLv3 / LGPLv3 のデュアル。
-
-ai-digest との相違点は次の一点である。ai-digest はバッチ（`cli.py`）と読み取り専用ビューア（`app.py`）を独立させ、バッチの失敗がサイトを落とさない構造を取っている。本システムは Web リクエストの中で API を呼ぶため、この分離は成立しない。代わりに **生成コア（`sizu_writer/`）を Flask から独立させ、`app.py` と `cli.py` の双方から同じコアを呼ぶ** 構造とする。プロンプト調整も出力検証も、Web を立てずに `cli.py` で試せる。
-
-### 2.3 状態を持たない
-
-要件 11 で永続保存は必須ではない。ここを積極的に利用し、**サーバー側にセッションも一時ファイルも持たない**設計とする。
-
-- 再生成に必要な入力文とその時点の本文は、結果画面のフォームに `textarea` と `hidden` として載せ、リクエストごとに往復させる。
-- したがって Flask の `SECRET_KEY`、セッション Cookie、ワーカー間共有ストアがいずれも不要になる。gunicorn のワーカーを増やしても、プロセスが再起動しても、動作は変わらない。
-- 将来の保存機能（要件 11）は、この往復に手を入れず `storage.py` を足すだけで載る（10.3 節）。
+The rest of this document assumes the repository `sizu-writer` and the Python package `sizu_writer`. Changing the name means replacing those two and the file names under `deploy/`.
 
 ---
 
-## 3. システム構成
+## 2. Design policy
+
+### 2.1 The lines this system draws
+
+From requirements 2, 13 and 14, the invariants come first. Neither a setting nor an extension crosses them.
+
+1. Send nothing to the posting site. The only host an HTTP client here talks to is an OpenAI compatible endpoint.
+2. Accept no credential of the posting site. It exists neither as a setting nor as a form field.
+3. Bring in no browser automation. `playwright` and `selenium` do not belong in `requirements.txt`.
+4. Keep the API key inside the server process. It appears in no template, no JavaScript, no response header and no error page.
+5. Let no instruction, editing note, internal remark or review result into the generated body. On the screen, the body area and the supporting area are separated structurally, not only visually.
+
+### 2.2 What is inherited from ai-digest
+
+The new repository also carries a `doc/POLICY`, and inherits the following. The one difference follows.
+
+- The header block at the top of each module (Description / Usage / Options / Routes / Requirements / Version History, plus Author, Source Code, License, Contact).
+- Comments in English, imperative, short.
+- Settings collected in the `Config` dataclass of `config.py`, read from the environment (optionally from `.env`). `config.py` touches neither the network nor any file but `.env`.
+- `logging` rather than `print`. Logging is configured once, at the entry point.
+- Tests in `tests/test_*.py`, `unittest` and `unittest.mock` only, with no network and no API call.
+- Module versions as `major.minor`, `minor` carried over before it reaches 10. The repository version is recorded in `doc/VERSIONS`.
+- Python 3.9 or later, `str.format()` preferred over an f-string, type hints.
+- Dual licensed under GPLv3 and LGPLv3.
+
+The difference from ai-digest is this. ai-digest keeps the batch (`cli.py`) and the read only viewer (`app.py`) independent, so that a failed batch never takes the site down. Here the API is called inside a web request, so that separation does not hold. Instead, **the generation core (`sizu_writer/`) is independent from Flask, and both `app.py` and `cli.py` call it**. Adjusting a prompt and checking the output can then be done with `cli.py`, without a web server.
+
+### 2.3 No state
+
+Requirement 11 does not ask for persistence. This design uses that: **the server holds neither a session nor a temporary file**.
+
+- The memo and the current body, both needed for a regeneration, ride on the result form as a `textarea` and a `hidden` field, and travel with each request.
+- So Flask's `SECRET_KEY`, a session cookie and a store shared between workers are all unnecessary. Adding gunicorn workers or restarting the process changes nothing.
+- The future persistence of requirement 11 lands on top of this without touching it: add `storage.py` (section 10.3).
+
+---
+
+## 3. System composition
 
 ```
-[ブラウザ]
+[browser]
     |  HTTPS
     v
 [Apache HTTP Server]
-    |  - HTTPS 終端、Basic 認証 / IP 制限（運用側の判断）
+    |  - HTTPS termination, Basic auth / IP restriction (operational choice)
     |  - ProxyPass /  ->  127.0.0.1:8090
-    |  - アクセスログ、エラーログは Apache 側に閉じる
+    |  - access and error logs stay on the Apache side
     v
-[gunicorn]  systemd 管理、Restart=always、boot 時 enable
+[gunicorn]  managed by systemd, Restart=always, enabled at boot
     |  WSGI
     v
-[Flask app.py]  ---- sizu_writer/ (生成コア) ----> [OpenAI 互換 API]
+[Flask app.py]  ---- sizu_writer/ (generation core) ----> [OpenAI compatible API]
                           ^
                           |
                      prompts/*.md
                           ^
                           |
-                     [cli.py]  ← 保守・プロンプト調整用
+                     [cli.py]  <- maintenance and prompt work
 ```
 
-- Apache と Flask の連携方式は **リバースプロキシ + gunicorn** を採用する。要件 5.1 は WSGI（`mod_wsgi`）も許容しているが、`mod_wsgi` は Apache 本体と Python の版数が結合し、Apache の再起動なしにアプリだけ入れ替えることができない。リバースプロキシならアプリの再起動は `systemctl restart sizu-writer` で完結し、ai-digest と同じ運用手順に揃う。
-- gunicorn は `127.0.0.1` だけを listen する。外部から直接叩けない。
-- Flask 開発サーバーは開発時のみ。`app.py` の `__main__` ブロックも `127.0.0.1` 固定とする。
+- Apache and Flask are connected by **a reverse proxy in front of gunicorn**. Requirement 5.1 also allows `mod_wsgi`, but `mod_wsgi` ties the Apache build to a Python version and cannot replace the application without restarting Apache. Behind a reverse proxy, `systemctl restart sizu-writer` is enough, which matches the operation of ai-digest.
+- gunicorn listens on `127.0.0.1` only, so nothing reaches it directly from outside.
+- The Flask development server is for development. The `__main__` block of `app.py` binds `127.0.0.1` as well.
 
-### 3.1 プロセスとタイムアウトの整合
+### 3.1 Timeouts that agree with each other
 
-生成 1 回で数十秒かかりうるため、各層のタイムアウトを内側から外側へ広げる。
+One generation can take tens of seconds, so the timeouts widen from the inside out.
 
-| 層 | 設定 | 既定値 | 根拠 |
+| Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
-| OpenAI クライアント | `OPENAI_TIMEOUT` | 60 秒 | 生成 1 回の上限。超えたら利用者にタイムアウトを返す |
-| gunicorn | `--timeout` | 120 秒 | クライアント側タイムアウト + リトライ 1 回分の余裕 |
-| Apache | `ProxyTimeout` | 180 秒 | 最も外側。ここで切れると Flask のエラー処理を通らず、素の 504 が出る |
+| OpenAI client | `OPENAI_TIMEOUT` | 60s | The limit of one generation. Beyond it, the user is told it timed out |
+| gunicorn | `--timeout` | 120s | The client timeout plus room for one retry |
+| Apache | `ProxyTimeout` | 180s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-`OPENAI_MAX_RETRIES` を上げる場合、gunicorn と Apache の値も見直す必要がある。この依存関係は README のデプロイ節に明記する。
+Raising `OPENAI_MAX_RETRIES` means revisiting the gunicorn and Apache values. The README states this dependency in its deployment section.
 
 ---
 
-## 4. リポジトリ構成
+## 4. Repository layout
 
 ```
 .
-├── app.py                          Flask アプリケーション（Web エントリポイント）
-├── cli.py                          コマンドラインからの生成（保守・プロンプト調整用）
-├── config.py                       環境変数駆動の設定
+├── app.py                          Flask application (web entry point)
+├── cli.py                          Generation from the command line (maintenance, prompt work)
+├── config.py                       Settings driven by the environment
 ├── requirements.txt
-├── Procfile                        gunicorn の起動定義
+├── Procfile                        gunicorn invocation
 ├── .python-version
 ├── .env.example
 ├── .gitignore
 ├── sizu_writer/
-│   ├── __init__.py                 Draft データクラス、__version__、共通ユーティリティ
-│   ├── errors.py                   例外階層と利用者向けメッセージの対応表
-│   ├── prompts.py                  prompts/ の読み込みとメッセージ組み立て
-│   ├── generator.py                OpenAI 互換 API 呼び出しと応答検証
-│   ├── formatter.py                本文 Markdown の後処理と点検
-│   └── web/
-│       ├── __init__.py             TEMPLATE_DIR / STATIC_DIR の解決
-│       ├── templates/
-│       │   ├── base.html
-│       │   ├── index.html          入力画面
-│       │   ├── result.html         結果画面
-│       │   └── error.html          エラー画面
-│       └── static/
-│           ├── style.css
-│           └── copy.js             クリップボードコピーのみを担う
+│   ├── __init__.py                 The Draft dataclass, __version__, shared helpers
+│   ├── errors.py                   The exception hierarchy and the messages shown to the user
+│   ├── prompts.py                  Reading prompts/ and assembling the messages
+│   ├── generator.py                The API call and the validation of its answer
+│   └── formatter.py                Post processing and inspection of the body
+│       └── web/
+│           ├── __init__.py         Resolution of TEMPLATE_DIR and STATIC_DIR
+│           ├── templates/
+│           │   ├── base.html
+│           │   ├── index.html      Input screen
+│           │   ├── result.html     Result screen
+│           │   └── error.html      Error screen
+│           └── static/
+│               ├── style.css
+│               └── copy.js         Clipboard copying and nothing else
 ├── prompts/
-│   ├── system.md                   本文とタイトルを生成する際の共通方針
-│   ├── body_user.md                入力文を渡すユーザーメッセージの型
-│   ├── titles_system.md            タイトルのみ再生成の方針
-│   └── titles_user.md              本文を渡してタイトルを求める型
-├── tests/                          unittest、標準ライブラリのみ
+│   ├── system.md                   The policy for the body and the titles
+│   ├── body_user.md                The user message carrying the memo
+│   ├── titles_system.md            The policy for regenerating the titles only
+│   └── titles_user.md              The message carrying the body and asking for titles
+├── tests/                          unittest, standard library only
 ├── deploy/
-│   ├── sizu-writer.service         systemd ユニットの例
-│   └── sizu-writer.conf            Apache リバースプロキシ設定の例
+│   ├── sizu-writer.service         Example systemd unit
+│   └── sizu-writer.conf            Example Apache reverse proxy configuration
 └── doc/
-    ├── REQUIREMENTS.md             要件定義書
-    ├── BASIC_DESIGN.md             本書
-    ├── POLICY                      実装方針（ai-digest 準拠）
-    ├── VERSIONS                    リポジトリ版数の履歴
+    ├── REQUIREMENTS.md             Requirements
+    ├── BASIC_DESIGN.md             This document
+    ├── POLICY                      Implementation policy (following ai-digest)
+    ├── VERSIONS                    Repository version history
     ├── LICENSE
     ├── COPYING
     └── COPYING.LESSER
 ```
 
-`prompts/` をパッケージの外に置くのは、要件 10.3 の「プロンプトをアプリケーションコードから分離する」を運用面まで貫くためである。プロンプトの修正は Python の再インストールを伴わず、`PROMPT_DIR` を向け替えれば別のプロンプト一式で動く。
+`prompts/` sits outside the package so that requirement 10.3, keeping the prompt out of the application code, holds in operation too. Editing a prompt needs no reinstall, and pointing `PROMPT_DIR` elsewhere runs the system on a different set of prompts.
 
 ---
 
-## 5. モジュール設計
+## 5. Module design
 
 ### 5.1 `sizu_writer/__init__.py`
 
-生成結果を表すデータクラスと版数を持つ。
+Holds the dataclass of one result, and the version.
 
 ```python
 @dataclass
 class Draft:
-    body: str                       # 投稿本文の全文（Markdown、後処理済み）
-    primary_title: str              # タイトル第一候補
-    alternative_titles: List[str]   # その他の候補、最大 MAX_ALT_TITLES 件
-    model: str                      # 実際に応答したモデル名
-    generated_at: str               # ISO 8601 の生成時刻（画面の補助表示のみ）
-    notices: List[str]              # 後処理で検出した注意。本文には混ぜない
+    body: str                       # the whole post body (Markdown, post processed)
+    primary_title: str              # the leading title
+    alternative_titles: List[str]   # other candidates, at most MAX_ALT_TITLES
+    model: str                      # the model that actually answered
+    generated_at: str               # ISO 8601 time, shown only as supporting information
+    notices: List[str]              # what the inspection found; never mixed into the body
 ```
 
-`notices` は「本文に `#` 見出しがあったので `##` に降格した」「定型的な締めの表現を検出した」といった点検結果を運ぶ。**画面では本文領域の外に表示し、コピー対象に含めない**（要件 6.3）。
+`notices` carries findings such as "a `#` heading was demoted to `##`" or "a formulaic closing was detected". **They are shown outside the body area and are not part of what is copied** (requirement 6.3).
 
 ### 5.2 `sizu_writer/errors.py`
 
-要件 6.6 の各エラーを型として持つ。表示メッセージ、HTTP ステータス、ログレベルをここで一元管理する。
+Each error of requirement 6.6 becomes a type. The message, the HTTP status and the log level live here.
 
 ```python
 class SizuWriterError(Exception):
@@ -185,26 +185,26 @@ class SizuWriterError(Exception):
     status_code: int
 ```
 
-| 例外 | 発生条件 | 画面表示（日本語） | HTTP | ログ |
+| Exception | Condition | Message | HTTP | Log |
 | --- | --- | --- | --- | --- |
-| `EmptyInputError` | 入力が空、または空白のみ | 短文を入力してください。 | 400 | INFO |
-| `InputTooLongError` | 入力が `MAX_INPUT_CHARS` 超過 | 入力が長すぎます。◯◯字以内にしてください。 | 400 | INFO |
-| `UpstreamConnectionError` | 接続失敗、DNS 失敗、TLS 失敗 | 文章生成サービスへ接続できませんでした。時間をおいて再度お試しください。 | 502 | ERROR |
-| `UpstreamTimeoutError` | `OPENAI_TIMEOUT` 超過 | 生成に時間がかかりすぎたため中断しました。入力を短くするか、時間をおいてお試しください。 | 504 | ERROR |
-| `UpstreamStatusError` | 4xx / 5xx 応答、認証エラー、レート超過 | 文章生成サービスがエラーを返しました。時間をおいて再度お試しください。 | 502 | ERROR |
-| `InvalidResponseError` | JSON 不正、必須項目欠落、本文が空、出力打ち切り | 生成結果を読み取れませんでした。もう一度生成してください。 | 502 | ERROR |
-| `InternalError` | 上記以外の想定外例外 | サーバー内部で処理に失敗しました。 | 500 | ERROR |
+| `EmptyInputError` | Empty or blank input | Enter a memo first. | 400 | INFO |
+| `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
+| `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
+| `UpstreamTimeoutError` | Beyond `OPENAI_TIMEOUT` | Generation took too long and was stopped. Shorten the memo, or try again in a while. | 504 | ERROR |
+| `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
+| `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
+| `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
 
-設計上の要点は次の四つ。
+Four points matter.
 
-- **画面に出るのは `user_message` だけ**である。例外の `str()`、スタックトレース、URL、モデル名、キーの断片は画面に出さない。原因はサーバーログにのみ残す。
-- 各エラー応答には 8 桁の **参照 ID**（リクエスト単位の乱数）を添え、同じ ID をログにも出す。利用者は「エラー ID: 3f9c1a72」だけを伝えればよく、運用側はログを引ける。
-- 認証エラー（401 / 403）とレート超過（429）を利用者向けに区別しない。設定の不備を画面に書けば、それは内部情報の露出になる。ログでは区別する。
-- `UpstreamStatusError` はステータスコードを属性に持ち、ログにだけ出す。
+- **Only `user_message` reaches the screen.** The `str()` of the exception, the traceback, the URL, the model name and any fragment of the key stay in the server log.
+- Each error answer carries an eight digit **reference id** (random per request), which also goes to the log. The user only has to quote "error id: 3f9c1a72" for the operator to find the entry.
+- An authentication failure (401 / 403) and a rate limit (429) are not distinguished for the user. Writing a misconfiguration onto the screen is leaking internal information. The log does distinguish them.
+- `UpstreamStatusError` keeps the status code as an attribute, for the log only.
 
 ### 5.3 `sizu_writer/prompts.py`
 
-責務はプロンプトファイルの読み込みと、API へ渡すメッセージの組み立てのみ。API 呼び出しはしない。
+Its only job is reading the prompt files and assembling the messages. It performs no API call.
 
 ```python
 def load_prompt(name: str, prompt_dir: str) -> str
@@ -212,60 +212,60 @@ def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]
 def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[Dict[str, str]]
 ```
 
-- プレースホルダは `{{input}}` と `{{body}}` の二種類だけとし、`str.replace()` で置換する。`str.format()` を使わないのは、プロンプト本文に現れる `{` `}` を機械的にエスケープさせないためである（POLICY の `str.format()` 優先はコード内の文字列整形についての規約であり、外部テキストの差し込みはこの限りではない）。
-- 読み込み結果はプロセス内にキャッシュする。`PROMPT_RELOAD=on` のときだけ毎回読み直し、プロンプト調整中に再起動を要らなくする。
-- 必須ファイルが欠けている場合は起動時ではなく最初の生成時に `InternalError` として扱い、ログにファイル名を出す。Web プロセスがプロンプト不備で起動不能になるより、健全性エンドポイントが生きている方が運用しやすい。
+- The placeholders are `{{input}}` and `{{body}}` only, substituted with `str.replace()`. `str.format()` is avoided so that a brace appearing in a prompt does not have to be escaped. (The POLICY preference for `str.format()` concerns string building in code, not substitution into external text.)
+- What is read is cached in the process. With `PROMPT_RELOAD=on` it is read again on every request, so that adjusting a prompt needs no restart.
+- A missing file is treated as an `InternalError` at the first generation rather than at startup, with the file name in the log. A web process that cannot start because of a prompt is worse to operate than one whose health endpoint still answers.
 
-#### プロンプトの骨子
+#### The shape of the prompt
 
-`prompts/system.md` には、要件 3、7、8 を「モデルへの指示」として書き下ろす。節構成は次のとおりとし、要件定義書の記述をそのまま指示文にできるよう対応づける。
+`prompts/system.md` writes requirements 3, 7 and 8 out as instructions to the model, in these sections.
 
-| 節 | 対応する要件 | 内容の要点 |
+| Section | Requirement | Content |
 | --- | --- | --- |
-| 役割と媒体 | 2、7.1 | しずかなインターネットに投稿する数段落の文章。短文投稿の引き延ばしでもブログ記事の縮小版でもない |
-| 書かないもの | 3 | 一次原典、記事の下書き、素材集、体系的論考、調査記事、手順書、解説記事にしない。将来の記事を見越した論点・根拠・一般化を足さない |
-| 立て付け | 7.2 | 既知のテーマを初めて知った体裁にしない。整理し直す、関心の所在を確かめる、論点を切り分ける、言えることと言えないことを示す |
-| 材料の保存 | 7.3 | 具体的な場面、対象、元の言葉遣い、迷い、違和感、問い、未決着を優先して残す。存在しない体験・感情・事実・因果を補わない |
-| 説明量 | 7.4 | 背景説明は本文の理解に要る範囲まで。一般論、制度説明、用語解説、歴史、事例列挙、参考文献、体系的論証へ広げない |
-| 文体 | 7.5 | 元のメモの語り口を優先。既定はです・ます調、原文が常体で統一なら常体を維持。論文調・広告調・SNS 調にしない。生成 AI 特有の定型を避ける |
-| 導入 | 7.6 | 具体的な場面・対象・言葉・感覚から始める。禁止する導入文を列挙 |
-| 終わり方 | 7.7 | 教訓・提言・結論を作らない。未決着は未決着のまま。放棄した印象にはしない。禁止する締め文を列挙 |
-| Markdown | 7.8 | 短文では見出しなし。要る場合も `##` `###` のみ、`#` は使わない。箇条書き・引用・強調は必要時のみ。参考文献一覧は付けない。全角と半角英数字の間に半角スペース |
-| タイトル | 8 | 本文にある場面・対象・言葉・問い・引っかかり・考え始めた地点に近づける。検索性・拡散性・クリック率のための語を足さない。解決済みに見せない。象徴的・文学的・扇情的にしない |
-| 出力形式 | 5.3 | 指定した JSON スキーマに従い、本文とタイトルを分離して返す。本文に指示・注釈・見出し以外のメタ情報を混ぜない |
+| Role and medium | 2, 7.1 | A piece of a few paragraphs for Shizuka na Internet; neither a stretched microblog post nor a shrunk article |
+| What this is not | 3 | Not a primary source, a draft, material, a systematic essay, a survey, a how-to or an explainer. No point, evidence or generalization added for a future article |
+| Stance | 7.2 | A familiar theme is not a discovery. Sort the thinking out, check where the interest lies, separate the points, state what can and cannot be said |
+| Keeping the material | 7.3 | Keep the scene, the subject, the wording, the hesitation, the discomfort, the question, the unsettled. Invent no experience, emotion, fact or causal link |
+| How much to explain | 7.4 | Background only as far as the text requires. No generalities, systems, glossary, history, case lists, bibliography or systematic argument |
+| Register | 7.5 | Follow the memo. Desu/masu by default, plain form kept when the original is consistent. Not academic, advertising or social media. Avoid what is typical of generated text |
+| Opening | 7.6 | Start from a concrete scene, subject, word or sensation. The forbidden openings are listed |
+| Ending | 7.7 | No manufactured lesson, recommendation or conclusion. The undecided stays undecided, without reading as abandoned. The forbidden closings are listed |
+| Markdown | 7.8 | No heading in a short text; `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. No bibliography. A space between full width characters and ASCII |
+| Titles | 8 | Stay close to the scene, the subject, the words, the question, the point of attention, where the thinking started. No word for search, spread or clicks. Not settled looking, not symbolic, literary or sensational |
+| Output format | 5.3 | Follow the given JSON schema, keeping the body and the titles apart. No instruction or annotation inside the body |
 
-長さについては「数段落から数千字程度を目安。字数を満たすために背景説明・一般論・例示・結論を足さない。短く成立する内容は短いままにする」と、上限ではなく**下限を作らない指示**として書く（要件 7.1）。
+Length is written as an instruction that **sets no lower bound**: "a few paragraphs to a few thousand characters as a guide; do not add background, generalities, examples or a conclusion to reach a length; what holds in a short text stays short" (requirement 7.1).
 
-`prompts/titles_system.md` は上表のうち「タイトル」節と媒体の位置づけだけを抜き出したものとし、本文の生成方針は書かない。タイトルのみ再生成のとき、本文はすでに確定しているためである。
+`prompts/titles_system.md` takes only the title section and the position of the medium from the table above, and says nothing about writing the body, because the body is already settled when the titles alone are regenerated.
 
 ### 5.4 `sizu_writer/generator.py`
 
-OpenAI 互換 API を呼び、応答を検証して `Draft` を返す。
+Calls the OpenAI compatible API, validates the answer and returns a `Draft`.
 
 ```python
 def generate_draft(input_text: str, config: Config) -> Draft
 def regenerate_titles(input_text: str, body: str, config: Config) -> Draft
 ```
 
-#### 5.4.1 API 呼び出し方式
+#### 5.4.1 How the API is called
 
-`openai` パッケージの Chat Completions を使い、`response_format` に JSON Schema を指定する（Structured Outputs）。ai-digest が tool use で構造化応答を得ているのと同じ狙いで、散文をヒューリスティックに切り分ける処理を作らない。
+Chat Completions of the `openai` package, with a JSON Schema in `response_format` (Structured Outputs). The aim is the one behind the tool use of ai-digest: not to write heuristics that cut prose apart.
 
-`base_url` を設定可能にしているため、OpenAI 以外の互換エンドポイントでも動く。ただし互換エンドポイントは `json_schema` に対応していないことがあるので、ai-digest が Anthropic 互換エンドポイントの差異を設定で吸収しているのと同じ方針で、応答形式の指定を段階的に落とせるようにする。
+`base_url` is configurable, so a compatible endpoint works as well. Such an endpoint may not support `json_schema`, so — as ai-digest absorbs the differences of Anthropic compatible endpoints through settings — the response format can be stepped down.
 
-| `OPENAI_RESPONSE_FORMAT_MODE` | 送る指定 | 用途 |
+| `OPENAI_RESPONSE_FORMAT_MODE` | What is sent | For |
 | --- | --- | --- |
-| `json_schema`（既定） | `response_format={"type": "json_schema", "json_schema": {..., "strict": true}}` | OpenAI 本家、および Structured Outputs 対応エンドポイント |
-| `json_object` | `response_format={"type": "json_object"}` | JSON は返せるがスキーマ強制に非対応なエンドポイント |
-| `none` | 指定しない | 上記いずれも通らないエンドポイント。プロンプト内の形式指示だけが頼りになる |
+| `json_schema` (default) | `response_format={"type": "json_schema", "json_schema": {..., "strict": true}}` | OpenAI itself and endpoints supporting Structured Outputs |
+| `json_object` | `response_format={"type": "json_object"}` | Endpoints that return JSON but cannot enforce a schema |
+| `none` | Nothing | Endpoints that accept neither; only the format instruction in the prompt remains |
 
-いずれの場合も、応答の検証（5.4.3）は同一の関数を通る。`json_schema` 以外を選んだときにだけ検証が甘くなる、ということは起こさない。
+In every case the validation of 5.4.3 runs. Choosing something other than `json_schema` never makes the validation weaker.
 
-`temperature` は既定では**送らない**。値を送らなければエンドポイントの既定に従い、`temperature` を受け付けないモデルでもリクエストが通る。`OPENAI_TEMPERATURE` に値が設定されたときだけ送る。これは ai-digest の `ANTHROPIC_THINKING_MODE=default`（パラメータを送らず provider の既定を残す）と同じ考え方である。
+`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `OPENAI_TEMPERATURE` is set. This is the reasoning behind ai-digest's `ANTHROPIC_THINKING_MODE=default`.
 
-#### 5.4.2 JSON スキーマ
+#### 5.4.2 The JSON schema
 
-本文生成:
+For the body:
 
 ```json
 {
@@ -280,197 +280,197 @@ def regenerate_titles(input_text: str, body: str, config: Config) -> Draft
 }
 ```
 
-タイトルのみ再生成では `body_markdown` を除いた同型のスキーマを使う。
+Regenerating the titles uses the same schema without `body_markdown`.
 
-`strict: true` の Structured Outputs では `maxItems` などの制約が効かないため、**その他の候補の件数（要件 8: 最大 4 件）はアプリケーション側で切り詰める**。4 件を超えたら先頭 4 件を採り、超過を `notices` に残さずログの DEBUG に留める（利用者にとっては無関係な内部事情である）。
+`strict: true` Structured Outputs ignores constraints such as `maxItems`, so **the limit of four alternatives (requirement 8) is applied by the application**. Beyond four, the first four are kept; the excess goes to the DEBUG log and not to `notices`, being an internal matter of no interest to the user.
 
-#### 5.4.3 応答の検証
+#### 5.4.3 Validating the answer
 
-次の順に確かめ、いずれかで落ちたら `InvalidResponseError` を送出する。理由はログにだけ書き分ける。
+Checked in this order; any failure raises `InvalidResponseError`, with the reason written only to the log.
 
-1. 選択肢が 1 件以上あること。
-2. `finish_reason` が `length` でないこと。打ち切られた本文を投稿候補として画面に出さない。ログには「出力上限に達した。`MAX_OUTPUT_TOKENS` を上げるか入力を短くする」と書く。
-3. 本文が JSON として解釈でき、オブジェクトであること。
-4. `body_markdown` が空でない文字列であること（タイトルのみ再生成では検証対象外）。
-5. `primary_title` が空でない文字列であること。
-6. `alternative_titles` が文字列のリストであること。空リストは許容する（要件 8 は最大件数のみを定める）。
+1. There is at least one choice.
+2. `finish_reason` is not `length`. A truncated body is not offered as a post. The log says to raise `MAX_OUTPUT_TOKENS` or shorten the input.
+3. The content parses as JSON and is an object.
+4. `body_markdown` is a non empty string (not checked when only the titles are regenerated).
+5. `primary_title` is a non empty string.
+6. `alternative_titles` is a list of strings. An empty list is fine; requirement 8 sets a maximum only.
 
-`alternative_titles` の各要素は、空文字と `primary_title` との重複を取り除いたうえで先頭 `MAX_ALT_TITLES` 件を採る。
+Each entry of `alternative_titles` is stripped of the empty ones and of duplicates of `primary_title`, and the first `MAX_ALT_TITLES` are kept.
 
-#### 5.4.4 リトライ
+#### 5.4.4 Retries
 
-`openai` クライアントの `max_retries`（既定 2）に委ね、独自のリトライループを書かない。ai-digest 同様、`OPENAI_MAX_RETRIES=0` にすれば 1 リクエストで確実に終わるため、エンドポイントの挙動比較ができる。
+Left to `max_retries` of the client (default 2); no retry loop of our own. As in ai-digest, `OPENAI_MAX_RETRIES=0` spends exactly one request, which is what comparing endpoints needs.
 
 ### 5.5 `sizu_writer/formatter.py`
 
-モデル出力を投稿可能な形へ整える。**書き換えは機械的に判定できるものに限り、文意に触れる修正はしない**。
+Turns the model output into something postable. **It rewrites only what can be decided mechanically and never touches the meaning.**
 
 ```python
 def normalize_body(text: str, ascii_spacing: bool) -> Tuple[str, List[str]]
 ```
 
-適用する処理は次の四つ。
+Four rewrites:
 
-1. **外側のコードフェンス除去**: 応答全体が ` ```markdown ... ``` ` で包まれている場合に限り剥がす。本文中のコードブロックには触れない。
-2. **`#` 見出しの降格**: 行頭 `# ` を `## ` にする（要件 7.8）。降格したら `notices` に「本文の見出し階層を調整しました」を積む。コードフェンス内の `#` は対象外。
-3. **前後の空白と連続空行の整理**: 3 行以上の連続空行を 2 行に畳む。段落の意図は保つ。
-4. **全角と半角英数字の間への半角スペース挿入**（要件 7.8、`BODY_ASCII_SPACING=on` が既定）。次を除外範囲とする。
-   - フェンス付きコードブロックとインラインコード（`` ` `` で囲まれた範囲）
-   - Markdown リンクの URL 部分（`](...)`）と自動リンク（`<...>`）
-   - 半角の直後が句読点・閉じ括弧のとき、および全角の直前が開き括弧のとき（`（GPT）` を `（ GPT ）` にしない）
+1. **Remove an outer code fence**, only when the whole answer is wrapped in ` ```markdown ... ``` `. A code block inside the body is left alone.
+2. **Demote a `#` heading** to `## ` (requirement 7.8), pushing "the heading level of the body was adjusted" onto `notices`. A `#` inside a code fence is out of scope.
+3. **Tidy the surrounding whitespace**: three or more blank lines become two. Paragraphing is preserved.
+4. **Insert a space between full width characters and ASCII alphanumerics** (requirement 7.8, `BODY_ASCII_SPACING=on` by default), except:
+   - fenced code blocks and inline code (between backticks)
+   - the URL part of a Markdown link (`](...)`) and an autolink (`<...>`)
+   - an ASCII character followed by punctuation or a closing bracket, and a full width character preceded by an opening bracket (`（GPT）` does not become `（ GPT ）`)
 
-さらに、書き換えを伴わない**点検**を行い、該当すれば `notices` に積む。
+Beyond that, an **inspection** that rewrites nothing pushes findings onto `notices`:
 
-- 禁止した定型表現（「いかがだったでしょうか」「ぜひ考えてみてください」「今回は」「この記事では」「近年」「皆さんは」など）を含む。
-- 「以下の点に注意して」「ご指示のとおり」のような、AI への指示や作業説明が混じった疑いのある表現を含む。
+- a forbidden formula is present (「いかがだったでしょうか」, 「ぜひ考えてみてください」, 「今回は」, 「この記事では」, 「近年」, 「皆さんは」 and the like)
+- a phrase that looks like an instruction or a remark about the work is present (「以下の点に注意して」, 「ご指示のとおり」)
 
-点検は**検出のみで、本文を書き換えない**。誤検出で文章を壊すより、人間の確認に回すほうが要件 4（人間が最終確認して投稿する）に沿う。
+The inspection **detects only**. Sending a suspicion to the human is closer to requirement 4 than breaking a sentence on a false positive.
 
 ### 5.6 `app.py`
 
-Flask アプリケーション本体。ルートは四つ。
+The Flask application. Four routes.
 
-| メソッド | パス | 役割 |
+| Method | Path | Role |
 | --- | --- | --- |
-| GET | `/` | 入力画面 |
-| POST | `/generate` | 生成し、結果画面を返す。`mode` で全文生成とタイトルのみ再生成を切り替える |
-| GET | `/healthz` | プロセス生存確認。API は呼ばない |
-| GET | `/static/<file>` | CSS と JS |
+| GET | `/` | Input screen |
+| POST | `/generate` | Generate and render the result; `mode` selects a whole draft or the titles only |
+| GET | `/healthz` | Liveness; no API call |
+| GET | `/static/<file>` | CSS and JS |
 
-- 生成と再生成を 1 エンドポイントにまとめるのは、フォームの送信先が常に一つで済み、画面遷移の分岐がテンプレート側に閉じるためである。`mode` は送信ボタンの `name`/`value` で決まる（`mode=full` / `mode=titles`）。
-- POST の応答として結果画面を直接描画する（PRG しない）。サーバーが状態を持たないため、リダイレクト先へ結果を引き継ぐ手段がないからである。結果画面でのリロードは再送信確認が出るが、再送信は「同じ入力からの再生成」であり、破壊的操作ではない。
-- `SizuWriterError` は `errorhandler` で一括して受け、`error.html`（または結果画面上部のエラー領域）に `user_message` と参照 ID を描く。想定外の例外は `InternalError` に丸めてから同じ経路を通す。`DEBUG` は本番で必ずオフ、`app.config["PROPAGATE_EXCEPTIONS"]` も既定のままとし、スタックトレースを画面に出さない。
-- `MAX_CONTENT_LENGTH` を設定し、巨大な POST をアプリケーションに到達させない。
-- 同一オリジンからの POST だけを受ける任意の検査（`REQUIRE_SAME_ORIGIN`、既定 `on`）を入れる。`Origin` ヘッダが自サイト以外なら 400。Apache 側で `ProxyPreserveHost On` が要る点を `deploy/sizu-writer.conf` と README に明記する。
+- Generation and regeneration share one endpoint, so the form always posts to the same place and the branching stays in the template. `mode` comes from the `name`/`value` of the submit button (`mode=full` / `mode=titles`).
+- The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
+- `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- `MAX_CONTENT_LENGTH` keeps a huge POST from reaching the application.
+- An optional check that a POST comes from the same origin (`REQUIRE_SAME_ORIGIN`, default `on`) answers 400 when the `Origin` header is foreign. It needs `ProxyPreserveHost On` on the Apache side, which `deploy/sizu-writer.conf` and the README state.
 
 ### 5.7 `cli.py`
 
-Web を経由せず同じ生成コアを叩く。プロンプトの調整、互換エンドポイントの検証、受け入れ確認に使う。POLICY に従い `main() -> int` と `sys.exit(main())`、`-h` と `-v` を備える。
+Calls the same core without the web. Used for prompt work, for verifying a compatible endpoint and for acceptance checks. Following POLICY: `main() -> int`, `sys.exit(main())`, `-h` and `-v`.
 
 ```sh
-python cli.py generate --input memo.txt          # ファイルから読み、結果を標準出力へ
-python cli.py generate --text "短い思いつき"     # 直接渡す
-python cli.py generate --input memo.txt --json   # Draft を JSON で出す（テストやパイプ用）
-python cli.py titles --input memo.txt --body draft.md   # タイトルのみ再生成
+python cli.py generate --input memo.txt          # read a file, print the result
+python cli.py generate --text "a short thought"  # pass it directly
+python cli.py generate --input memo.txt --json   # print the Draft as JSON (tests, pipes)
+python cli.py titles --input memo.txt --body draft.md   # regenerate the titles only
 ```
 
-ai-digest の `cli.py` と同じく、主要な設定は同名のコマンドラインオプションでも上書きできるようにする（`--model`、`--timeout`、`--max-output-tokens`、`--prompt-dir` など）。**認証情報にはオプションを設けない**。コマンドラインは他者から読める。
+As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--max-output-tokens`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
 
-終了コードは `0` 成功、`1` 一般失敗（POLICY の規約どおり）。
+Exit codes: `0` success, `1` failure, as POLICY prescribes.
 
 ---
 
-## 6. 設定設計
+## 6. Settings
 
-`config.py` に `Config` データクラスと `load_config()` を置く。値の妥当性検査は `validate_*()` として分け、誤った値は既定へ落とさず起動時または生成前に失敗させる（ai-digest が `SUMMARIZER_BACKEND` の綴り誤りを拒否しているのと同じ方針）。
+`config.py` holds the `Config` dataclass and `load_config()`. Validation lives in `validate_*()`; a wrong value fails at startup or before generation instead of falling back to a default (the policy behind ai-digest rejecting a misspelled `SUMMARIZER_BACKEND`).
 
-| 環境変数 | 既定 | 説明 |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | （なし・必須） | API キー。未設定なら生成時に `InternalError`。ログに「キーが未設定」と出し、画面には出さない |
-| `OPENAI_BASE_URL` | （空＝OpenAI） | 互換エンドポイントの base URL。バージョンパスまで含める |
-| `OPENAI_MODEL` | （なし・必須） | 使用モデル。既定値を置かない。妥当な既定はエンドポイントごとに違う |
-| `OPENAI_TIMEOUT` | `60` | 1 リクエストの秒数上限 |
-| `OPENAI_MAX_RETRIES` | `2` | SDK に委ねるリトライ回数。`0` で 1 リクエスト固定 |
-| `OPENAI_TEMPERATURE` | （空＝送らない） | 設定時のみリクエストに載せる |
+| `OPENAI_API_KEY` | (none, required) | The API key. Missing means an `InternalError` at generation; the log says the key is unset, the screen does not |
+| `OPENAI_BASE_URL` | (empty = OpenAI) | Base URL of a compatible endpoint, including the version path |
+| `OPENAI_MODEL` | (none, required) | The model. No default, because a sensible one differs per endpoint |
+| `OPENAI_TIMEOUT` | `60` | Seconds allowed for one request |
+| `OPENAI_MAX_RETRIES` | `2` | Retries left to the SDK; `0` spends one request |
+| `OPENAI_TEMPERATURE` | (empty = not sent) | Sent only when set |
 | `OPENAI_RESPONSE_FORMAT_MODE` | `json_schema` | `json_schema` / `json_object` / `none` |
-| `MAX_OUTPUT_TOKENS` | `6000` | 応答の上限。数千字の日本語本文とタイトル案が収まる値 |
-| `MAX_INPUT_CHARS` | `4000` | 入力欄の受け入れ上限 |
-| `MAX_ALT_TITLES` | `4` | その他のタイトル候補の最大件数（要件 8） |
-| `PROMPT_DIR` | `prompts` | プロンプト一式の置き場 |
-| `PROMPT_RELOAD` | `off` | `on` でリクエストごとに読み直す（調整用） |
-| `BODY_ASCII_SPACING` | `on` | 全角と半角英数字の間への半角スペース挿入 |
-| `REQUIRE_SAME_ORIGIN` | `on` | POST の `Origin` 検査 |
-| `LOG_LEVEL` | `INFO` | アプリケーションログの水準 |
-| `LOG_PAYLOAD` | `off` | `on` のとき入力文と応答本文を DEBUG で記録する。既定 `off`（要件 10.1） |
-| `PORT` | `8090` | 開発サーバーおよび gunicorn の待ち受けポート |
+| `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer; enough for a few thousand Japanese characters and the titles |
+| `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field |
+| `MAX_ALT_TITLES` | `4` | Maximum number of alternative titles (requirement 8) |
+| `PROMPT_DIR` | `prompts` | Where the prompts live |
+| `PROMPT_RELOAD` | `off` | `on` reads them again on every request (for prompt work) |
+| `BODY_ASCII_SPACING` | `on` | Insert a space between full width characters and ASCII |
+| `REQUIRE_SAME_ORIGIN` | `on` | The `Origin` check on POST |
+| `LOG_LEVEL` | `INFO` | Level of the application log |
+| `LOG_PAYLOAD` | `off` | `on` records the memo and the answer at DEBUG. Off by default (requirement 10.1) |
+| `PORT` | `8090` | Port of the development server and of gunicorn |
 
-`.env.example` は ai-digest と同じ方針で書く。すなわち **秘密情報の欄は空のまま置き、プレースホルダを入れない**。ダミー値が入っていると「設定済み」に見え、認証エラーが実際の呼び出しまで顕在化しない。
+`.env.example` follows ai-digest: **a secret is left empty, with no placeholder**. A dummy value reads as configured, so an authentication failure would only surface at the actual call.
 
-`LOG_PAYLOAD=on` は入力内容と生成結果をログに残す。要件 10.1 が求める「保存目的と保存期間」を、README の該当節と `.env.example` のコメントに書く（目的: プロンプト調整と不具合調査。既定は無効。有効にする場合は logrotate で保存期間を定めること）。
+`LOG_PAYLOAD=on` puts the input and the result into the log. The purpose and the retention that requirement 10.1 asks for are stated in the README and in `.env.example` (purpose: prompt work and troubleshooting; off by default; when enabled, set a retention with logrotate).
 
 ---
 
-## 7. 画面設計
+## 7. Screens
 
-### 7.1 共通
+### 7.1 Shared
 
-- `base.html` を土台に `index.html` / `result.html` / `error.html` が載る（ai-digest と同じ構成）。
-- CSS はシステムフォントのみ、外部リクエストなし。`max-width` と 1 カラムのレイアウトで、スマートフォンと PC の双方に耐える（要件 10.4）。ブレークポイントは 1 箇所（狭い画面でボタンを縦積み）で足りる。
-- JavaScript は `copy.js` のみ。生成も画面遷移も素の HTML フォームで動き、JS が無効でも「コピーボタンが効かない」以外の機能低下はない。
-- 生成ボタン押下後は、二重送信を防ぐためボタンを無効化し、待機中である旨を表示する（JS 有効時のみ。無効時も送信は正しく行われる）。
+- `base.html` carries `index.html`, `result.html` and `error.html`, as in ai-digest.
+- The CSS uses system fonts only and makes no external request. A `max-width` and a single column serve both a phone and a desktop (requirement 10.4). One breakpoint, stacking the buttons on a narrow screen, is enough.
+- The only JavaScript is `copy.js`. Generation and navigation work as plain HTML forms; with JavaScript disabled, nothing degrades except the copy buttons.
+- After the generate button is pressed, it is disabled and a waiting state is shown, to prevent a double submission (with JavaScript only; without it the submission still works).
 
-### 7.2 入力画面（`/`）
+### 7.2 Input screen (`/`)
 
-| 要素 | 仕様 |
+| Element | Specification |
 | --- | --- |
-| ページタイトル | サービス名と一行の説明 |
-| 短文入力欄 | `<textarea name="input_text">`。複数段落可、行数は初期 12 行程度、リサイズ可。`maxlength` に `MAX_INPUT_CHARS` |
-| 文字数表示 | 現在の文字数と上限（JS 有効時のみ。無効時はサーバー側で検査） |
-| 生成ボタン | `<button name="mode" value="full">` |
-| 消去ボタン | `type="reset"` ではなく、入力欄を空にして焦点を戻す（`type="reset"` は編集途中の初期値へ戻るため、要件 6.1 の「入力内容を消去する」と意味がずれる） |
+| Page title | The name of the service and a one line description |
+| Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS` |
+| Character count | The current count and the limit (with JavaScript only; without it the server checks) |
+| Generate button | `<button name="mode" value="full">` |
+| Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field; it empties the field and returns the focus |
 
-### 7.3 結果画面（`/generate` の応答）
+### 7.3 Result screen (the answer of `/generate`)
 
-上から順に次を配置する。**投稿に使う文字列と補助情報を視覚的にも DOM 構造的にも分離する**（要件 10.4）。
+From top to bottom. **What is posted and what merely supports it are separated visually and in the DOM** (requirement 10.4).
 
-1. **タイトル第一候補**: ラベル「第一候補」と、タイトル本文、その右にコピーボタン。
-2. **その他のタイトル候補**: 各行にタイトルと個別のコピーボタン。0 件なら節ごと表示しない。
-3. **タイトル再生成ボタン**: `<button name="mode" value="titles">`。本文は変えずタイトルだけを作り直す。
-4. **投稿本文**: 見出し「投稿本文」の下に `<textarea readonly>` を置き、Markdown 原文をそのまま入れる。
-   - `readonly` の `textarea` にする理由は三つ。改行と Markdown 記法が視覚整形で失われない、コピーボタンが失敗しても利用者が選択してコピーできる（要件 9.3）、そしてラベルや説明文が構造的に混入しえない（要件 6.3）。
-   - 高さは内容に応じて広げ、スクロールを最小にする。
-5. **本文コピーボタン**: `textarea` の値だけをコピーする。
-6. **注意（`notices`）**: 本文領域の外、本文の下。「見出し階層を調整しました」「定型的な締めの表現が含まれている可能性があります」など。空なら非表示。
-7. **全文再生成ボタン**: `<button name="mode" value="full">`。
-8. **入力内容**: 折りたたみ（`<details>`）の中に編集可能な `textarea name="input_text">`（初期値は今回の入力）。ここを直して全文再生成すれば、入力画面へ戻らずに作り直せる。加えて「新しく書き始める」リンク（`GET /`）を置く（要件 9.2）。
-9. **補助情報**: 使用モデル名と生成時刻を小さく表示。
+1. **The leading title**: a label, the title, a copy button beside it.
+2. **Other candidates**: a title and its own copy button per row. The section disappears when there are none.
+3. **Regenerate the titles**: `<button name="mode" value="titles">`, leaving the body as it is.
+4. **The post body**: a heading, then a `readonly` `<textarea>` holding the Markdown as it is.
+   - `readonly` for three reasons: line breaks and Markdown are not lost to visual rendering; the text can be selected by hand when a copy button fails (requirement 9.3); and no label or explanation can slip in structurally (requirement 6.3).
+   - It grows with the content, to minimize scrolling.
+5. **Copy the body**: copies the value of the textarea only.
+6. **Notices**: outside the body area, below it. Empty means hidden.
+7. **Regenerate the whole draft**: `<button name="mode" value="full">`.
+8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input. Editing it and regenerating avoids a trip back to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
+9. **Supporting information**: the model name and the time of generation, in small type.
 
-再生成のために結果画面のフォームが保持する値:
+What the result form carries for a regeneration:
 
-| フィールド | 種別 | 用途 |
+| Field | Kind | Use |
 | --- | --- | --- |
-| `input_text` | `textarea`（折りたたみ内） | 全文再生成・タイトル再生成の双方で送る |
-| `body` | `hidden` | タイトルのみ再生成のとき、現在の本文をモデルへ渡す |
-| `mode` | 送信ボタンの value | `full` / `titles` |
+| `input_text` | `textarea` (inside the details) | Sent by both regenerations |
+| `body` | `hidden` | The current body, handed to the model when only the titles are regenerated |
+| `mode` | The value of the submit button | `full` / `titles` |
 
-### 7.4 コピー操作（`copy.js`）
+### 7.4 Copying (`copy.js`)
 
 ```
 click
-  -> navigator.clipboard.writeText(value)      // セキュアコンテキスト
-     成功 -> ボタン横に「コピーしました」を 2 秒表示
-     失敗 -> フォールバックへ
-  -> フォールバック: 対象を選択状態にして document.execCommand('copy')
-     成功 -> 同上
-     失敗 -> 「コピーできませんでした。選択してコピーしてください」を表示し、選択状態は残す
+  -> navigator.clipboard.writeText(value)      // secure context
+     success -> show "Copied" beside the button for 2 seconds
+     failure -> fall back
+  -> fallback: select the target and document.execCommand('copy')
+     success -> as above
+     failure -> show "Could not copy. Select the text and copy it by hand." and keep the selection
 ```
 
-- HTTP（非セキュアコンテキスト）では `navigator.clipboard` が使えないため、フォールバックは必須である。外部公開時は HTTPS 前提だが、LAN 内の HTTP でも使える状態を保つ。
-- コピー対象は `data-copy-target` で指す要素の `value`（`textarea`）または `textContent`（タイトル）に限る。ラベル、ボタン文言、注意書きは対象要素の外にあるため、構造上コピーされない。
+- Over HTTP (not a secure context) `navigator.clipboard` is unavailable, so the fallback is required. Publication assumes HTTPS, but the system stays usable over HTTP on a LAN.
+- What is copied is the `value` (a `textarea`) or the `textContent` (a title) of the element named by `data-copy-target`. A label, a button caption or a notice lies outside that element and cannot be copied.
 
-### 7.5 エラー表示
+### 7.5 Errors
 
-- 入力に起因するエラー（空、長すぎ）は、入力画面を再描画し、入力内容を保ったままエラーを上部に出す。入力を捨てない。
-- 生成に起因するエラーは、直前の入力（と、タイトル再生成なら本文）を保持したまま `error.html` を描き、そこから再試行できるようにする。
-- 表示するのは `user_message` と参照 ID のみ。
+- An error caused by the input (empty, too long) re-renders the input screen with the input intact and the message on top. The input is not thrown away.
+- An error caused by the generation renders `error.html` while keeping the last input (and the body, for a title regeneration), so that it can be tried again.
+- Only `user_message` and the reference id are shown.
 
 ---
 
-## 8. 非機能設計
+## 8. Non functional design
 
-### 8.1 セキュリティ
+### 8.1 Security
 
-- API キーはサーバープロセスの環境変数（または `.env`、パーミッション `600`、所有者はサービス実行ユーザー）から読む。テンプレートへ渡さない。`config.py` は `Config` の `__repr__` でキーを伏せる。
-- 外部公開時は Apache で HTTPS を終端する。Basic 認証・IP 制限・VPN は運用側の選択とし、`deploy/sizu-writer.conf` にコメント付きの雛形を置く。
-- gunicorn は `127.0.0.1` のみ listen。
-- `MAX_CONTENT_LENGTH` と `MAX_INPUT_CHARS` で入力量を抑える。
-- 本文の表示は `textarea` の値として行うため、Jinja2 の自動エスケープと合わせて、モデル出力由来の HTML が実行されることはない。**モデル出力を `|safe` で描画しない**ことを設計上の禁止事項とする。
-- レート制限はアプリケーションでは実装しない。gunicorn のワーカーをまたいだ計数ができず、正しく効かないためである。必要なら Apache 側（`mod_ratelimit`、`mod_qos`）または認証で絞る。この判断を README に書く。
-- エラー画面に内部情報を出さない（5.2 節）。
+- The API key comes from the environment of the server process (or from `.env`, mode `600`, owned by the service user). It is not handed to a template. `Config.__repr__` hides it.
+- When published, Apache terminates HTTPS. Basic authentication, IP restriction and a VPN are operational choices; `deploy/sizu-writer.conf` holds a commented template.
+- gunicorn listens on `127.0.0.1` only.
+- `MAX_CONTENT_LENGTH` and `MAX_INPUT_CHARS` bound the input.
+- The body is shown as the value of a `textarea`, so with Jinja2 autoescaping no HTML from the model is ever executed. **Rendering model output with `|safe` is forbidden by design.**
+- Rate limiting is not implemented in the application: it cannot count across gunicorn workers and would not hold. Use Apache (`mod_ratelimit`, `mod_qos`) or authentication. The README states this decision.
+- No internal information on an error page (section 5.2).
 
-### 8.2 可用性
+### 8.2 Availability
 
-- systemd で常時稼働させる。`deploy/sizu-writer.service` の要点:
+- systemd keeps it running. The essentials of `deploy/sizu-writer.service`:
 
 ```ini
 [Service]
@@ -487,112 +487,112 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-- `Restart=always` でプロセス終了時に自動復帰し、`systemctl enable` でサーバー再起動後も自動起動する（要件 10.2）。
-- `/healthz` は API を呼ばず即座に応答する。監視から叩いても課金されない。
-- OpenAI API 障害時は後続処理を持たないため、エラーを返して終わる。再試行は利用者の操作に委ねる（要件 10.2）。
+- `Restart=always` brings the process back, and `systemctl enable` starts it after a reboot (requirement 10.2).
+- `/healthz` answers immediately without calling the API, so monitoring costs nothing.
+- On an API failure there is no subsequent step; the error is returned and that is the end. Retrying is the user's decision (requirement 10.2).
 
-### 8.3 保守性
+### 8.3 Maintainability
 
-- プロンプトはコードの外（`prompts/*.md`）。モデル名・タイムアウト・出力上限は環境変数（6 節）。
-- HTML テンプレート、CSS、JS、Python、プロンプトがそれぞれ別ファイルに分かれる（4 節の構成）。
-- アプリケーションログは stderr へ出し、systemd の journal に入る。Apache のログとはファイルもプロセスも別である（要件 10.3）。ログ書式は ai-digest と同じ `%(asctime)s %(levelname)s %(name)s: %(message)s`。
-- 将来の保存機能は `sizu_writer/storage.py` を足し、`app.py` の生成成功直後に 1 行呼び出しを挿すだけで載る。`Draft` は保存したい項目（入力、本文、タイトル案、生成時刻、モデル）をすでに持つ。採用タイトルと投稿済みフラグは、保存を実装する際に画面から受け取る項目として追加する（要件 11）。
+- The prompts live outside the code (`prompts/*.md`). The model name, the timeout and the output limit are environment variables (section 6).
+- The HTML templates, the CSS, the JS, the Python and the prompts are separate files (section 4).
+- The application log goes to stderr and lands in the systemd journal, in a different file and a different process from the Apache log (requirement 10.3). The format is that of ai-digest: `%(asctime)s %(levelname)s %(name)s: %(message)s`.
+- Persistence will be `sizu_writer/storage.py` plus one call in `app.py` right after a successful generation. `Draft` already carries what is worth storing (the input, the body, the titles, the time, the model). The chosen title and a posted flag will be added as screen fields when persistence is implemented (requirement 11).
 
-### 8.4 操作性
+### 8.4 Usability
 
-- 一度の入力と 1 クリックで、本文全文とタイトル案が揃う（要件 10.4）。
-- 投稿までの操作は「本文コピー → 貼り付け → タイトルコピー → 貼り付け → 確認 → 投稿」で完結する。
-- 1 カラムのレイアウトとし、スマートフォンでも横スクロールが出ないようにする。
-
----
-
-## 9. テスト設計
-
-`tests/` に `unittest` で置く。ネットワークへは出ず、OpenAI クライアントはスタブに差し替える。
-
-| ファイル | 主な検証内容 |
-| --- | --- |
-| `test_config.py` | 既定値、空文字の扱い、`OPENAI_RESPONSE_FORMAT_MODE` の綴り誤りを拒否すること、必須値の欠落を検出すること、`repr` にキーが出ないこと |
-| `test_prompts.py` | プロンプトの読み込み、`{{input}}` `{{body}}` の置換、置換対象がプロンプト本文の他の記号を壊さないこと、ファイル欠落時の挙動、`PROMPT_RELOAD` の効き |
-| `test_generator.py` | 正常応答から `Draft` を組めること、`alternative_titles` が 5 件以上でも 4 件へ切り詰めること、`primary_title` との重複と空文字を除くこと、JSON 不正・必須項目欠落・空本文・`finish_reason=length` がいずれも `InvalidResponseError` になること、接続失敗・タイムアウト・4xx/5xx が対応する例外へ写ること、`temperature` 未設定時にパラメータを送らないこと、`OPENAI_RESPONSE_FORMAT_MODE` ごとにリクエストが変わり検証は変わらないこと |
-| `test_formatter.py` | 外側フェンスの除去、`#` 見出しの降格と `notices`、コードブロック内を書き換えないこと、ASCII スペーシングの挿入と除外規則（インラインコード、URL、括弧・句読点の隣接）、`BODY_ASCII_SPACING=off` で何もしないこと、定型表現の検出 |
-| `test_errors.py` | 各例外が `user_message` と `status_code` を持つこと、機密になりうる文字列（キー、URL、パス）が `user_message` に含まれないこと |
-| `test_web.py` | Flask の `test_client` で、入力画面が描かれること、空入力がエラーになり入力を保持すること、生成成功時に本文とタイトルが結果画面に出ること、`mode=titles` が本文を保持したままタイトルだけを更新すること、生成例外時にスタックトレースが応答本文に出ないこと、`Origin` 不一致の POST が 400 になること、`/healthz` が API を呼ばずに 200 を返すこと |
-
-受け入れ条件（要件 14）のうち文章の質に関する項目（7〜9）は自動テストでは判定できない。これらは `cli.py generate` で実入力を通し、目視で確認する手順として README に書く。
+- One input and one click yield the whole body and the title candidates (requirement 10.4).
+- Posting is "copy the body, paste, copy a title, paste, read, publish".
+- A single column layout, with no horizontal scrolling on a phone.
 
 ---
 
-## 10. 要件との対応
+## 9. Test design
 
-### 10.1 初期実装範囲（要件 12）
+`unittest` under `tests/`. No network; the OpenAI client is replaced by a stub.
 
-| 要件 | 実現箇所 |
+| File | What it checks |
 | --- | --- |
-| 1. Apache と Flask の連携 | 3 節、`deploy/sizu-writer.conf`、`deploy/sizu-writer.service` |
-| 2. 短文入力画面 | 7.2 節、`index.html` |
-| 3. OpenAI API による文章生成 | 5.4 節、`generator.py` |
-| 4. 本文全文の表示 | 7.3 節 4、`result.html` |
-| 5. タイトル案の表示 | 7.3 節 1〜2 |
-| 6. 本文全文の一括コピー | 7.3 節 5、7.4 節 |
-| 7. タイトルごとのコピー | 7.3 節 1〜2、7.4 節 |
-| 8. 全文再生成 | 7.3 節 7、`mode=full` |
-| 9. タイトル案だけの再生成 | 7.3 節 3、`mode=titles`、`regenerate_titles()` |
-| 10. 基本的なエラー処理 | 5.2 節、7.5 節 |
-| 11. API キーのサーバー側管理 | 6 節、8.1 節 |
+| `test_config.py` | The defaults, blank values, a misspelled `OPENAI_RESPONSE_FORMAT_MODE` being rejected, a missing required value being detected, the key not appearing in `repr` |
+| `test_prompts.py` | Reading a prompt, substituting `{{input}}` and `{{body}}`, leaving the rest of the prompt intact, behavior on a missing file, the effect of `PROMPT_RELOAD` |
+| `test_generator.py` | A `Draft` built from a good answer; five or more alternatives cut to four; duplicates of `primary_title` and empty entries removed; bad JSON, a missing field, an empty body and `finish_reason=length` all becoming `InvalidResponseError`; a connection failure, a timeout and a 4xx/5xx mapping to their exceptions; no `temperature` sent when it is unset; the request changing per `OPENAI_RESPONSE_FORMAT_MODE` while the validation does not |
+| `test_formatter.py` | Removing the outer fence; demoting `#` and the resulting notice; leaving a code block alone; the ASCII spacing and its exclusions (inline code, URLs, brackets and punctuation); `BODY_ASCII_SPACING=off` doing nothing; detecting the formulas |
+| `test_errors.py` | Each exception carrying `user_message` and `status_code`; no key, URL or path inside `user_message` |
+| `test_web.py` | With the Flask `test_client`: the input screen renders; an empty input errors and keeps the input; a successful generation shows the body and the titles; `mode=titles` updates the titles and keeps the body; no traceback in the body of an error answer; a POST with a foreign `Origin` answers 400; `/healthz` answers 200 without calling the API |
 
-### 10.2 受け入れ条件（要件 14）
-
-| 条件 | 設計上の担保 |
-| --- | --- |
-| 1. Web 画面から短文を入力できる | 7.2 節 |
-| 2. 生成ボタンで OpenAI API が呼ばれる | 5.6 節 `POST /generate` → 5.4 節 |
-| 3. 本文全文が表示される | 7.3 節 4 |
-| 4. そのままコピーして貼り付けられる | `textarea` に Markdown 原文を格納、7.4 節 |
-| 5. 第一候補と複数候補が表示される | 5.4.2 節のスキーマ、7.3 節 1〜2 |
-| 6. 本文と各タイトルを個別にコピーできる | 7.4 節、コピー対象は `data-copy-target` の要素に限定 |
-| 7. 本文に AI の内部指示や編集説明が混入しない | 5.4.2 節で本文を独立したフィールドとして受け取る、5.5 節の点検、7.3 節の領域分離 |
-| 8. 説明記事や体系的論考へ過剰に拡張されない | 5.3 節「書かないもの」「説明量」、7.1 の下限を作らない指示 |
-| 9. 既知のテーマを初めて知った体裁へ変えない | 5.3 節「立て付け」 |
-| 10. コピー・貼り付け・確認だけで投稿できる | 8.4 節 |
-| 11. 投稿先へ自動投稿しない | 2.1 節の不変条件 1〜3。投稿先への通信経路をコードに持たない |
-| 12. API キーがブラウザへ露出しない | 2.1 節の不変条件 4、8.1 節 |
-
-### 10.3 将来拡張（要件 11）
-
-保存を実装する際に触る箇所を、あらかじめ限定しておく。
-
-- 追加: `sizu_writer/storage.py`（JSON を `data/drafts/<日付>/<id>.json` へ）、`DATA_DIR` 設定、一覧・詳細ルート。
-- 変更: `app.py` の生成成功直後に保存呼び出し 1 行、結果画面に「採用したタイトル」「投稿済み」を記録する小さなフォーム。
-- 不変: `generator.py`、`formatter.py`、`prompts.py`、プロンプト一式。生成コアは永続化を知らないままでよい。
-
-保存を実装しても、投稿先への送信は行わない（要件 11 末尾）。
+Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality of the writing and cannot be decided by a test. The README describes them as a manual step: run a real memo through `cli.py generate` and read the result.
 
 ---
 
-## 11. 初期実装の進め方
+## 10. Mapping to the requirements
 
-| 段階 | 内容 | 完了の目安 |
+### 10.1 Scope of the initial implementation (requirement 12)
+
+| Requirement | Where |
+| --- | --- |
+| 1. Apache and Flask | Section 3, `deploy/sizu-writer.conf`, `deploy/sizu-writer.service` |
+| 2. Input screen | Section 7.2, `index.html` |
+| 3. Generation through the OpenAI API | Section 5.4, `generator.py` |
+| 4. Showing the whole body | Section 7.3 item 4, `result.html` |
+| 5. Showing the titles | Section 7.3 items 1 to 2 |
+| 6. Copying the whole body | Section 7.3 item 5, section 7.4 |
+| 7. Copying each title | Section 7.3 items 1 to 2, section 7.4 |
+| 8. Regenerating the whole text | Section 7.3 item 7, `mode=full` |
+| 9. Regenerating the titles only | Section 7.3 item 3, `mode=titles`, `regenerate_titles()` |
+| 10. Basic error handling | Sections 5.2 and 7.5 |
+| 11. The API key on the server | Sections 6 and 8.1 |
+
+### 10.2 Acceptance conditions (requirement 14)
+
+| Condition | How the design holds it |
+| --- | --- |
+| 1. A short text can be entered | Section 7.2 |
+| 2. Generate calls the OpenAI API | Section 5.6 `POST /generate` -> section 5.4 |
+| 3. The whole body is shown | Section 7.3 item 4 |
+| 4. It can be copied and pasted as it stands | The Markdown held in a `textarea`, section 7.4 |
+| 5. The leading title and several candidates are shown | The schema of section 5.4.2, section 7.3 items 1 to 2 |
+| 6. The body and each title can be copied individually | Section 7.4; what is copied is limited to the `data-copy-target` element |
+| 7. No internal instruction leaks into the body | The separate field of section 5.4.2, the inspection of section 5.5, the separation of section 7.3 |
+| 8. No inflation into an explainer or an essay | "What this is not" and "How much to explain" in section 5.3, the absence of a lower bound in 7.1 |
+| 9. A familiar theme is not a discovery | "Stance" in section 5.3 |
+| 10. Copy, paste and read is enough to post | Section 8.4 |
+| 11. Nothing is posted automatically | Invariants 1 to 3 of section 2.1; no path to the posting site exists in the code |
+| 12. The key never reaches the browser | Invariant 4 of section 2.1, section 8.1 |
+
+### 10.3 Future extension (requirement 11)
+
+What persistence will touch is bounded in advance.
+
+- Added: `sizu_writer/storage.py` (JSON under `data/drafts/<date>/<id>.json`), a `DATA_DIR` setting, a list route and a detail route.
+- Changed: one call in `app.py` right after a successful generation, and a small form on the result screen recording the chosen title and whether it was posted.
+- Unchanged: `generator.py`, `formatter.py`, `prompts.py` and the prompts. The generation core stays unaware of persistence.
+
+Even with persistence, nothing is sent to the posting site (end of requirement 11).
+
+---
+
+## 11. Order of implementation
+
+| Stage | Content | Done when |
 | --- | --- | --- |
-| 1 | リポジトリ初期化。`doc/`（POLICY、VERSIONS、ライセンス、要件、本書）、`.gitignore`、`.python-version`、`requirements.txt` | `pip install -r requirements.txt` が通る |
-| 2 | `config.py` と `.env.example`、`tests/test_config.py` | 設定の読み込みと検証がテストで固まる |
-| 3 | `prompts/*.md` の初版と `prompts.py`、`tests/test_prompts.py` | プロンプトが要件 3・7・8 を網羅する |
-| 4 | `generator.py`、`formatter.py`、`errors.py` と各テスト | `cli.py` なしでも生成コアが単体で検証できる |
-| 5 | `cli.py` | 実キーで生成を試し、出力の質をプロンプトへ反映する反復ができる |
-| 6 | `app.py`、テンプレート、CSS、`copy.js`、`tests/test_web.py` | 開発サーバーで一連の操作が通る |
-| 7 | `deploy/` 一式と README のデプロイ節 | 本番相当の Apache + gunicorn + systemd で稼働する |
-| 8 | 受け入れ確認（要件 14 の 12 項目） | 文章の質に関する 7〜9 を実入力で目視確認する |
+| 1 | Initialize the repository: `doc/` (POLICY, VERSIONS, licenses, requirements, this document), `.gitignore`, `.python-version`, `requirements.txt` | `pip install -r requirements.txt` succeeds |
+| 2 | `config.py`, `.env.example`, `tests/test_config.py` | Reading and validating the settings is settled by tests |
+| 3 | The first `prompts/*.md` and `prompts.py`, `tests/test_prompts.py` | The prompts cover requirements 3, 7 and 8 |
+| 4 | `generator.py`, `formatter.py`, `errors.py` and their tests | The core can be verified without `cli.py` |
+| 5 | `cli.py` | Generation can be tried with a real key and the output fed back into the prompts |
+| 6 | `app.py`, the templates, the CSS, `copy.js`, `tests/test_web.py` | The whole flow works on the development server |
+| 7 | `deploy/` and the deployment section of the README | It runs on Apache, gunicorn and systemd |
+| 8 | Acceptance (the 12 items of requirement 14) | Items 7 to 9 confirmed by reading real output |
 
-段階 5 を段階 6 より前に置くのが要点である。この種のシステムで最も手戻りが大きいのはプロンプトであり、画面を作る前に `cli.py` で出力の質を詰めておけば、画面側の作り直しが起きない。
+Stage 5 comes before stage 6 on purpose. In a system of this kind the prompt is what costs the most to redo, and settling the output quality before the screens exist keeps the screens from being rebuilt.
 
 ---
 
-## 12. 未決事項
+## 12. Open questions
 
-実装着手前に決めておきたい項目を挙げる。いずれも本書の構造には影響しない。
+Points to decide before implementation. None of them affects the structure of this document.
 
-1. **モデルの選定**: `OPENAI_MODEL` に既定値を置かない設計としたため、運用で使うモデルを決める必要がある。文体の指示追従性が結果を大きく左右するので、段階 5 で複数を比べる。
-2. **入力上限**: `MAX_INPUT_CHARS=4000` は仮値。実際に投げるメモの長さで見直す。
-3. **公開範囲**: Basic 認証、IP 制限、VPN のいずれを採るか。`deploy/sizu-writer.conf` の雛形に反映する。
-4. **`LOG_PAYLOAD` の運用**: 既定 `off` のまま運用するか、調整期間だけ `on` にして保存期間を定めるか（要件 10.1）。
-5. **公開リポジトリとするか**: 公開する場合、`prompts/` の内容もそのまま公開される。
+1. **The model**: `OPENAI_MODEL` has no default, so the model to run must be chosen. How closely a model follows instructions about register decides the result; compare several at stage 5.
+2. **The input limit**: `MAX_INPUT_CHARS=4000` is provisional. Revisit it with the memos actually written.
+3. **Who may reach it**: Basic authentication, IP restriction or a VPN. Reflect the choice in `deploy/sizu-writer.conf`.
+4. **`LOG_PAYLOAD`**: keep it off, or turn it on during a tuning period with a retention period defined (requirement 10.1).
+5. **A public repository**: if the repository is public, `prompts/` is public with it.

@@ -1,413 +1,403 @@
-# しずかなインターネット向け文章生成システム 要件定義
+# Requirements: a writing system for Shizuka na Internet
 
-## 1. 目的
+## 1. Purpose
 
-人間が入力した短文、思いつき、観察、違和感、問い、短い考察をもとに、OpenAI API を利用して「しずかなインターネット」へ投稿可能な文章を生成する。
+Take a short text a person wrote — a passing thought, an observation, a discomfort, a question, a short reflection — and use the OpenAI API to produce a post for Shizuka na Internet (sizu.me).
 
-本システムは投稿そのものを自動化しない。生成結果として、投稿本文の全文とタイトル案を画面へ表示し、人間が内容を確認したうえでコピーし、「しずかなインターネット」の投稿画面へ貼り付けて公開する。
+The system does not post. It shows the whole post body and the title candidates on the screen; the person reads them, copies them, pastes them into the posting form of Shizuka na Internet and publishes.
 
-## 2. 基本方針
+## 2. Principles
 
-- サーバー上で Flask アプリケーションとして常時稼働させる。
-- Apache HTTP Server と連携して公開する。
-- 人間が Web 画面から短文を入力する。
-- OpenAI API を利用して、投稿用の本文全文とタイトル案を生成する。
-- 投稿本文は、そのまま全文をコピーできる形で表示する。
-- タイトル案も、それぞれ個別にコピーできる形で表示する。
-- 「しずかなインターネット」への投稿操作は人間が行う。
-- 本システムから「しずかなインターネット」への自動投稿は行わない。
-- ブラウザ自動操作や非公式な投稿処理には依存しない。
+- Run on a server as a Flask application, continuously.
+- Publish it through the Apache HTTP Server.
+- Let the person enter a short text through a web page.
+- Use the OpenAI API to produce the whole post body and the title candidates.
+- Show the post body so that it can be copied whole.
+- Show each title candidate so that it can be copied on its own.
+- Leave the posting to the person.
+- Never post to Shizuka na Internet from this system.
+- Depend neither on browser automation nor on any unofficial posting path.
 
-## 3. 対象とする文章
+## 3. What kind of text
 
-本システムでは、短文投稿サイトのタイムラインへ流すには長いが、ブログ、Qiita、Zenn、note の記事として構成・論証するほどではない文章を生成する。
+The system produces text that is too long for the timeline of a microblog, yet does not need the construction and argument of a blog, Qiita, Zenn or note article.
 
-対象は次のような内容とする。
+It covers:
 
-- その時点での思いつき
-- 小さな観察
-- 違和感
-- 連想
-- 問い
-- 短い考察
-- 既に知っているテーマについて、改めて整理した考え
+- a thought of the moment
+- a small observation
+- a discomfort
+- an association
+- a question
+- a short reflection
+- a thought on a familiar theme, sorted out again
 
-生成文章を、次の用途へ広げない。
+It does not extend to:
 
-- id774.net の一次原典
-- Qiita、Zenn、note 向け記事の下書き
-- 将来の記事の素材集
-- 体系的な論考
-- 調査記事
-- 手順書
-- 解説記事
+- a primary source for id774.net
+- a draft for Qiita, Zenn or note
+- material for a future article
+- a systematic essay
+- a survey article
+- a how-to
+- an explainer
 
-後から同じ着想が別の記事へつながることは妨げないが、その可能性を見越して論点、説明、根拠、一般化を追加しない。
+The same idea may later feed an article; that is not prevented. But no point, explanation, evidence or generalization is added in anticipation of it.
 
-## 4. 想定利用フロー
+## 4. Expected flow
 
-1. 人間が Web ブラウザで本システムへアクセスする。
-2. 入力欄へ短文、メモ、出来事、会話、断片的な文章を入力する。
-3. 人間が生成ボタンを押す。
-4. Flask アプリケーションが OpenAI API を呼び出す。
-5. OpenAI API が、しずかなインターネット向けの文章とタイトル案を生成する。
-6. システムが生成結果を画面へ表示する。
-7. 人間が本文全文をコピーする。
-8. 人間が採用するタイトルをコピーする。
-9. 人間が「しずかなインターネット」の投稿画面へ本文とタイトルを貼り付ける。
-10. 人間が最終確認して投稿する。
+1. The person opens the system in a browser.
+2. They enter a short text, a memo, an event, a fragment of a conversation.
+3. They press the generate button.
+4. The Flask application calls the OpenAI API.
+5. The API produces a text and title candidates suited to Shizuka na Internet.
+6. The system shows the result.
+7. The person copies the whole body.
+8. The person copies the title they choose.
+9. The person pastes both into the posting form of Shizuka na Internet.
+10. The person reads it once more and publishes.
 
-## 5. システム構成
+## 5. System composition
 
-### 5.1 Web サーバー
+### 5.1 Web server
 
-- Apache HTTP Server を使用する。
-- Apache から Flask アプリケーションへリクエストを転送する。
-- 連携方式は、WSGI またはリバースプロキシ方式を想定する。
-- HTTPS、アクセス制御、認証などの外部公開要件は、運用環境に応じて Apache 側で管理する。
+- Use the Apache HTTP Server.
+- Forward requests from Apache to the Flask application.
+- Either WSGI or a reverse proxy is acceptable.
+- HTTPS, access control and authentication are managed by Apache, according to the deployment.
 
-### 5.2 アプリケーション
+### 5.2 Application
 
-- Python と Flask を使用する。
-- Flask アプリケーションはサーバー上で常時稼働させる。
-- 本番環境では Flask の開発用サーバーを直接公開しない。
-- Apache と連携可能な WSGI サーバーまたはアプリケーションサーバーを使用する。
+- Use Python and Flask.
+- Keep the Flask application running on the server.
+- Do not expose the Flask development server in production.
+- Use a WSGI server or an application server that works with Apache.
 
-### 5.3 外部 API
+### 5.3 External API
 
-- OpenAI API を使用する。
-- API キーはソースコードや画面へ直接記述しない。
-- API キーは環境変数またはアクセス権を制限した設定ファイルから読み込む。
-- OpenAI API の応答は、本文とタイトル案を分離して扱える構造化形式で受け取る。
+- Use the OpenAI API.
+- Do not write the API key into the source or onto a screen.
+- Read the API key from an environment variable or from a configuration file with restricted access.
+- Receive the answer in a structured form, so that the body and the titles are separate.
 
-## 6. 機能要件
+## 6. Functional requirements
 
-### 6.1 短文入力機能
+### 6.1 Input
 
-入力画面に、次の要素を設ける。
+The input screen carries:
 
-- 短文・メモ入力欄
-- 生成ボタン
-- 入力内容を消去するボタン
+- a field for the memo
+- a generate button
+- a button that clears the field
 
-入力欄は、複数段落の文章を受け付けられるテキストエリアとする。
+The field is a textarea that accepts several paragraphs.
 
-入力対象には、次の内容を含められる。
+The input may be:
 
-- 一文だけの思いつき
-- 箇条書き
-- 会話の断片
-- 既にある短い文章
-- 複数段落のメモ
+- a single thought
+- a list
+- a fragment of a conversation
+- an existing short text
+- a memo of several paragraphs
 
-### 6.2 文章生成機能
+### 6.2 Generation
 
-入力内容をもとに、次の成果物を生成する。
+From the input, the system produces:
 
-- 投稿本文の全文
-- タイトルの第一候補
-- その他のタイトル候補
+- the whole post body
+- the leading title
+- other title candidates
 
-本文とタイトルは、同一の生成結果として整合していなければならない。
+The body and the titles belong to the same result and must agree with each other.
 
-### 6.3 本文表示機能
+### 6.3 Showing the body
 
-生成された本文は、次の条件で表示する。
+- Show the post body alone, in its own area.
+- It must be copyable as it stands, straight into the posting form.
+- Never mix an instruction to the AI, an editing note, an internal remark or a review result into the body.
+- Produce the body as Markdown.
+- Provide a button that copies the whole body.
+- Do not let a label or an explanatory sentence on the screen fall inside what is copied.
 
-- 投稿用の本文全文だけを独立した領域へ表示する。
-- そのままコピーして投稿画面へ貼り付けられること。
-- AI への指示、編集理由、内部メモ、レビュー結果を本文へ混入させない。
-- Markdown として生成する。
-- 本文全体を一括コピーするボタンを設ける。
-- コピー対象に画面上の説明文やラベルを含めない。
+### 6.4 Showing the titles
 
-### 6.4 タイトル案表示機能
+- Mark the leading title.
+- Allow several candidates of differing character.
+- Provide a copy button for each title.
+- A rationale per title is not required in the initial specification.
+- Do not add a word only for search, spread or clicks.
 
-生成されたタイトル案は、次の条件で表示する。
+### 6.5 Regeneration
 
-- 第一候補を明示する。
-- 性格の異なる候補を複数表示できる。
-- 各タイトルを個別にコピーできるボタンを設ける。
-- タイトルの採用理由は、初期仕様では必須としない。
-- 検索性、拡散性、クリック率のためだけの語を追加しない。
+The result may miss the intent, so it must be possible to generate again. At a minimum:
 
-### 6.5 再生成機能
+- regenerate the whole text from the same input
+- regenerate the titles alone
 
-生成結果が意図と異なる場合に備え、再生成できるようにする。
+Letting the AI revise a part of the body is not required in the initial implementation.
 
-最低限、次の操作を想定する。
+### 6.6 Errors
 
-- 同じ入力内容から全文を再生成する。
-- タイトル案だけを再生成する。
+Report these in a form the person understands:
 
-初期実装では、本文の一部分だけを AI に修正させる機能は必須としない。
+- the input is empty
+- the OpenAI API could not be reached
+- the OpenAI API returned an error
+- the answer had an unexpected shape
+- a timeout occurred
+- the server failed internally
 
-### 6.6 エラー表示機能
+Never show the API key, an internal path or a traceback on the screen.
 
-次のエラーを利用者に分かる形で表示する。
+## 7. Requirements on the writing
 
-- 入力が空である。
-- OpenAI API への接続に失敗した。
-- OpenAI API がエラーを返した。
-- 応答形式が想定と異なる。
-- タイムアウトが発生した。
-- サーバー内部で処理に失敗した。
+### 7.1 Position within the medium
 
-API キー、内部パス、スタックトレースなどの機密情報は画面へ表示しない。
+The text is neither a stretched out microblog post nor a shrunk blog article. It is a piece of a few paragraphs that stands on its own.
 
-## 7. 文章生成要件
+A few paragraphs to a few thousand Japanese characters is the guide. Background, generalities, examples or a conclusion are not added to reach a length. What holds in a short text stays short.
 
-### 7.1 媒体に対する位置づけ
+### 7.2 Stance
 
-生成文章は、短文投稿の引き延ばしでも、ブログ記事の縮小版でもなく、それ自体で読める数段落の文章とする。
+A theme the writer already knows is not presented as a discovery.
 
-文章の長さは、数段落から数千字程度を目安とする。ただし、字数を満たすために背景説明、一般論、例示、結論を追加しない。短く成立する内容は短いままにする。
+The basic stances are:
 
-### 7.2 立て付け
+- revisiting a familiar theme and sorting the thinking out again
+- checking where the interest actually lies
+- separating points that had been conflated
+- stating what can and cannot be said at this moment
+- closing naturally on an unsettled matter, when that is where things stand
 
-既に知っている概念やテーマを扱う場合、初めて知った体裁にはしない。
+### 7.3 Keeping the material
 
-次のような立て付けを基本とする。
+Keep, in preference to anything else:
 
-- 以前から知っているテーマについて、改めて考えを整理する。
-- 自分がどこに関心を持っているかを確認する。
-- 混同していた論点を切り分ける。
-- 現時点で言えることと言えないことを示す。
-- 必要であれば、未決着のまま自然に閉じる。
+- the concrete scene
+- the subject
+- the writer's own wording
+- the hesitation in judgment
+- the discomfort
+- the question
+- what is not settled
 
-### 7.3 元の材料の維持
+Never invent an experience, an emotion, a fact or a causal link in order to make the text tidier.
 
-次の要素を優先して残す。
+### 7.4 How much to explain
 
-- 具体的な場面
-- 対象
-- 元の言葉遣い
-- 判断の迷い
-- 違和感
-- 問い
-- まだ決着していない部分
+Explain the background only as far as the observations and thoughts in the text require.
 
-文章を整えるために、存在しない体験、感情、事実、因果関係を補ってはならない。
+Do not widen into:
 
-### 7.4 説明量
+- generalities
+- an account of a whole system
+- a glossary
+- historical background
+- a list of related cases
+- a bibliography
+- a systematic argument
 
-背景説明は、本文中の観察や考えを理解するために必要な範囲に限る。
+### 7.5 Register
 
-次の内容へ広げない。
+- Follow the voice of the memo.
+- Unless stated otherwise, use the Japanese desu/masu form.
+- If the original is consistently in the plain form, that form may be kept.
+- Do not shift into an academic, advertising or social media register.
+- Avoid what is typical of generated text: a generic opening, a syllogism that is too neat, a safe summary, formulaic connectives.
 
-- 一般論
-- 制度全体の説明
-- 用語解説
-- 歴史的背景
-- 関連事例の列挙
-- 参考文献一覧
-- 体系的な論証
+### 7.6 Opening
 
-### 7.5 文体
+Prefer to start from a concrete scene, subject, word or sensation.
 
-- 元のメモの語り口を優先する。
-- 指定がない場合は、です・ます調を基本とする。
-- 元の文章が常体で統一されている場合は、その文体を維持してよい。
-- 論文調、広告調、SNS 調へ変えない。
-- 生成 AI に特有の汎用的な導入、整いすぎた三段論法、安全な総括、定型接続表現を避ける。
-
-### 7.6 導入
-
-具体的な場面、対象、言葉、感覚から始めることを優先する。
-
-次のような記事用の導入は使用しない。
+Do not use an article style opening such as:
 
 - 「今回は〜について書きます」
 - 「この記事では〜を考えます」
 - 「近年、〜が注目されています」
 - 「皆さんは〜をご存じでしょうか」
 
-ただし、既知のテーマについて整理する場合は、「以前から知っている」「改めて考える」といった立て付けを自然に示してよい。
+When a familiar theme is being sorted out, a stance of "known for a while" or "thinking it over again" may of course be shown.
 
-### 7.7 終わり方
+### 7.7 Ending
 
-- 無理に教訓、提言、結論を作らない。
-- 判断できていないことは、判断できていない状態のまま記述してよい。
-- 文章を途中で放棄した印象にはしない。
-- 現時点で考えが止まっている位置が分かる形で閉じる。
-- 「いかがだったでしょうか」「ぜひ考えてみてください」などの定型文を使用しない。
+- Do not manufacture a lesson, a recommendation or a conclusion.
+- What is undecided may be written as undecided.
+- Do not read as abandoned halfway.
+- Close where the thinking currently stands, so that the position is visible.
+- Do not use formulas such as 「いかがだったでしょうか」 or 「ぜひ考えてみてください」.
 
 ### 7.8 Markdown
 
-- 本文は Markdown として生成する。
-- 短い文章では原則として見出しを設けない。
-- 見出しが必要な場合は `##` または `###` だけを使用する。
-- 本文内で `#` 見出しを使用しない。
-- 箇条書き、引用、強調は必要な場合だけ使用する。
-- 短い文章を細かな見出しで分断しない。
-- リンクは、読者が対象を確認するために必要な場合だけ使用する。
-- 参考文献一覧は標準では設けない。
-- 全角文字と半角英数字の間には、原則として半角スペースを入れる。
+- Produce the body as Markdown.
+- A short text normally carries no heading.
+- When a heading is needed, use `##` or `###` only.
+- Never use a `#` heading inside the body.
+- Use lists, quotes and emphasis only where they are needed.
+- Do not break a short text apart with small headings.
+- Use a link only where the reader needs it to check the subject.
+- Do not add a bibliography by default.
+- Put a space between a full width character and an adjacent ASCII alphanumeric.
 
-## 8. タイトル生成要件
+## 8. Requirements on the titles
 
-タイトルは、本文に実際に書かれている次の要素へ近いものとする。
+A title stays close to what the body actually contains:
 
-- 場面
-- 対象
-- 言葉
-- 問い
-- 引っかかった点
-- 考え始めた地点
-- 改めて整理した論点
+- the scene
+- the subject
+- the words
+- the question
+- what caught the writer's attention
+- where the thinking started
+- the point that was sorted out again
 
-次の方針を採用する。
+The policy is:
 
-- 簡潔で率直なタイトルを優先する。
-- 検索性、拡散性、クリック率を目的とした語を加えない。
-- 内容を解決済みに見せるタイトルを避ける。
-- 本文が問いを解き明かしていない場合は、解決を示唆する疑問形を避ける。
-- 未決着の場合は、観察した事実や考え始めた地点を題名にしてよい。
-- 無理に象徴的、文学的、扇情的なタイトルを作らない。
+- prefer a plain, direct title
+- add no word for the sake of search, spread or clicks
+- avoid a title that makes the content look settled
+- avoid a question form suggesting a resolution the body does not reach
+- when the matter is unsettled, an observed fact or the point where the thinking started makes a fine title
+- do not force a symbolic, literary or sensational title
 
-出力するタイトル案の件数は、次を基本とする。
+The number of candidates:
 
-- 第一候補: 1 件
-- その他の候補: 最大 4 件
+- leading title: 1
+- other candidates: at most 4
 
-## 9. 画面要件
+## 9. Screens
 
-### 9.1 入力画面
+### 9.1 Input screen
 
-最低限、次の要素を表示する。
+At a minimum:
 
-- ページタイトル
-- 短文入力欄
-- 生成ボタン
-- 入力内容の消去ボタン
+- the page title
+- the memo field
+- the generate button
+- the button that clears the field
 
-### 9.2 結果画面
+### 9.2 Result screen
 
-最低限、次の要素を表示する。
+At a minimum:
 
-- タイトル第一候補
-- その他のタイトル候補
-- 各タイトルのコピーボタン
-- 投稿本文全文
-- 本文全文のコピーボタン
-- 全文再生成ボタン
-- タイトルだけの再生成ボタン
-- 入力画面へ戻る操作
+- the leading title
+- the other title candidates
+- a copy button per title
+- the whole post body
+- a copy button for the whole body
+- a button that regenerates the whole text
+- a button that regenerates the titles only
+- a way back to the input screen
 
-### 9.3 コピー操作
+### 9.3 Copying
 
-- コピーボタンを押すと、対象の文字列だけをクリップボードへコピーする。
-- コピー成功時は、短い完了表示を出す。
-- コピー失敗時は、手動で選択可能な状態を維持する。
-- 本文の改行と Markdown 記法を維持する。
+- A copy button copies the target string and nothing else.
+- On success, show a short confirmation.
+- On failure, leave the text selectable by hand.
+- Preserve the line breaks and the Markdown of the body.
 
-## 10. 非機能要件
+## 10. Non functional requirements
 
-### 10.1 セキュリティ
+### 10.1 Security
 
-- OpenAI API キーをクライアントへ送信しない。
-- API キーを HTML、JavaScript、Git リポジトリへ含めない。
-- サーバー側だけで OpenAI API を呼び出す。
-- 外部公開する場合は、Apache 側で HTTPS を有効にする。
-- 必要に応じて、Basic 認証、IP アドレス制限、VPN などで利用者を制限する。
-- 入力内容と API 応答をログへ記録する場合は、保存目的と保存期間を明確にする。
-- エラー画面へ内部情報を露出しない。
+- Never send the OpenAI API key to the client.
+- Never put the key into the HTML, the JavaScript or the Git repository.
+- Call the OpenAI API from the server only.
+- When published, terminate HTTPS at Apache.
+- Restrict the users with Basic authentication, IP restriction or a VPN as needed.
+- If the input and the answers are logged, state the purpose and the retention period.
+- Do not expose internal information on an error page.
 
-### 10.2 可用性
+### 10.2 Availability
 
-- Flask アプリケーションはサービスとして常時稼働させる。
-- プロセス終了時に自動再起動できる構成とする。
-- サーバー再起動後に自動起動する。
-- OpenAI API 障害時は、自動投稿などの後続処理を行わず、利用者へエラーを返す。
+- Run the Flask application as a service.
+- Restart it automatically when the process ends.
+- Start it automatically after a reboot.
+- On an API failure, return an error to the person and run no subsequent step; there is none to run.
 
-### 10.3 保守性
+### 10.3 Maintainability
 
-- 文章生成プロンプトをアプリケーションコードから分離する。
-- プロンプトは単独の Markdown またはテキストファイルとして管理する。
-- OpenAI API のモデル名、タイムアウト、出力上限などを設定ファイルまたは環境変数で変更できるようにする。
-- HTML テンプレート、CSS、Python コード、プロンプトを分離する。
-- アプリケーションログと Apache ログを分離する。
+- Keep the writing prompt out of the application code.
+- Manage the prompt as a standalone Markdown or text file.
+- Allow the model name, the timeout and the output limit to be changed through a configuration file or environment variables.
+- Keep the HTML templates, the CSS, the Python code and the prompt separate.
+- Keep the application log separate from the Apache log.
 
-### 10.4 操作性
+### 10.4 Usability
 
-- 一度の入力と生成操作で、投稿に必要な本文とタイトル案を得られること。
-- 生成結果から投稿まで、本文とタイトルをそれぞれコピーして貼り付けるだけで完了すること。
-- 投稿用の文字列と補助情報を明確に分離すること。
-- スマートフォンと PC の両方から操作可能な画面を想定する。
+- One input and one generation yield the body and the titles needed to post.
+- From result to post, copying and pasting the body and a title is all that is needed.
+- Separate the strings meant for posting from the supporting information.
+- Assume both a phone and a desktop.
 
-## 11. 保存要件
+## 11. Persistence
 
-初期仕様では、生成結果の永続保存は必須としない。
+Persisting the results is not required in the initial specification.
 
-ただし、次の情報を保存できる構成は将来拡張として考慮する。
+A later extension may store:
 
-- 入力した短文
-- 生成した本文
-- タイトル案
-- 生成日時
-- 使用したモデル
-- 再生成履歴
-- 人間が採用したタイトル
-- 投稿済みかどうか
+- the input
+- the generated body
+- the title candidates
+- the time of generation
+- the model used
+- the history of regenerations
+- the title the person chose
+- whether it was posted
 
-保存を行う場合でも、本システムから投稿先へ自動送信しない。
+Even with persistence, nothing is sent to the posting site.
 
-## 12. 初期実装の範囲
+## 12. Scope of the initial implementation
 
-初期実装では、次を実装対象とする。
+1. Apache and Flask working together
+2. the input screen
+3. generation through the OpenAI API
+4. showing the whole body
+5. showing the title candidates
+6. copying the whole body at once
+7. copying each title
+8. regenerating the whole text
+9. regenerating the titles only
+10. basic error handling
+11. keeping the API key on the server
 
-1. Apache と Flask の連携
-2. 短文入力画面
-3. OpenAI API による文章生成
-4. 本文全文の表示
-5. タイトル案の表示
-6. 本文全文の一括コピー
-7. タイトルごとのコピー
-8. 全文再生成
-9. タイトル案だけの再生成
-10. 基本的なエラー処理
-11. API キーのサーバー側管理
+## 13. Out of scope for the initial implementation
 
-## 13. 初期実装では行わないこと
+- posting to Shizuka na Internet
+- browser automation with Playwright, Selenium or the like
+- storing credentials of the posting site
+- scheduled posting
+- posting to several media at once
+- sharing to social networks
+- image generation
+- collecting references automatically
+- external web search
+- SEO for articles
+- editing a published post
+- retrieving the result of a post
 
-次の機能は初期実装の対象外とする。
+## 14. Acceptance conditions
 
-- 「しずかなインターネット」への自動投稿
-- Playwright、Selenium などによるブラウザ自動操作
-- 投稿先のログイン情報の保存
-- 予約投稿
-- 複数媒体への同時投稿
-- SNS への自動共有
-- 画像生成
-- 参考文献の自動収集
-- 外部 Web 検索
-- 記事向けの SEO 最適化
-- 公開後の記事編集
-- 投稿結果の自動取得
+The initial specification is met when:
 
-## 14. 受け入れ条件
+1. the person can enter a short text on a web page
+2. pressing generate calls the OpenAI API
+3. the whole body, suited to Shizuka na Internet, is shown
+4. the body can be copied and pasted into the posting form as it stands
+5. the leading title and several candidates are shown
+6. the body and each title can be copied individually
+7. no internal instruction or editing note of the AI leaks into the body
+8. the body is not inflated into an explainer or a systematic essay
+9. a familiar theme is not presented as a discovery
+10. the person can post by copying, pasting and reading it once more
+11. the system posts nothing by itself
+12. the OpenAI API key never reaches the browser
 
-次の条件を満たした場合、初期仕様を満たしたものとする。
+## 15. Summary
 
-1. 利用者が Web 画面から短文を入力できる。
-2. 生成ボタンを押すと、OpenAI API が呼び出される。
-3. しずかなインターネット向けの本文全文が表示される。
-4. 本文は、そのままコピーして投稿画面へ貼り付けられる。
-5. タイトル第一候補と複数の候補が表示される。
-6. 本文と各タイトルを個別にコピーできる。
-7. 本文へ AI の内部指示や編集説明が混入しない。
-8. 本文が説明記事や体系的な論考へ過剰に拡張されない。
-9. 既知のテーマを初めて知った体裁へ変えない。
-10. 人間がコピー、貼り付け、最終確認だけで投稿できる。
-11. 本システムが投稿先へ自動投稿しない。
-12. OpenAI API キーがブラウザ側へ露出しない。
+The system runs on a server as a Flask application behind Apache.
 
-## 15. 要件の要約
+A person enters a short text, and the OpenAI API produces the whole post body and several title candidates for Shizuka na Internet. The result is shown as a screen where the body and each title can be copied individually.
 
-本システムは、Apache と連携した Flask アプリケーションとしてサーバー上で稼働する。
+The person copies the title they choose and the whole body, pastes them into the posting form of Shizuka na Internet, reads them once more and publishes.
 
-人間が短文を入力すると、OpenAI API が「しずかなインターネット」向けの投稿本文全文と複数のタイトル案を生成する。生成結果は、本文全文と各タイトルを個別にコピーできる画面として表示する。
-
-人間は、採用するタイトルと本文全文をコピーし、「しずかなインターネット」の投稿画面へ貼り付け、最終確認して投稿する。
-
-投稿先への自動投稿、ブラウザ自動操作、認証情報の保持は行わない。
+The system does not post, does not automate a browser and holds no credential of the posting site.
