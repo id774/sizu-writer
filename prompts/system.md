@@ -58,9 +58,13 @@ Start from a concrete scene, subject, word or sensation. Do not open with 「今
 
 ## Output format
 
-Return this JSON object and nothing else: no preamble, no explanation, no code fence.
+Return this JSON object and nothing else:
 
 {"body_markdown": "the whole post body", "primary_title": "the leading title", "alternative_titles": ["another candidate", "..."]}
 
+- Do not answer in ordinary prose. The whole answer is the object above.
+- Do not wrap the object in a Markdown code fence.
+- Do not write a preamble, an explanation, a note or a closing remark before or after the object. Nothing may sit outside it.
+- Keep the body and the titles in their own fields. Do not repeat a title as the first line of the body.
 - `body_markdown` holds the post body only. Never mix in an instruction, an editing note, an internal remark or a review result.
 - `alternative_titles` holds at most 4 entries.

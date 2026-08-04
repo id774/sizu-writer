@@ -19,17 +19,41 @@ that follow from what this system must never do.
 These lines are not crossed by a setting or by an extension.
 
 - Do not send anything to the posting site. The only host this system contacts
-  is the OpenAI compatible endpoint.
+  is the generation endpoint the configuration names.
 - Do not accept credentials of the posting site, neither as a setting nor as a
   form field.
 - Do not depend on browser automation. `playwright` and `selenium` do not
   belong in `requirements.txt`.
-- Do not let the API key leave the server process: not into a template, not
+- Do not let the API token leave the server process: not into a template, not
   into JavaScript, not into an error page.
 - Do not mix an instruction to the model, an editing note, or a review result
   into the generated body. The screen separates the body from every other
   piece of information, structurally and not only visually.
 - Do not render model output with `|safe`.
+
+### The generation endpoint
+The settings decide where a memo is sent, so they are read strictly.
+
+- Do not choose an endpoint implicitly. The backend, the token, the base URL
+  and the model are required, and a missing one stops the process instead of
+  being filled in with a default.
+- Do not accept an unknown backend. A value the code has no provider for is
+  refused before a request, never read as the one backend that does exist.
+- Do not switch to a second endpoint when the first one fails. One generation
+  uses one route, whatever went wrong on it.
+- Do not infer what a compatible endpoint supports from its model name or its
+  URL. A difference in behavior is expressed as a named setting.
+- Do not read a legacy setting as its successor. A renamed variable is refused
+  by name, so that a stale value cannot decide where a memo goes.
+- Do not vary the number of API requests silently. Retries are the SDK's, and
+  the count is a setting an operator can see.
+- Do not log the API token, the memo, the prompts or the generated text. What
+  a log line carries is the shape of the exchange: the backend, the endpoint
+  host, the model, the request id, the finish reason and the token counts.
+- Do not accept part of an answer. A structured answer is the whole response,
+  or the whole inside of one code fence; an object cut out of surrounding
+  prose is refused, because that is the heuristic which lets a remark become
+  the first line of a post.
 
 ### Logging and Output
 - Use the standard `logging` module. Obtain a module logger with
@@ -68,10 +92,17 @@ These lines are not crossed by a setting or by an extension.
   touches no file beyond `.env`.
 - A credential never gets a command line option: a command line is readable by
   every user of the host.
+- Validation is in two stages. `load_config()` converts values and refuses one
+  that is malformed on its own terms; `validate_generation_config()` refuses a
+  configuration that cannot address an endpoint. Every path that reaches the
+  API passes both; `cli.py --version` and the tests pass neither.
+- No error message quotes a secret. A token is reported as present or absent.
 
 ### Tests
 - `tests/test_*.py`, `unittest` and `unittest.mock` only.
-- No network access and no API call. The OpenAI client is replaced by a stub.
+- No network access and no API call. The client is replaced by a stub, and the
+  provider tests stub the `openai` package itself rather than importing it.
+- No test needs a token, a `.env` or a real endpoint.
 - Run them with `python -m unittest discover -s tests`.
 
 ### Versioning

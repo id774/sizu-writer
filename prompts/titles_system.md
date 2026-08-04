@@ -16,8 +16,12 @@ The body is neither a stretched out microblog post nor a shrunk blog article. It
 
 ## Output format
 
-Return this JSON object and nothing else: no preamble, no explanation, no code fence.
+Return this JSON object and nothing else:
 
 {"primary_title": "the leading title", "alternative_titles": ["another candidate", "..."]}
 
-`alternative_titles` holds at most 4 entries.
+- Do not answer in ordinary prose. The whole answer is the object above.
+- Do not wrap the object in a Markdown code fence.
+- Do not write a preamble, an explanation, a note or a closing remark before or after the object. Nothing may sit outside it.
+- Do not return the body. It is already settled and is not part of the answer.
+- `alternative_titles` holds at most 4 entries.

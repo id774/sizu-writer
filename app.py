@@ -11,8 +11,13 @@
 #  request and a restart loses nothing.
 #
 #  Nothing here posts to an external site. The only host contacted is
-#  the OpenAI compatible endpoint, and the API key stays in the server
-#  process: it reaches neither the templates nor the error pages.
+#  the one named by GENERATION_BASE_URL, and the API token stays in the
+#  server process: it reaches neither the templates nor the error pages.
+#
+#  The generation settings are validated while this module is imported,
+#  so a worker that cannot address an endpoint refuses to start instead
+#  of accepting a memo and failing on the request. systemd reports the
+#  message, which names the setting at fault.
 #
 #  Routes:
 #      /            input screen
@@ -37,6 +42,9 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v2.0 2026-08-05
+#       Validate the generation settings at startup, so that a worker
+#       without a usable endpoint never accepts a memo.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -48,7 +56,7 @@ import secrets
 from flask import Flask, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from config import load_config
+from config import load_config, validate_generation_config
 from sizu_writer.errors import (EmptyInputError, InputTooLongError,
                                 InternalError, SizuWriterError)
 from sizu_writer.generator import generate_draft, regenerate_titles
@@ -61,6 +69,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Refuse the process rather than the request. A screen offering to
+# generate for someone whose server cannot reach an endpoint wastes
+# their memo; the operator sees the setting named in the journal.
+validate_generation_config(config)
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024

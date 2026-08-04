@@ -8,7 +8,7 @@ Run the commands from an account with `sudo` access.
 Prepare these values first:
 
 - A DNS name whose `A` or `AAAA` record points to the server
-- An API key and model name for an OpenAI-compatible endpoint
+- A token, base URL and model name for an OpenAI-compatible endpoint
 - A TLS certificate for the DNS name
 - A reader restriction: Basic authentication, an IP range, or a VPN
 
@@ -44,9 +44,16 @@ sudo chmod 600 .env
 sudo -u sizu sensible-editor .env
 ```
 
-Set `OPENAI_API_KEY` and `OPENAI_MODEL`.
-Set `OPENAI_BASE_URL` only for a compatible service other than OpenAI.
+Set the four required values: `GENERATION_BACKEND`, `GENERATION_API_TOKEN`,
+`GENERATION_BASE_URL` and `GENERATION_MODEL`.
+None of them has a default, and the service refuses to start without them.
+The shipped example is filled in for Sakura AI Engine except for the token and
+the model; the README lists worked examples for other endpoints.
 Keep `PORT=8090` unless both deployment examples are changed to the same port.
+
+The `OPENAI_*` variables of v1.x are refused. Check that none survives in the
+unit's `EnvironmentFile`, in the service account's shell profile or in the
+environment systemd inherits, because a process finding one stops at startup.
 
 Run the offline checks, then make one real API request:
 
@@ -56,7 +63,8 @@ sudo -u sizu .venv/bin/python -m unittest discover -s tests
 sudo -u sizu .venv/bin/python cli.py generate --text "A deployment test memo."
 ```
 
-The last command spends API quota and confirms the key, model and endpoint.
+The last command spends one request and confirms the token, the model and the
+endpoint together. A `Draft` is the success condition, not an HTTP 200.
 
 ## Start the application
 
@@ -148,14 +156,18 @@ Finally, generate a draft in the browser to test Apache, gunicorn and the API to
 
 ### Generation endpoint contract
 
-sizu-writer uses the OpenAI SDK's Chat Completions client.
+sizu-writer speaks the OpenAI-compatible Chat Completions protocol through the
+`openai` package. Which service answers is decided by `GENERATION_BASE_URL`.
 The configured endpoint must accept these request fields:
 
 - `model`
 - `messages`
 - `max_tokens`
-- `response_format={"type":"json_object"}`
-- `temperature`, only when `OPENAI_TEMPERATURE` is set
+- `response_format={"type":"json_object"}`, only under
+  `GENERATION_RESPONSE_MODE=json-object`
+- `temperature`, only when `GENERATION_TEMPERATURE` is set
+
+`stream` is never sent, and no request carries anything else.
 
 The assistant message must contain a JSON object like this:
 
@@ -169,11 +181,37 @@ The assistant message must contain a JSON object like this:
 
 The response must expose that content through `choices[0].message.content`.
 It must also report `finish_reason`, because a response cut off for length is rejected.
+The usage counts and the response id are read when present and are not required.
 An endpoint that only resembles Chat Completions may not satisfy this contract.
 
+Under `GENERATION_RESPONSE_MODE=prompt-json` the object may also arrive inside a
+single code fence covering the whole answer. Nothing else is accepted: an answer
+with a sentence before or after the object is refused rather than trimmed.
+
 Change one compatibility setting at a time and test it with `cli.py generate`.
-Leave `OPENAI_TEMPERATURE` empty when the selected model rejects that parameter.
-Keep the timeout order `OPENAI_TIMEOUT` < gunicorn < Apache `ProxyTimeout`.
+Leave `GENERATION_TEMPERATURE` empty when the selected model rejects that parameter.
+Use `prompt-json` when the endpoint or the model rejects `response_format`.
+Keep the timeout order `GENERATION_TIMEOUT` < gunicorn < Apache `ProxyTimeout`,
+and remember that the innermost limit is spent once per attempt:
+`GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`.
+
+### Request budget
+
+`GENERATION_MAX_RETRIES` defaults to `0`, so one screen action or one CLI run
+costs one request. This matters on a plan that counts them: the Sakura AI Engine
+free plan for foundational models covers 3,000 chat completion requests a month
+and rate limits beyond that.
+
+sizu-writer keeps no counter. The endpoint's own control panel is the record,
+and the application log gives the matching per-request lines:
+
+```sh
+sudo journalctl -u sizu-writer --since today | grep 'generation response'
+```
+
+Those lines carry the backend, the endpoint host, the request id, the model, the
+finish reason and the token counts. They carry no token, no memo and no
+generated text, at any log level.
 
 ### Calling sizu-writer from another system
 
@@ -210,8 +248,11 @@ Prompt files are read for every generation, so prompt-only changes need no resta
 Changing the unit requires `systemctl daemon-reload` and a restart.
 Changing the Apache virtual host requires a config test and reload.
 
-Rotate an API key by replacing it in `.env` and restarting the service.
-Never put the key in a command line, a repository, a template or an Apache log.
+Rotate the API token by replacing it in `.env` and restarting the service.
+Never put the token in a command line, a repository, a template or an Apache log.
+Changing the endpoint means changing `GENERATION_BASE_URL`, `GENERATION_MODEL`
+and the token together, and restarting; there is no runtime switch and no
+fallback to a second endpoint.
 
 Generated drafts are not persisted on the server.
 Back up `.env` securely and back up any custom prompt directory.

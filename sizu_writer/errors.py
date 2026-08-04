@@ -21,6 +21,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v2.0 2026-08-05
+#       Name GENERATION_TIMEOUT as the limit a timeout reports.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -59,7 +61,7 @@ class UpstreamConnectionError(SizuWriterError):
 
 
 class UpstreamTimeoutError(SizuWriterError):
-    """ Raised when one request exceeds OPENAI_TIMEOUT. """
+    """ Raised when one request exceeds GENERATION_TIMEOUT. """
 
     user_message = "Generation took too long and was stopped. Shorten the memo, or try again in a while."
     status_code = 504

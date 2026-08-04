@@ -32,9 +32,10 @@
 #  - --body FILE
 #      Body handed to the titles command.
 #  - --model NAME / --prompt-dir DIR / --timeout SECONDS
-#      Override the matching setting for this invocation. The API key
-#      has no option on purpose: a command line is readable by every
-#      user of the host.
+#      Override the matching setting for this invocation. The API token
+#      and the base URL have no option on purpose: a command line is
+#      readable by every user of the host through ps, and the token is
+#      a secret while the endpoint is a decision of the deployment.
 #  - --json
 #      Print the draft as JSON instead of as text.
 #
@@ -43,6 +44,10 @@
 #  - openai
 #
 #  Version History:
+#  v2.0 2026-08-05
+#       Validate the generation settings before a subcommand runs, and
+#       point --model and --timeout at the GENERATION_* settings.
+#       --version still needs no credentials.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -54,7 +59,7 @@ import json
 import logging
 import sys
 
-from config import load_config
+from config import ConfigError, load_config, validate_generation_config
 from sizu_writer import Draft, __version__
 from sizu_writer.errors import SizuWriterError
 from sizu_writer.generator import generate_draft, regenerate_titles
@@ -110,18 +115,38 @@ def main() -> int:
     """ Run one command and return its exit status. """
     arguments = build_parser().parse_args()
 
-    config = load_config()
+    # Configured before the settings are read, so that a refused
+    # setting is reported in the same format as everything else. The
+    # level LOG_LEVEL asks for is applied as soon as it is known.
     logging.basicConfig(
-        level=getattr(logging, config.log_level, logging.INFO),
+        level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    try:
+        config = load_config()
+    except ConfigError as error:
+        logger.error("%s", error)
+        return 1
+
+    logging.getLogger().setLevel(
+        getattr(logging, config.log_level, logging.INFO))
+
     if arguments.model:
-        config.openai_model = arguments.model
+        config.generation_model = arguments.model
     if arguments.prompt_dir:
         config.prompt_dir = arguments.prompt_dir
     if arguments.timeout:
-        config.openai_timeout = arguments.timeout
+        config.generation_timeout = arguments.timeout
+
+    # After the overrides, so that --model can stand in for a missing
+    # GENERATION_MODEL, and before the input is read, so that a
+    # misconfiguration is reported without spending a request.
+    try:
+        validate_generation_config(config)
+    except ConfigError as error:
+        logger.error("%s", error)
+        return 1
 
     try:
         source = read_source(arguments)
