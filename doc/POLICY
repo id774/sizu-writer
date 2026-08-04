@@ -77,9 +77,8 @@ The settings decide where a memo is sent, so they are read strictly.
 
 ### Structure
 - Python 3.9 or later.
-- Every module starts with the header block used across id774 repositories:
-  Description, Author, Source Code, License, Contact, Requirements and
-  Version History, plus Usage, Routes and Options where they apply.
+- Every module starts with the header block used across id774 repositories, in
+  the order given under [Documentation and Versioning](#documentation-and-versioning).
 - Comments are written in English, in the imperative, and stay short.
 - Type hints are used on the public functions of a module.
 - Prefer `str.format()` over an f-string. Substitution into an external text
@@ -105,9 +104,57 @@ The settings decide where a memo is sent, so they are read strictly.
 - No test needs a token, a `.env` or a real endpoint.
 - Run them with `python -m unittest discover -s tests`.
 
-### Versioning
-- A module version is `major.minor`; `minor` is carried over before it reaches
-  10. The repository version is recorded in `doc/VERSIONS`.
+### Documentation and Versioning
+- Every module must contain a structured header, in this order:
+  `Description`, `Usage` and `Options` (executables and modules that take
+  options only), `Routes` (the web application only), `Requirements`,
+  `Version History`.
+- The header keeps the standard `Author`, `Source Code`, `License`, `Contact`
+  block used across the repository.
+- "Test Cases" belong in the test code under `tests/`, never in the application
+  modules.
+- Documentation must be updated in sync with behavior changes.
+
+#### When to Bump a Module Version
+- These rules apply to the `Version History` in each module header. Repository
+  release versions and Git tags follow the separate rules below.
+- Do not bump the version mechanically every time a file is touched. Decide
+  based on the nature of the change:
+  - Documentation-only changes (comments, help text, README/POLICY/VERSIONS
+    wording with no effect on behavior) do not bump the version.
+  - Any change that affects code behavior (bug fixes, new options, and refactors
+    that change observable behavior) bumps the version.
+  - Multiple updates on the same date are consolidated into a single version
+    entry; do not increment the version multiple times on the same date.
+
+#### Module Version Numbering
+- Versions use a two-level `major.minor` scheme.
+- When incrementing `minor` would reach `10`, roll over instead: increment
+  `major` by 1 and reset `minor` to `0` (for example `v0.9` -> `v1.0`,
+  `v1.9` -> `v2.0`).
+- Do not continue `minor` past `9` as in standard semantic versioning
+  (do not use `v1.10`, `v1.11`, ...).
+
+#### Repository Versioning
+- Repository release versions are independent of individual module versions.
+- Record repository release versions in `doc/VERSIONS` and use the same versions
+  for Git tags.
+- Repository release versions may use a three-level `major.minor.patch` scheme.
+  The first release is v1.0 and the one after it is v1.0.1.
+- Work that is not released yet takes no version of its own: it belongs to the
+  entry already standing at the top of `doc/VERSIONS`.
+- The package version exposed by `sizu_writer.__version__` and
+  `cli.py --version` tracks the application, and is bumped when a release
+  warrants it, not on every change.
+
+#### doc/VERSIONS Structure
+- `doc/VERSIONS` reads as a version-level summary of overall changes, not a raw
+  commit log:
+  - When multiple changes to the same file within one version are really one
+    coherent change, merge them into a single bullet.
+  - When changes are independent, place entries that touch the same file or
+    feature near each other, so that each version reads as a coherent whole.
+- Use UTF-8.
 
 ### License
 - GPL version 3 or LGPL version 3, dual licensed.

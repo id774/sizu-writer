@@ -1,7 +1,7 @@
 # Detailed design: the generation API
 
 - Repository: `id774/sizu-writer`
-- Version: v2.0 (an incompatible change to the settings)
+- Version: v1.0
 - Written: 2026-08-05
 - First endpoint supported: Sakura AI Engine, free plan for foundational models
 - Protocol: OpenAI-compatible Chat Completions
@@ -37,10 +37,11 @@ The design holds these conditions:
 
 ## 2. Background
 
-v1.x read `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`,
-`OPENAI_TIMEOUT`, `OPENAI_MAX_RETRIES` and `OPENAI_TEMPERATURE`. Setting a base
-URL was already enough to reach a compatible endpoint, so the transport was
-close to what was needed. Six things were not:
+Before this design, sizu-writer read `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+`OPENAI_MODEL`, `OPENAI_TIMEOUT`, `OPENAI_MAX_RETRIES` and
+`OPENAI_TEMPERATURE`. Setting a base URL was already enough to reach a
+compatible endpoint, so the transport was close to what was needed. Six things
+were not:
 
 1. The names read as OpenAI's, blurring the difference between the company's
    service and the protocol its SDK speaks.
@@ -82,7 +83,7 @@ other endpoint.
 
 ### 3.3 The backend is named
 
-`GENERATION_BACKEND` is required, and v2.0 accepts one value.
+`GENERATION_BACKEND` is required, and one value is accepted.
 
 | Value | Meaning |
 | --- | --- |
@@ -313,7 +314,7 @@ GENERATION_MAX_RETRIES=0
 
 OpenAI is one explicit endpoint among several, not a privileged default.
 
-### 8.4 The v1.x settings
+### 8.4 The legacy settings
 
 `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_TIMEOUT`,
 `OPENAI_MAX_RETRIES` and `OPENAI_TEMPERATURE` are refused. A process finding
@@ -330,7 +331,8 @@ and no precedence rule, for four reasons:
 1. A mixture of old and new settings would leave the endpoint to be guessed.
 2. A stale `OPENAI_API_KEY` in a shell must not be picked up silently.
 3. The path back to OpenAI's default URL has to be closed completely.
-4. The break belongs in the open, which is what makes this v2.0.
+4. The break belongs in the open, and refusing the old settings by name is
+   what puts it there — not the version number.
 
 ---
 
@@ -375,7 +377,7 @@ subclass of `ValueError`.
 
 | Checked by `load_config()` | Condition |
 | --- | --- |
-| the v1.x `OPENAI_*` variables | none is present |
+| the legacy `OPENAI_*` variables | none is present |
 | `GENERATION_RESPONSE_MODE` | `json-object` or `prompt-json` |
 | `GENERATION_TIMEOUT` | a number greater than zero |
 | `GENERATION_MAX_RETRIES` | a whole number, zero or more |
@@ -660,7 +662,8 @@ version keeps.
 
 ### 14.1 What the user sees
 
-Unchanged from v1.x. No message names the endpoint, the model or the cause.
+Unchanged from the first design. No message names the endpoint, the model or
+the cause.
 
 | Exception | Condition | HTTP |
 | --- | --- | ---: |
@@ -779,7 +782,7 @@ screens offer no way to switch endpoints.
 token kept out of `repr()`, the refusal of an unknown or missing backend, a
 missing token, a missing or `http` or resource-carrying base URL, a missing
 model, an unknown response mode, a negative retry count, a non-positive
-timeout, the v1.x variables, and the absence of secrets from every message.
+timeout, the legacy variables, and the absence of secrets from every message.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -888,7 +891,7 @@ variable is set — the process would refuse to start if one were; the log names
 4. A `Draft` with a body and titles is produced.
 5. Regenerating the titles keeps the body.
 6. `GENERATION_MAX_RETRIES=0` means one SDK call per operation.
-7. An unknown backend, an empty base URL and a v1.x `OPENAI_*` variable are all
+7. An unknown backend, an empty base URL and a legacy `OPENAI_*` variable are all
    refused before a request.
 8. `json-object` and `prompt-json` are both selectable.
 9. No JSON is extracted out of free text.
@@ -905,8 +908,8 @@ variable is set — the process would refuse to start if one were; the log names
 Sakura AI Engine is not built into the code as a backend of its own. It is
 reached as what it is: an explicitly configured OpenAI-compatible endpoint.
 
-That keeps the diff against v1.x small, reuses the `openai` package as a
-transport, removes the need to contact OpenAI at all, lets every other
+That keeps the diff against the first design small, reuses the `openai` package
+as a transport, removes the need to contact OpenAI at all, lets every other
 compatible service use the same settings, shares the body and title validation
 across all of them, isolates the differences that remain into named settings
 like `GENERATION_RESPONSE_MODE`, and leaves `providers/` as the place a

@@ -21,7 +21,7 @@
 #  - Standard library only
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.1 2026-08-05
 #       Name GENERATION_TIMEOUT as the limit a timeout reports.
 #  v1.0 2026-08-04
 #       Initial release.

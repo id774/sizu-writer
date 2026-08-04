@@ -44,7 +44,7 @@
 #  - openai
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.1 2026-08-05
 #       Validate the generation settings before a subcommand runs, and
 #       point --model and --timeout at the GENERATION_* settings.
 #       --version still needs no credentials.

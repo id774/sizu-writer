@@ -51,7 +51,7 @@ The shipped example is filled in for Sakura AI Engine except for the token and
 the model; the README lists worked examples for other endpoints.
 Keep `PORT=8090` unless both deployment examples are changed to the same port.
 
-The `OPENAI_*` variables of v1.x are refused. Check that none survives in the
+The legacy `OPENAI_*` variables are refused. Check that none survives in the
 unit's `EnvironmentFile`, in the service account's shell profile or in the
 environment systemd inherits, because a process finding one stops at startup.
 

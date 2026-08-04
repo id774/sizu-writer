@@ -30,7 +30,7 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.1 2026-08-05
 #       Move the API call into sizu_writer/providers/, work from a
 #       CompletionResult instead of an SDK response, and read the JSON
 #       according to GENERATION_RESPONSE_MODE.

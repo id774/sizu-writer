@@ -42,7 +42,7 @@
 #  - Flask 3.x
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.1 2026-08-05
 #       Validate the generation settings at startup, so that a worker
 #       without a usable endpoint never accepts a memo.
 #  v1.0 2026-08-04

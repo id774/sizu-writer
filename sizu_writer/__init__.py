@@ -20,8 +20,6 @@
 #  - Standard library only
 #
 #  Version History:
-#  v2.0 2026-08-05
-#       Carry the version of the provider neutral generation settings.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -30,7 +28,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
-__version__ = "2.0"
+__version__ = "1.0"
 
 
 @dataclass

@@ -34,7 +34,7 @@
 #  - openai
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.0 2026-08-05
 #       Initial release, moved out of generator.py so that the transport
 #       and the validation of a draft can change independently.
 #

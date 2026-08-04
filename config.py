@@ -73,7 +73,7 @@
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.1 2026-08-05
 #       Replace the OPENAI_* settings with provider neutral GENERATION_*
 #       ones, require the backend, token, base URL and model instead of
 #       falling back to OpenAI, add the response mode, default the
@@ -103,9 +103,9 @@ GENERATION_BACKENDS = ("openai-compatible",)
 # operation into two requests.
 RESPONSE_MODES = ("json-object", "prompt-json")
 
-# Settings of v1.x. They are refused rather than translated, because a
-# host with a stale OPENAI_API_KEY exported would otherwise keep
-# working against an endpoint nobody chose.
+# The settings these replaced. They are refused rather than translated,
+# because a host with a stale OPENAI_API_KEY exported would otherwise
+# keep working against an endpoint nobody chose.
 LEGACY_VARIABLES = {
     "OPENAI_API_KEY": "GENERATION_API_TOKEN",
     "OPENAI_BASE_URL": "GENERATION_BASE_URL",
@@ -183,7 +183,7 @@ def _whole(name: str, default: int, minimum: int) -> int:
 
 
 def _refuse_legacy_variables() -> None:
-    """ Refuse a v1.x setting instead of reading it as its successor. """
+    """ Refuse a legacy setting instead of reading it as its successor. """
     for name in sorted(LEGACY_VARIABLES):
         # Presence is what is refused, not the value: an exported but
         # empty OPENAI_BASE_URL still says the host was set up for v1.
