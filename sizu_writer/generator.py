@@ -5,11 +5,20 @@
 # sizu_writer/generator.py: Generation core of sizu-writer
 #
 #  Description:
-#  This module calls an OpenAI compatible endpoint, validates the answer
-#  and returns a Draft. The answer is requested as JSON so that the body
-#  and the titles arrive as separate fields; splitting prose by heuristic
-#  is what lets an instruction leak into a post. Retries are left to the
-#  SDK, and the endpoint is the only host this system ever talks to.
+#  This module assembles the messages, spends one request through the
+#  configured provider, reads the JSON object out of the answer,
+#  validates it and returns a Draft. It knows nothing about HTTP, the
+#  SDK, the token or the base URL: that all lives in
+#  sizu_writer/providers/, so a second wire protocol can be added later
+#  without touching what a body and its titles have to look like.
+#
+#  The answer is requested as JSON so that the body and the titles
+#  arrive as separate fields; splitting prose by heuristic is what lets
+#  an instruction leak into a post. For the same reason nothing here
+#  digs a JSON object out of surrounding prose. Either the whole answer
+#  is the object — or, under prompt-json, a single fenced block holding
+#  it — or the answer is refused. An endpoint that explains itself first
+#  is misconfigured, and reading past the explanation would hide that.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -18,9 +27,13 @@
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
-#  - openai
+#  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v2.0 2026-08-05
+#       Move the API call into sizu_writer/providers/, work from a
+#       CompletionResult instead of an SDK response, and read the JSON
+#       according to GENERATION_RESPONSE_MODE.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -33,81 +46,58 @@ from typing import Any, Dict, List
 
 from config import Config
 from sizu_writer import Draft
-from sizu_writer.errors import (InternalError, InvalidResponseError,
-                                UpstreamConnectionError, UpstreamStatusError,
-                                UpstreamTimeoutError)
+from sizu_writer.errors import InvalidResponseError
 from sizu_writer.formatter import normalize_body
 from sizu_writer.prompts import build_body_messages, build_titles_messages
+from sizu_writer.providers import CompletionResult, build_provider
 
 logger = logging.getLogger(__name__)
 
 
-def _client(config: Config):
-    """ Build the OpenAI client described by the configuration. """
-    try:
-        from openai import OpenAI
-    except ImportError as error:
-        logger.error("The openai package is not installed: %s", error)
-        raise InternalError("openai package missing")
-
-    if not config.openai_api_key:
-        logger.error("OPENAI_API_KEY is not set")
-        raise InternalError("api key missing")
-    if not config.openai_model:
-        logger.error("OPENAI_MODEL is not set")
-        raise InternalError("model missing")
-
-    arguments: Dict[str, Any] = {
-        "api_key": config.openai_api_key,
-        "timeout": config.openai_timeout,
-        "max_retries": config.openai_max_retries,
-    }
-    if config.openai_base_url:
-        arguments["base_url"] = config.openai_base_url
-    return OpenAI(**arguments)
+def _complete(messages: List[Dict[str, str]],
+              config: Config) -> CompletionResult:
+    """ Spend one request through the configured provider. """
+    return build_provider(config).complete(messages, config)
 
 
-def _complete(messages: List[Dict[str, str]], config: Config) -> Any:
-    """ Send one chat completion request and map its failures. """
-    import openai
+def _unwrap_fence(content: str) -> str:
+    """
+    Return the inside of an answer that is one fenced block, or the
+    answer unchanged.
 
-    arguments: Dict[str, Any] = {
-        "model": config.openai_model,
-        "messages": messages,
-        "max_tokens": config.max_output_tokens,
-        "response_format": {"type": "json_object"},
-    }
-    if config.openai_temperature is not None:
-        arguments["temperature"] = config.openai_temperature
+    Only a whole answer wrapped in a single fence is unwrapped. A fence
+    with prose around it, or an answer holding more than one fence, is
+    left as it is and fails to parse a moment later, which is the
+    intended outcome: the model was asked for an object and returned
+    something else.
+    """
+    text = content.strip()
+    if not text.startswith("```") or not text.endswith("```"):
+        return text
 
-    try:
-        return _client(config).chat.completions.create(**arguments)
-    except openai.APITimeoutError as error:
-        logger.error("The request timed out after %s seconds: %s", config.openai_timeout, error)
-        raise UpstreamTimeoutError()
-    except openai.APIConnectionError as error:
-        logger.error("Cannot reach the endpoint: %s", error)
-        raise UpstreamConnectionError()
-    except openai.APIStatusError as error:
-        logger.error("The endpoint answered with status %s: %s", error.status_code, error)
-        raise UpstreamStatusError()
+    lines = text.split("\n")
+    if len(lines) < 3 or lines[-1].strip() != "```":
+        return text
+    # Anything but an info string on the opening line means the fence is
+    # not the wrapper of the whole answer.
+    if "`" in lines[0].strip()[3:]:
+        return text
+
+    inner = "\n".join(lines[1:-1])
+    if "```" in inner:
+        return text
+    return inner.strip()
 
 
-def _payload(response: Any) -> Dict[str, Any]:
+def _payload(content: str, response_mode: str) -> Dict[str, Any]:
     """ Read the JSON object carried by the answer. """
-    choices = getattr(response, "choices", None)
-    if not choices:
-        logger.error("The answer carries no choice")
-        raise InvalidResponseError()
-
-    choice = choices[0]
-    if getattr(choice, "finish_reason", None) == "length":
-        logger.error("The output was cut off; raise MAX_OUTPUT_TOKENS or shorten the input")
-        raise InvalidResponseError()
+    text = content.strip()
+    if response_mode == "prompt-json":
+        text = _unwrap_fence(text)
 
     try:
-        payload = json.loads(choice.message.content)
-    except (AttributeError, TypeError, ValueError) as error:
+        payload = json.loads(text)
+    except ValueError as error:
         logger.error("The answer is not readable as JSON: %s", error)
         raise InvalidResponseError()
 
@@ -148,8 +138,8 @@ def _now() -> str:
 
 def generate_draft(input_text: str, config: Config) -> Draft:
     """ Generate a post body and its title candidates. """
-    response = _complete(build_body_messages(input_text, config.prompt_dir), config)
-    payload = _payload(response)
+    result = _complete(build_body_messages(input_text, config.prompt_dir), config)
+    payload = _payload(result.content, config.generation_response_mode)
 
     raw_body = payload.get("body_markdown")
     if not isinstance(raw_body, str) or not raw_body.strip():
@@ -163,7 +153,7 @@ def generate_draft(input_text: str, config: Config) -> Draft:
         body=body,
         primary_title=titles[0],
         alternative_titles=titles[1:],
-        model=getattr(response, "model", config.openai_model),
+        model=result.model or config.generation_model,
         generated_at=_now(),
         notices=notices,
     )
@@ -171,14 +161,16 @@ def generate_draft(input_text: str, config: Config) -> Draft:
 
 def regenerate_titles(input_text: str, body: str, config: Config) -> Draft:
     """ Generate title candidates for a body that is already settled. """
-    response = _complete(build_titles_messages(input_text, body, config.prompt_dir), config)
-    titles = _titles(_payload(response), config)
+    messages = build_titles_messages(input_text, body, config.prompt_dir)
+    result = _complete(messages, config)
+    titles = _titles(_payload(result.content, config.generation_response_mode),
+                     config)
 
     return Draft(
         body=body,
         primary_title=titles[0],
         alternative_titles=titles[1:],
-        model=getattr(response, "model", config.openai_model),
+        model=result.model or config.generation_model,
         generated_at=_now(),
         notices=[],
     )

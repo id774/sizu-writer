@@ -4,6 +4,8 @@ Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md) (2026-08-04).
 
 This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout follow [id774/ai-digest](https://github.com/id774/ai-digest).
 
+> **The generation path was redesigned in v2.0.** Sections 3, 5.4 and 6 below describe the v1.x shape, in which the endpoint was an `OPENAI_*` setting that defaulted to OpenAI and the API call lived inside `generator.py`. What is implemented now — provider neutral settings, a required endpoint, the `providers/` layer and the two response modes — is in [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md). Where the two disagree, the detailed design is the one that matches the code. The paragraphs below are annotated where that happens; everything else in this document still holds.
+
 ---
 
 ## 1. Repository name
@@ -32,11 +34,13 @@ The rest of this document assumes the repository `sizu-writer` and the Python pa
 
 From requirements 2, 13 and 14, the invariants come first. Neither a setting nor an extension crosses them.
 
-1. Send nothing to the posting site. The only host an HTTP client here talks to is an OpenAI compatible endpoint.
+1. Send nothing to the posting site. The only host an HTTP client here talks to is the generation endpoint the configuration names.
 2. Accept no credential of the posting site. It exists neither as a setting nor as a form field.
 3. Bring in no browser automation. `playwright` and `selenium` do not belong in `requirements.txt`.
-4. Keep the API key inside the server process. It appears in no template, no JavaScript, no response header and no error page.
+4. Keep the API token inside the server process. It appears in no template, no JavaScript, no response header and no error page.
 5. Let no instruction, editing note, internal remark or review result into the generated body. On the screen, the body area and the supporting area are separated structurally, not only visually.
+6. Choose no endpoint implicitly. The base URL, the backend, the token and the model are all required, and a process missing one of them does not start. An endpoint reached because a setting was left blank is an endpoint nobody chose. (Added in v2.0.)
+7. Fall back to no second endpoint. One generation uses one route, so which service received the memo and whose failure ended the run stay answerable. (Added in v2.0.)
 
 ### 2.2 What is inherited from ai-digest
 
@@ -77,13 +81,26 @@ Requirement 11 does not ask for persistence. This design uses that: **the server
 [gunicorn]  managed by systemd, Restart=always, enabled at boot
     |  WSGI
     v
-[Flask app.py]  ---- sizu_writer/ (generation core) ----> [OpenAI compatible API]
+[Flask app.py]  ---- sizu_writer/ (generation core) ----> [GENERATION_BASE_URL]
                           ^
                           |
                      prompts/*.md
                           ^
                           |
                      [cli.py]  <- maintenance and prompt work
+```
+
+Since v2.0 the generation core is itself in two layers, so that the transport can change without touching what a draft has to look like:
+
+```
+[sizu_writer/generator.py]        messages, and the object it expects back
+        |
+        v
+[sizu_writer/providers/]          chosen by GENERATION_BACKEND
+        |
+        v
+[GENERATION_BASE_URL]             Sakura AI Engine, OpenAI, or another
+                                  OpenAI compatible service
 ```
 
 - Apache and Flask are connected by **a reverse proxy in front of gunicorn**. Requirement 5.1 also allows `mod_wsgi`, but `mod_wsgi` ties the Apache build to a Python version and cannot replace the application without restarting Apache. Behind a reverse proxy, `systemctl restart sizu-writer` is enough, which matches the operation of ai-digest.
@@ -96,11 +113,11 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 
 | Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
-| OpenAI client | `OPENAI_TIMEOUT` | 60s | The limit of one generation. Beyond it, the user is told it timed out |
+| Generation client | `GENERATION_TIMEOUT` | 60s | The limit of one generation. Beyond it, the user is told it timed out |
 | gunicorn | `--timeout` | 120s | The client timeout plus room for one retry |
 | Apache | `ProxyTimeout` | 180s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-Raising `OPENAI_MAX_RETRIES` means revisiting the gunicorn and Apache values. The README states this dependency in its deployment section.
+Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the worst case wait is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`. The default is 0 retries, so 60 seconds sits comfortably inside gunicorn's 120. The README states this dependency in its deployment section.
 
 ---
 
@@ -120,8 +137,11 @@ Raising `OPENAI_MAX_RETRIES` means revisiting the gunicorn and Apache values. Th
 │   ├── __init__.py                 The Draft dataclass, __version__, shared helpers
 │   ├── errors.py                   The exception hierarchy and the messages shown to the user
 │   ├── prompts.py                  Reading prompts/ and assembling the messages
-│   ├── generator.py                The API call and the validation of its answer
+│   ├── generator.py                The messages, the answer and the validation of a draft
 │   ├── formatter.py                Post processing and inspection of the body
+│   ├── providers/                  How an endpoint is spoken to (v2.0)
+│   │   ├── __init__.py             The backend registry and CompletionResult
+│   │   └── openai_compatible.py    The Chat Completions call and its failures
 │   └── web/
 │       ├── __init__.py             Resolution of TEMPLATE_DIR and STATIC_DIR
 │       ├── templates/
@@ -144,6 +164,9 @@ Raising `OPENAI_MAX_RETRIES` means revisiting the gunicorn and Apache values. Th
 └── doc/
     ├── REQUIREMENTS.md             Requirements
     ├── BASIC_DESIGN.md             This document
+    ├── DETAILED_DESIGN_GENERATION_API.md   The generation path in detail (v2.0)
+    ├── PROMPTS.md                  The prompt files and how to work on them
+    ├── DEPLOYMENT.md               Debian, Apache and API integration
     ├── POLICY                      Implementation policy (following ai-digest)
     ├── VERSIONS                    Repository version history
     ├── LICENSE
@@ -190,7 +213,7 @@ class SizuWriterError(Exception):
 | `EmptyInputError` | Empty or blank input | Enter a memo first. | 400 | INFO |
 | `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
 | `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
-| `UpstreamTimeoutError` | Beyond `OPENAI_TIMEOUT` | Generation took too long and was stopped. Shorten the memo, or try again in a while. | 504 | ERROR |
+| `UpstreamTimeoutError` | Beyond `GENERATION_TIMEOUT` | Generation took too long and was stopped. Shorten the memo, or try again in a while. | 504 | ERROR |
 | `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
 | `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
 | `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
@@ -240,12 +263,14 @@ Length is written as an instruction that **sets no lower bound**: "a few paragra
 
 ### 5.4 `sizu_writer/generator.py`
 
-Calls the OpenAI compatible API, validates the answer and returns a `Draft`.
+Validates the answer and returns a `Draft`.
 
 ```python
 def generate_draft(input_text: str, config: Config) -> Draft
 def regenerate_titles(input_text: str, body: str, config: Config) -> Draft
 ```
+
+> **v2.0.** The API call itself moved to `sizu_writer/providers/`, and `generator.py` now works from a `CompletionResult` rather than an SDK response. It handles no HTTP client, no authentication, no base URL and no SDK exception. Sections 5.4.1 and 5.4.4 below describe v1.x; the shape that is implemented is in [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md), sections 10 to 12. Section 5.4.3 still describes the validation exactly, because moving the transport was not allowed to change it.
 
 #### 5.4.1 How the API is called
 
@@ -261,7 +286,9 @@ Chat Completions of the `openai` package, with a JSON Schema in `response_format
 
 In every case the validation of 5.4.3 runs. Choosing something other than `json_schema` never makes the validation weaker.
 
-`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `OPENAI_TEMPERATURE` is set. This is the reasoning behind ai-digest's `ANTHROPIC_THINKING_MODE=default`.
+> **v2.0.** Two of these three shipped, under `GENERATION_RESPONSE_MODE`: `json-object` sends `response_format={"type": "json_object"}`, and `prompt-json` sends nothing and additionally accepts an answer wrapped in a single code fence. `prompt-json` is the default, because it works against an endpoint or a model that rejects the parameter, and it is what the Sakura AI Engine example uses. `json_schema` is still unimplemented. There is no automatic choice between the modes: trying one and retrying with the other would make one generation cost two requests. The sentence above holds unchanged — the validation of 5.4.3 runs in either mode, and no mode weakens it.
+
+`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `GENERATION_TEMPERATURE` is set. This is the reasoning behind ai-digest's `ANTHROPIC_THINKING_MODE=default`.
 
 #### 5.4.2 The JSON schema
 
@@ -300,6 +327,8 @@ Each entry of `alternative_titles` is stripped of the empty ones and of duplicat
 #### 5.4.4 Retries
 
 Left to `max_retries` of the client (default 2); no retry loop of our own. As in ai-digest, `OPENAI_MAX_RETRIES=0` spends exactly one request, which is what comparing endpoints needs.
+
+> **v2.0.** `GENERATION_MAX_RETRIES` defaults to `0`, so spending one request per action is the normal case rather than the one an operator opts into. A plan counting requests — Sakura AI Engine's 3,000 per month — makes an unpredictable multiplier expensive, and the retries the SDK would have spent are the least visible part of the total.
 
 ### 5.5 `sizu_writer/formatter.py`
 
@@ -363,6 +392,8 @@ Exit codes: `0` success, `1` failure, as POLICY prescribes.
 ## 6. Settings
 
 `config.py` holds the `Config` dataclass and `load_config()`. Validation lives in `validate_*()`; a wrong value fails at startup or before generation instead of falling back to a default (the policy behind ai-digest rejecting a misspelled `SUMMARIZER_BACKEND`).
+
+> **v2.0.** The table below is the v1.x naming. The settings that shipped are `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL` — all four required, none defaulted — plus `GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and `GENERATION_TEMPERATURE`. The rows below them are unchanged. Validation is split into `load_config()`, which converts and checks values on their own terms, and `validate_generation_config()`, which refuses a configuration that cannot address an endpoint; the split is what lets `cli.py --version` and the test suite run without credentials. The v1.x variables in the table are refused by name if they are still set. See [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md), sections 8 and 9.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -519,6 +550,8 @@ WantedBy=multi-user.target
 | `test_errors.py` | Each exception carrying `user_message` and `status_code`; no key, URL or path inside `user_message` |
 | `test_web.py` | With the Flask `test_client`: the input screen renders; an empty input errors and keeps the input; a successful generation shows the body and the titles; `mode=titles` updates the titles and keeps the body; no traceback in the body of an error answer; a POST with a foreign `Origin` answers 400; `/healthz` answers 200 without calling the API |
 
+> **v2.0.** The transport moved, and its tests moved with it into `test_openai_compatible_provider.py`: what reaches the SDK, the normalization of an answer, and the mapping of a timeout, a connection failure and each error status. `test_generator.py` keeps everything about a draft and gains the two response modes. `test_config.py` gains the refusal of the v1.x `OPENAI_*` variables and the base URL rules. The stub is now the `openai` package itself, so the suite does not import the SDK at all. `test_prompts.py` and `test_errors.py` are still unwritten.
+
 Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality of the writing and cannot be decided by a test. The README describes them as a manual step: run a real memo through `cli.py generate` and read the result.
 
 ---
@@ -591,7 +624,7 @@ Stage 5 comes before stage 6 on purpose. In a system of this kind the prompt is 
 
 Points to decide before implementation. None of them affects the structure of this document.
 
-1. **The model**: `OPENAI_MODEL` has no default, so the model to run must be chosen. How closely a model follows instructions about register decides the result; compare several at stage 5.
+1. **The model**: `GENERATION_MODEL` has no default, so the model to run must be chosen. How closely a model follows instructions about register decides the result; compare several at stage 5.
 2. **The input limit**: `MAX_INPUT_CHARS=4000` is provisional. Revisit it with the memos actually written.
 3. **Who may reach it**: Basic authentication, IP restriction or a VPN. Reflect the choice in `deploy/sizu-writer.conf`.
 4. **`LOG_PAYLOAD`**: keep it off, or turn it on during a tuning period with a retention period defined (requirement 10.1).

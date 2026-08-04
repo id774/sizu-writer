@@ -51,9 +51,7 @@ placeholder against the table above.
 
 ## The JSON contract
 
-`system.md` ends by asking for one JSON object and nothing else. The request
-also carries `response_format={"type": "json_object"}`, so the endpoint is
-asked twice, in two ways, for the same thing:
+`system.md` ends by asking for one JSON object and nothing else:
 
 ```json
 {
@@ -65,17 +63,30 @@ asked twice, in two ways, for the same thing:
 
 `titles_system.md` asks for the same object without `body_markdown`.
 
-The instruction stays in the prompt even though `response_format` is set,
-because the two do different work. `response_format` makes the answer parse;
-the prompt is what keeps an editing note out of `body_markdown`. A model told
-only to return JSON will happily return valid JSON whose body field opens with
-a remark about the instructions it was given.
+The prompt carries the whole contract, so that it holds whether or not the API
+is also asked. That is what `GENERATION_RESPONSE_MODE` selects:
+
+| Mode | The request | The prompt |
+|---|---|---|
+| `prompt-json` (default) | sends nothing extra | is the only statement of the contract |
+| `json-object` | sends `response_format={"type":"json_object"}` | states it again in words |
+
+The instruction stays in the prompt even under `json-object`, because the two
+do different work. `response_format` makes the answer parse; the prompt is what
+keeps an editing note out of `body_markdown`. A model told only to return JSON
+will happily return valid JSON whose body field opens with a remark about the
+instructions it was given.
+
+The same four prompts serve both modes. There is no `prompts-json-object/`
+alongside `prompts/`: a policy that differs by transport would have to be
+edited twice and would drift.
 
 `sizu_writer/generator.py` validates what comes back and refuses the answer,
 raising `InvalidResponseError`, when:
 
 - there is no choice in the response
-- `finish_reason` is `length`, meaning the body was cut off partway
+- `finish_reason` says the output limit was reached, meaning the body was cut
+  off partway
 - the content does not parse as JSON, or parses as something other than an object
 - `body_markdown` is missing, not a string, or blank (checked on `generate` only)
 - `primary_title` is missing, not a string, or blank
@@ -85,6 +96,40 @@ An empty `alternative_titles` is accepted; the requirement sets a maximum, not
 a minimum. Blank entries, duplicates and repeats of `primary_title` are dropped,
 and `MAX_ALT_TITLES` of the rest are kept. Renaming a field in a prompt without
 renaming it in `generator.py` produces `InvalidResponseError` on every run.
+
+## What surrounds the object
+
+Under `prompt-json` one concession is made: an answer that is a single code
+fence with the object inside it is unwrapped, because a model asked in words
+for JSON wraps it routinely. Accepted:
+
+````text
+```json
+{"body_markdown": "...", "primary_title": "...", "alternative_titles": []}
+```
+````
+
+Refused, in both modes:
+
+````text
+Here is the draft you asked for.
+
+```json
+{...}
+```
+````
+
+Nothing takes the first `{` and the last `}` out of free text. That heuristic is
+the same one this design refuses everywhere else: an answer opening with "Here
+are the title candidates you asked for" is a prompt that needs fixing, and
+reading past the sentence would hide it. A prompt whose model keeps writing an
+introduction is a prompt to change, not an answer to trim.
+
+The output format sections of `system.md` and `titles_system.md` therefore say
+in six ways what shape the answer takes — no prose, no code fence, nothing
+before or after the object, the body and the titles in their own fields, and no
+editing note inside the body field. Under `prompt-json` those sentences are all
+that stands between the model and an unusable answer.
 
 ## Why a JSON object rather than prose
 
@@ -131,11 +176,15 @@ than whether the writing is good:
 .venv/bin/python cli.py generate --input memo.txt --json
 ```
 
-Comparing endpoints or models is the same command with `--model`:
+Comparing models on the configured endpoint is the same command with `--model`:
 
 ```sh
-.venv/bin/python cli.py generate --input memo.txt --model gpt-4o
+.venv/bin/python cli.py generate --input memo.txt --model some-other-model
 ```
+
+Comparing endpoints is not a command line option. `GENERATION_BASE_URL` and the
+token belong to the deployment, so a second endpoint means a second `.env` —
+which is the point: a run has one endpoint, and its log line says which.
 
 Changing one thing per run is worth the discipline here. The output is prose,
 so the difference between two runs is a matter of reading rather than of a

@@ -1,6 +1,56 @@
 sizu-writer Repository Version History
 ======================================
 
+v2.0.0 (Release Date: TBD)
+--------------------------
+- Replace the OpenAI specific environment variables with provider neutral
+  generation settings. Using the openai package as a client and talking to
+  OpenAI the company are separate facts, and only the first is true by
+  default; the settings, the module names and the log lines now say so.
+- Require an explicit backend, token, base URL and model, so that no
+  endpoint is ever selected implicitly. A blank base URL used to mean
+  OpenAI, which let a deployment address a service without naming it.
+  Validation runs when app.py is imported and before a CLI subcommand, so
+  a worker that cannot reach an endpoint refuses to start rather than
+  accepting a memo and failing on the request.
+- Add sizu_writer/providers/, holding everything that knows how an
+  endpoint is spoken to: the SDK, the authentication, the base URL, the
+  request shape and the client's exceptions. generator.py now works from a
+  CompletionResult, so a second wire protocol can be added as a module and
+  a registry entry without touching what a body and its titles have to
+  look like.
+- Support Sakura AI Engine account tokens, of the form <UUID>:<secret>,
+  against its OpenAI compatible Chat Completions API. sizu-writer now runs
+  with no OpenAI account at all, and Sakura AI Engine is not built in as a
+  backend of its own: it is reached as what it is, an explicitly configured
+  OpenAI compatible endpoint.
+- Add the json-object and prompt-json response modes. prompt-json is the
+  default and sends no response_format, so an endpoint or a model that
+  rejects the parameter still answers; it additionally accepts an object
+  wrapped in a single code fence. Neither mode extracts an object out of
+  surrounding prose, because that heuristic is what lets an opening remark
+  become the first line of a post. There is no automatic mode: trying one
+  and retrying with the other would make one generation cost two requests.
+- Default the API retries to zero, so that one screen action or one CLI run
+  spends one request. On a plan counting requests, an unpredictable
+  multiplier is expensive, and the retries the SDK would have spent are the
+  least visible part of the total.
+- Never fall back to a second endpoint. One generation uses one route, so
+  which service received the memo, which model replied, how many requests
+  were spent and whose failure ended the run all stay answerable.
+- Log the shape of each exchange and none of its content: the backend, the
+  endpoint host, the request id, the model, the finish reason and the token
+  counts, with a matching line naming the HTTP status of a failure. The
+  token, the memo, the prompts, the body and the titles appear at no level.
+- Refuse the legacy OPENAI_* settings and an unknown backend before any
+  request is made, naming the setting at fault and never quoting a secret.
+  There is no translation, no aliasing and no precedence rule, so a stale
+  OPENAI_API_KEY exported in a shell cannot decide where a memo is sent.
+- Document the generation path in doc/DETAILED_DESIGN_GENERATION_API.md,
+  and update the README, the basic design, the deployment guide, the prompt
+  document and doc/POLICY to match. The README covers choosing an endpoint,
+  the two response modes, the request budget and the upgrade from v1.x.
+
 v1.0.0 (Release Date: 2026-08-04)
 ---------------------------------
 - Initial release. A Flask application that turns a short memo into a

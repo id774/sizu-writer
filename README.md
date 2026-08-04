@@ -12,34 +12,41 @@ The repository is written in English — the code, the comments, the screens, th
 
 - Requirements: [doc/REQUIREMENTS.md](doc/REQUIREMENTS.md)
 - Basic design: [doc/BASIC_DESIGN.md](doc/BASIC_DESIGN.md)
+- The generation API in detail: [doc/DETAILED_DESIGN_GENERATION_API.md](doc/DETAILED_DESIGN_GENERATION_API.md)
 - The prompts: [doc/PROMPTS.md](doc/PROMPTS.md)
 - Debian and Apache deployment: [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md)
 - Implementation policy: [doc/POLICY](doc/POLICY)
 
+> **v2.0 changes the settings incompatibly.** The `OPENAI_*` variables are gone, replaced by provider neutral `GENERATION_*` ones, and a process that still finds an `OPENAI_*` variable refuses to start. See [Upgrading from v1.x](#upgrading-from-v1x).
+
 ## Features
 
 - **One memo in, a postable draft out**: the whole body and the title candidates from a single generation
+- **Any OpenAI compatible endpoint, named out loud**: Sakura AI Engine, OpenAI or another service, chosen by setting `GENERATION_BASE_URL`; there is no default endpoint and no fallback to one
 - **Structured answer**: the endpoint is asked for a JSON object, so the body and the titles arrive as separate fields rather than being cut out of prose by heuristic
+- **One action, one request**: retries default to zero, so a screen click or a CLI run costs exactly one request on a plan that counts them
 - **The writing policy is not code**: `prompts/*.md` lives outside the Python package, so adjusting how the system writes needs neither a code change nor a reinstall
 - **Copy without picking**: the body and each title have their own copy button, and the copied text never carries a label or an explanation from the screen
 - **Regenerate at two scales**: the whole draft, or the titles alone against a body already settled
 - **Mechanical cleanup only**: an outer code fence, a `#` heading and runs of blank lines are rewritten; anything that would touch the meaning of a sentence is reported as a notice instead
 - **No state on the server**: the memo and the body travel with the form, so any worker answers any request and a restart loses nothing
-- **The key stays in the process**: it reaches neither a template, nor JavaScript, nor an error page
+- **The token stays in the process**: it reaches neither a template, nor JavaScript, nor an error page
 - **Deployable as is**: `systemd` and Apache examples in [deploy/](deploy), a `Procfile` for a platform that wants one
 
 ## Requirements
 
 - Python 3.9 or later
-- An API key for OpenAI, or for any endpoint speaking its Chat Completions API
+- A token for an endpoint speaking the OpenAI compatible Chat Completions API — Sakura AI Engine, OpenAI, or another service
 - Outbound HTTPS access to that endpoint, and nothing else
+
+No OpenAI account is needed. The `openai` package is used as the client for the protocol; which service answers is decided by `GENERATION_BASE_URL` and by nothing else.
 
 Python dependencies are listed in `requirements.txt`:
 
 | Package | Purpose |
 |---|---|
 | Flask | Web screens and Jinja2 templates |
-| openai | Client of the OpenAI compatible endpoint |
+| openai | Client of the OpenAI compatible Chat Completions protocol |
 | python-dotenv | Loading of the local `.env` file |
 | gunicorn | Application server used in production |
 
@@ -81,7 +88,9 @@ chmod 600 .env
 $EDITOR .env
 ```
 
-Set `OPENAI_API_KEY` and `OPENAI_MODEL`. Neither has a default: the key because there can be none, the model because a sensible one differs per endpoint. Every setting is documented in [.env.example](.env.example) and under [Configuration](#configuration).
+Four settings are required and none of them has a default: `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL`. The shipped example is already filled in for Sakura AI Engine except for the token and the model; see [Choosing an endpoint](#choosing-an-endpoint). Every setting is documented in [.env.example](.env.example) and under [Configuration](#configuration).
+
+The base URL is required rather than defaulted on purpose. A request that leaves for a service nobody named is worse than one that never leaves, so an unset endpoint stops the process instead of quietly becoming OpenAI's.
 
 `chmod 600` is part of the step rather than an afterthought. The file holds a credential and is read by one service user. `.env` is ignored by Git and must never be committed.
 
@@ -92,9 +101,9 @@ Set `OPENAI_API_KEY` and `OPENAI_MODEL`. Neither has a default: the key because 
 .venv/bin/python -m unittest discover -s tests
 ```
 
-The first command prints the version. The second runs the whole suite, which needs no network access, no API key and no `.env`; see [Tests](#tests). Neither command calls the API, so both pass before a key is configured — which is the point of running them first.
+The first command prints the version. The second runs the whole suite, which needs no network access, no API token and no `.env`; see [Tests](#tests). Neither command calls the API, so both pass before a token is configured — which is the point of running them first.
 
-To confirm the key and the model as well, generate something small:
+To confirm the token and the model as well, generate something small:
 
 ```sh
 .venv/bin/python cli.py generate --text "A test memo."
@@ -106,12 +115,14 @@ All settings are read from environment variables, optionally through `.env`, and
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | none | API key of the endpoint. Required at generation time. A missing key is reported to the log, never to the screen. |
-| `OPENAI_BASE_URL` | none | Base URL of an OpenAI compatible endpoint, including the version path. Empty means OpenAI itself. |
-| `OPENAI_MODEL` | none | Model used for generation. Required; no default is shipped. |
-| `OPENAI_TIMEOUT` | `60` | Seconds allowed for one request. Raising it means revisiting the two outer timeouts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
-| `OPENAI_MAX_RETRIES` | `2` | Retries the SDK may spend on one request. `0` spends exactly one, which is what comparing two endpoints needs. |
-| `OPENAI_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
+| `GENERATION_BACKEND` | **required** | Wire protocol of the endpoint. `openai-compatible` is the only value this version accepts; an unknown one is refused rather than read as the default. |
+| `GENERATION_API_TOKEN` | **required** | API key or Bearer token of the endpoint. A missing token is reported to the log and to the operator, never to the screen. |
+| `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. `https` only. |
+| `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
+| `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
+| `GENERATION_TIMEOUT` | `60` | Seconds allowed for one request. Raising it means revisiting the two outer timeouts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
+| `GENERATION_MAX_RETRIES` | `0` | Retries the SDK may spend on one request. `0` spends exactly one; see [One action, one request](#one-action-one-request). |
+| `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field, enforced on the server as well as in the browser. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. |
@@ -119,31 +130,73 @@ All settings are read from environment variables, optionally through `.env`, and
 | `LOG_LEVEL` | `INFO` | Level of the application log. |
 | `PORT` | `8090` | Port of the development server and of gunicorn. |
 
-A non numeric value given to a numeric setting raises `ValueError` at startup naming the variable and the value, rather than falling back to the default. A setting that is silently ignored is worse than one that fails.
+A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. The four required settings are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
-`OPENAI_API_KEY` deliberately has no command line option: a command line is readable by every user of the host, through `ps`. The key stays in the environment or in `.env`.
+`GENERATION_API_TOKEN` deliberately has no command line option: a command line is readable by every user of the host, through `ps`. The token stays in the environment or in `.env`. `GENERATION_BASE_URL` has none either, for a different reason — the endpoint is a decision of the deployment, not of an invocation.
 
-### OpenAI compatible endpoints
+### Choosing an endpoint
 
-Set `OPENAI_BASE_URL` to use any endpoint speaking the Chat Completions API:
+Any service speaking the OpenAI compatible Chat Completions API works. The base URL includes the version path and stops before `/chat/completions`, which the SDK appends itself; a URL that already carries it is refused at startup.
+
+**Sakura AI Engine.** The token is the account token issued in the control panel, shaped `<UUID>:<secret>`; paste the whole string, colon included.
 
 ```env
-OPENAI_API_KEY=<key>
-OPENAI_BASE_URL=https://api.example.net/v1
-OPENAI_MODEL=some-model
+GENERATION_BACKEND=openai-compatible
+GENERATION_API_TOKEN=<UUID>:<secret>
+GENERATION_BASE_URL=https://api.ai.sakura.ad.jp/v1
+GENERATION_MODEL=<a model from the control panel>
+GENERATION_RESPONSE_MODE=prompt-json
 ```
 
-The base URL includes the version path. The endpoint must accept `response_format={"type": "json_object"}` and produce a JSON object in the answer; see [The response format](#the-response-format).
+The free plan for foundational models covers 3,000 chat completion requests per month, and rate limits beyond that. Model names are read off the control panel's list of available models rather than copied from a document: models are added, renamed and withdrawn, and the closed models are outside the free allowance. That is why no default model is shipped and no model name appears anywhere in this repository.
 
-Speaking the same API does not mean behaving the same way. When a compatible endpoint refuses `temperature`, leave `OPENAI_TEMPERATURE` empty and nothing is sent. When it answers slowly, raise `OPENAI_TIMEOUT` and the two timeouts outside it. Change one setting per run, so that the run which succeeds says which setting did it.
+**OpenAI.**
 
-### The response format
+```env
+GENERATION_BACKEND=openai-compatible
+GENERATION_API_TOKEN=<OpenAI API key>
+GENERATION_BASE_URL=https://api.openai.com/v1
+GENERATION_MODEL=<model>
+GENERATION_RESPONSE_MODE=json-object
+```
 
-Every request carries `response_format={"type": "json_object"}`, and the prompt asks for the same object again in words. The two do different work: the response format is what makes the answer parse, and the prompt is what keeps an editing note out of the body field. A model told only to return JSON will return valid JSON whose body opens with a remark about the instructions it was given.
+OpenAI is one explicit endpoint among several here, not a privileged default. Nothing happens differently because that URL is the one configured.
 
-The body and the titles arrive as separate fields for the same reason. Splitting one block of prose by heuristic — first line is the title, the rest is the body — is exactly what lets an instruction leak into a post. Separate fields leave the leak nowhere to go.
+**Anything else.** Same four settings, different values. Speaking the same API does not mean behaving the same way: when an endpoint refuses `temperature`, leave `GENERATION_TEMPERATURE` empty and nothing is sent; when it refuses `response_format`, use `prompt-json`; when it answers slowly, raise `GENERATION_TIMEOUT` and the two timeouts outside it. Change one setting per run, so that the run which succeeds says which setting did it.
 
-The design allows for stepping this down to a `json_schema` or to nothing at all, for endpoints that support more or less. `json_object` is fixed in this version; see [Not in this first version](#not-in-this-first-version).
+**No fallback.** An authentication failure, a rate limit or a timeout never causes a request to a second endpoint. One generation uses one route, which is what keeps it answerable afterwards which service received the memo, which model replied, how many requests were spent and whose failure ended the run.
+
+### Asking for JSON
+
+The body and the titles arrive as separate fields of a JSON object. Splitting one block of prose by heuristic — first line is the title, the rest is the body — is exactly what lets an instruction leak into a post, and separate fields leave the leak nowhere to go. How that object is asked for is a setting, because endpoints differ:
+
+| `GENERATION_RESPONSE_MODE` | Sent to the API | Answer accepted when |
+|---|---|---|
+| `prompt-json` (default) | nothing extra | the whole answer, or the inside of one outer code fence, parses as a JSON object |
+| `json-object` | `response_format={"type":"json_object"}` | the whole answer parses as a JSON object |
+
+`prompt-json` is the default because it works everywhere: an endpoint or a model that rejects `response_format` still answers. Use `json-object` where it is supported — it is the stronger of the two, and it costs nothing.
+
+There is no `auto`. Sending `json-object`, having it refused and retrying with `prompt-json` would turn one generation into two requests, which is precisely what a plan counting requests punishes.
+
+In both modes the prompt also states the contract in words, and both do work the other cannot. `response_format` is what makes an answer parse; the prompt is what keeps an editing note out of the body field. A model told only to return JSON will return valid JSON whose body opens with a remark about the instructions it was given.
+
+Neither mode digs an object out of surrounding prose. An answer with a sentence before the JSON is refused rather than trimmed: reading past an explanation would hide the fact that the endpoint is answering the wrong way.
+
+### One action, one request
+
+`GENERATION_MAX_RETRIES` defaults to `0`, so one screen click or one CLI run is one request to the endpoint. On a plan that counts requests, that is the difference between a predictable monthly total and one that drifts.
+
+| Action | Requests |
+|---|---:|
+| Generating a body and its titles | 1 |
+| Regenerating the titles of a settled body | 1 |
+| One SDK retry | 1 more |
+| A resubmission in the browser | 1 each |
+
+Raising the retries is a deliberate choice, and it also multiplies the worst case wait; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other).
+
+Local counts are an estimate, not a ledger. A connection dropped at the wrong moment leaves it unknowable on this side whether the service accepted the request, and no monthly counter is written to disk, because the server holds no state. The endpoint's own control panel is the record.
 
 ### Timeouts that agree with each other
 
@@ -151,11 +204,42 @@ Three timeouts sit one inside the other, and they widen outwards:
 
 | Timeout | Default | Set in |
 |---|---|---|
-| `OPENAI_TIMEOUT` | 60s | `.env` |
+| `GENERATION_TIMEOUT` | 60s | `.env` |
 | gunicorn `--timeout` | 120s | the systemd unit, or the `Procfile` |
 | Apache `ProxyTimeout` | 180s | the virtual host |
 
-Raising `OPENAI_TIMEOUT` means raising the other two. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
+Raising `GENERATION_TIMEOUT` means raising the other two. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
+
+Retries widen the same window, because the SDK spends the timeout again on each one:
+
+```text
+worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
+```
+
+At the default of zero retries that is 60 seconds, comfortably inside gunicorn's 120. Raising the retries to 2 makes it 180, which is already outside both — so the outer two move with it.
+
+### Upgrading from v1.x
+
+The `OPENAI_*` settings of v1.x are not read, and a process that finds one of them in its environment stops at startup naming its replacement:
+
+```text
+OPENAI_API_KEY is no longer supported; use GENERATION_API_TOKEN.
+```
+
+| v1.x | v2.0 |
+|---|---|
+| `OPENAI_API_KEY` | `GENERATION_API_TOKEN` |
+| `OPENAI_BASE_URL` | `GENERATION_BASE_URL`, now required |
+| `OPENAI_MODEL` | `GENERATION_MODEL` |
+| `OPENAI_TIMEOUT` | `GENERATION_TIMEOUT` |
+| `OPENAI_MAX_RETRIES` | `GENERATION_MAX_RETRIES`, now defaulting to `0` |
+| `OPENAI_TEMPERATURE` | `GENERATION_TEMPERATURE` |
+
+Two settings have no predecessor: `GENERATION_BACKEND`, which must be `openai-compatible`, and `GENERATION_RESPONSE_MODE`, which v1.x had no choice about — it always sent `response_format`, so `json-object` is the setting that reproduces its behaviour.
+
+There is no automatic translation, no aliasing and no precedence rule, which is deliberate. A mixture of old and new settings would leave the endpoint to be guessed; a stale `OPENAI_API_KEY` exported in a shell must not be picked up silently; the path back to OpenAI's default URL has to be closed completely; and a break of this size belongs in the open. Presence is what is refused, whatever the value: an exported but empty `OPENAI_BASE_URL` still says the host was set up for v1.
+
+Upgrading is therefore: rewrite `.env` from [.env.example](.env.example), unset any `OPENAI_*` variable exported elsewhere (a systemd `EnvironmentFile`, a shell profile, a CI secret), and restart.
 
 ## Usage
 
@@ -186,16 +270,18 @@ The exit status is 0 on success, 1 when generation failed, and 2 when the comman
 
 | Option | Replaces |
 |---|---|
-| `--model NAME` | `OPENAI_MODEL` |
+| `--model NAME` | `GENERATION_MODEL` |
 | `--prompt-dir DIR` | `PROMPT_DIR` |
-| `--timeout SECONDS` | `OPENAI_TIMEOUT` |
+| `--timeout SECONDS` | `GENERATION_TIMEOUT` |
 
 Each wins over the environment and `.env` for that invocation only:
 
 ```sh
-.venv/bin/python cli.py generate --input memo.txt --model gpt-4o
+.venv/bin/python cli.py generate --input memo.txt --model some-other-model
 .venv/bin/python cli.py generate --input memo.txt --prompt-dir prompts-plain
 ```
+
+The overrides are applied before the settings are checked, so `--model` can stand in for a `GENERATION_MODEL` that is not configured at all. There is no option for the token or the base URL, for the reasons under [Configuration](#configuration).
 
 `--prompt-dir` replaces the whole set of four prompts, not one file. Comparing two writing policies is a matter of copying the directory, editing the copy and pointing the option at it; see [doc/PROMPTS.md](doc/PROMPTS.md).
 
@@ -267,29 +353,42 @@ The screen shows a message meant for the person and a short reference id. The ca
 |---|---|---|
 | Enter a memo first. | 400 | The input was empty or blank |
 | The memo is too long. | 400 | Over `MAX_INPUT_CHARS` |
-| The generation service could not be reached. | 502 | DNS, network or a wrong `OPENAI_BASE_URL` |
-| The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad key, no quota, a rate limit, an unknown model |
-| Generation took too long and was stopped. | 504 | Over `OPENAI_TIMEOUT` |
+| The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
+| The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
+| Generation took too long and was stopped. | 504 | Over `GENERATION_TIMEOUT` |
 | The result could not be read. | 502 | The answer was not the expected JSON object, or was cut off |
-| The server failed to handle the request. | 500 | Anything unexpected, including a missing key or prompt file |
+| The server failed to handle the request. | 500 | Anything unexpected, including a missing prompt file |
+
+A misconfiguration never reaches this table, because the settings are checked before a request is made: the web process refuses to start and `cli.py` exits 1, each naming the setting at fault.
+
+Every failed request also leaves one line naming the status the endpoint answered with. The screen does not distinguish them — writing "your token is invalid" onto a page is reporting the configuration of the server to whoever asked for a draft — but the log does, and the difference decides what to do next:
+
+| Status | What to do |
+|---|---|
+| 401 | Replace `GENERATION_API_TOKEN`; it is not valid for this endpoint |
+| 403 | The plan or the permissions do not cover this model |
+| 429 | A rate limit, or the monthly allowance is used up. Wait, or check the control panel |
+| 500 | The endpoint failed internally. Retry later |
+| 504 | The endpoint timed out on its own side, before `GENERATION_TIMEOUT` fired |
 
 Two cases are worth knowing by their log line rather than their screen:
 
-**`The output was cut off; raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
+**`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
-**`api key missing` / `model missing`** — reported as an internal error, because from the reader's side that is what it is. The screen says only that the server failed; the log names which of the two is unset.
+**`The answer is not readable as JSON`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
 
 Both `cli.py` and `app.py` log in the same format, so a failure reproduced from the command line reads the same as the one from the screen:
 
 ```
-2026-08-04 09:42:01,727 ERROR sizu_writer.generator: The output was cut off; raise MAX_OUTPUT_TOKENS or shorten the input
+2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=...
+2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... timeout=60.0: ...
 ```
 
-Neither the memo nor the generated text is logged at the default level.
+The token, the memo, the prompts, the generated body and the titles appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
 
 ## Tests
 
-The suite lives in `tests/` and uses `unittest` from the standard library. Every test stubs the OpenAI client: no outbound access, no API key and no `.env` are needed.
+The suite lives in `tests/` and uses `unittest` from the standard library. Every test stubs the client: no outbound access, no API token and no `.env` are needed. The provider tests go further and stub the `openai` package itself, so they exercise the request that would have been sent without importing the SDK at all.
 
 Run everything at once, from the repository root:
 
@@ -311,10 +410,13 @@ Narrower selections use the same runner:
 
 | Module | Subject |
 |---|---|
-| `test_config.py` | environment driven settings, blank values, refusal of a non numeric value, the key kept out of `repr` |
-| `test_generator.py` | the API call, validation of the answer, the title limit, refusal of a truncated or malformed response |
+| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, refusal of a v1.x `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
+| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500 |
+| `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
 | `test_web.py` | the screens, input limits, regeneration of the titles alone, and that a failure does not expose its cause |
+
+`test_web.py` sets the four required settings before importing `app`, because `app.py` validates them while it is imported. They are placeholders and no request is made; `setdefault` leaves a real `.env` alone when one is present.
 
 A passing suite says nothing about the endpoint being reachable or the writing being good. The first is exercised by an actual `cli.py generate`; the second cannot be decided by a test at all. The acceptance conditions about the quality of the writing — that no instruction leaks into the body, that it is not inflated into an explainer, and that a familiar theme is not presented as freshly discovered (requirements 14.7 to 14.9) — are settled by running a real memo through `cli.py generate` and reading the result.
 
@@ -342,8 +444,11 @@ The guide covers installation, TLS, reader restrictions, API compatibility and o
 │   ├── __init__.py                 the Draft dataclass and the version
 │   ├── errors.py                   the exception hierarchy and the messages shown
 │   ├── prompts.py                  reading prompts/ and assembling the messages
-│   ├── generator.py                the API call and the validation of its answer
+│   ├── generator.py                the messages, the answer and the validation of a draft
 │   ├── formatter.py                post processing and inspection of the body
+│   ├── providers/
+│   │   ├── __init__.py             the backend registry, CompletionResult, the log line
+│   │   └── openai_compatible.py    the Chat Completions call and its failures
 │   └── web/
 │       ├── __init__.py             resolution of TEMPLATE_DIR and STATIC_DIR
 │       ├── templates/
@@ -366,6 +471,7 @@ The guide covers installation, TLS, reader restrictions, API compatibility and o
 └── doc/
     ├── REQUIREMENTS.md             requirements
     ├── BASIC_DESIGN.md             basic design
+    ├── DETAILED_DESIGN_GENERATION_API.md   the generation path in detail
     ├── PROMPTS.md                  the prompt files and how to work on them
     ├── DEPLOYMENT.md               Debian, Apache and API integration
     ├── POLICY                      implementation policy
@@ -378,6 +484,20 @@ The guide covers installation, TLS, reader restrictions, API compatibility and o
 `prompts/` sits outside the package on purpose: editing a prompt needs no reinstall, and `PROMPT_DIR` can point the system at an entirely different set.
 
 `sizu_writer/` imports no Flask. That is what lets `cli.py` exercise the same code the screens do, and what keeps the test suite free of a web context.
+
+### Adding a backend
+
+`providers/` holds everything that knows how an endpoint is spoken to: the SDK, the authentication, the base URL, the shape of a request and the exceptions the client raises. Above it, `generator.py` hands over a message list and receives a `CompletionResult`.
+
+Supporting a genuinely different protocol — an Anthropic compatible Messages API, say — is three steps:
+
+1. Write `sizu_writer/providers/<name>.py` with a class exposing `complete(messages, config) -> CompletionResult`, raising the `Upstream*` errors of `sizu_writer/errors.py`.
+2. Register a loader for it in `BACKENDS` in `sizu_writer/providers/__init__.py`.
+3. Add the value to `GENERATION_BACKENDS` in `config.py`, so the setting is accepted.
+
+Nothing else changes. `generator.py` is untouched by a new backend, which is the point of `CompletionResult`: what a body and its titles have to look like is not a property of the wire protocol, so a second protocol must not be able to weaken it. A backend needing settings of its own adds new `GENERATION_*` variables rather than reinterpreting an existing one — a setting that means different things per backend cannot be validated in one place.
+
+The registry holds loaders rather than classes, so importing `providers` does not import an SDK a deployment may not need. [doc/DETAILED_DESIGN_GENERATION_API.md](doc/DETAILED_DESIGN_GENERATION_API.md) documents the layer in full.
 
 ## The Japanese that stays
 
@@ -392,12 +512,13 @@ The repository is written in English. Four places keep Japanese because the stri
 
 Everything else — comments, log messages, screen text, error messages, prompt instructions, documents — is English. The generated post is Japanese, and so is the memo the person writes; the elements carrying either are marked `lang="ja"` while the page itself is `lang="en"`.
 
-## Not in this first version
+## Not implemented yet
 
 Parts of the basic design deliberately left for a later change:
 
 - the space inserted between full width characters and ASCII (`BODY_ASCII_SPACING`)
-- the `json_schema` and `none` response format modes; `json_object` is fixed for now
+- the `json_schema` response format mode, for endpoints supporting Structured Outputs; `json-object` and `prompt-json` are the two modes that exist
+- a second backend in `providers/`; `openai-compatible` is the only one v2.0 speaks
 - the `Origin` check on POST (`REQUIRE_SAME_ORIGIN`)
 - `LOG_PAYLOAD`, which would record the memo and the answer at DEBUG for prompt work
 - persistence of the generated drafts (requirement 11, a future extension)

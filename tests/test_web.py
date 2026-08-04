@@ -1,10 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 import unittest
 from unittest import mock
 
-import app as web
+# app.py validates the generation settings while it is imported, so a
+# worker that cannot address an endpoint refuses to start. These values
+# are what that check needs and nothing more: no request is ever made,
+# and setdefault leaves a real .env alone when one is present.
+os.environ.setdefault("GENERATION_BACKEND", "openai-compatible")
+os.environ.setdefault("GENERATION_API_TOKEN", "test-token")
+os.environ.setdefault("GENERATION_BASE_URL", "https://api.example.test/v1")
+os.environ.setdefault("GENERATION_MODEL", "test-model")
+
+import app as web  # noqa: E402  imported after the settings above
 from sizu_writer import Draft
 from sizu_writer.errors import UpstreamTimeoutError
 
