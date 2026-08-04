@@ -12,7 +12,7 @@ The body is neither a stretched out microblog post nor a shrunk blog article. It
 - Prefer a plain, direct title. Do not add a word for the sake of search, spread or clicks.
 - Avoid a title that makes the content look settled. If the body does not resolve its question, do not use a question form that suggests it does.
 - When the matter is unsettled, an observed fact or the point where the thinking started makes a fine title.
-- Do not force a symbolic, literary or sensational title.
+- Do not force a symbolic, literary or sensational title. When the body carries no natural title, a title made from the date is a candidate.
 
 ## Output format
 

@@ -250,15 +250,20 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
 | --- | --- | --- |
 | Role and medium | 2, 7.1 | A piece of a few paragraphs for Shizuka na Internet; neither a stretched microblog post nor a shrunk article |
 | What this is not | 3 | Not a primary source, a draft, material, a systematic essay, a survey, a how-to or an explainer. No point, evidence or generalization added for a future article |
+| The grain of the material | 3 | What one line would exhaust stays short; what an article would argue is written as the memo carries it. Unfinished, inconclusive and personal are not faults |
 | Stance | 7.2 | A familiar theme is not a discovery. Sort the thinking out, check where the interest lies, separate the points, state what can and cannot be said |
 | Keeping the material | 7.3 | Keep the scene, the subject, the wording, the hesitation, the discomfort, the question, the unsettled. Invent no experience, emotion, fact or causal link |
-| How much to explain | 7.4 | Background only as far as the text requires. No generalities, systems, glossary, history, case lists, bibliography or systematic argument |
-| Register | 7.5 | Follow the memo. Desu/masu by default, plain form kept when the original is consistent. Not academic, advertising or social media. Avoid what is typical of generated text |
+| What you do not look up | 7.10 | No research, no references. What has not been checked is not stated as established |
+| How much to explain | 7.4 | Background only as far as the text requires. No generalities, systems, glossary, history, case lists, bibliography or systematic argument. No move to a wide subject beyond what the observation supports |
+| Shape | 7.9 | Three to six paragraphs, fewer when the material is short. The usual order given, to follow the material rather than be applied mechanically |
+| Register | 7.5 | Follow the memo. Desu/masu by default, plain form kept when the original is consistent. Not academic, advertising or social media. Avoid what is typical of generated text. No bait, no conclusion first, no keyword repetition, no call to act |
 | Opening | 7.6 | Start from a concrete scene, subject, word or sensation. The forbidden openings are listed |
 | Ending | 7.7 | No manufactured lesson, recommendation or conclusion. The undecided stays undecided, without reading as abandoned. The forbidden closings are listed |
-| Markdown | 7.8 | No heading in a short text; `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. No bibliography. A space between full width characters and ASCII |
-| Titles | 8 | Stay close to the scene, the subject, the words, the question, the point of attention, where the thinking started. No word for search, spread or clicks. Not settled looking, not symbolic, literary or sensational |
+| Markdown | 7.8 | No heading in a short text; `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. A link only where the reader needs it, no bibliography. A space between full width characters and ASCII |
+| Titles | 8 | Stay close to the scene, the subject, the words, the question, the point of attention, where the thinking started. No word for search, spread or clicks. Not settled looking, not symbolic, literary or sensational; a date when nothing else is natural |
+| What matters most | 7.11 | The five points in order, the first three never given up for readability or notation |
 | Output format | 5.3 | Follow the given JSON schema, keeping the body and the titles apart. No instruction or annotation inside the body |
+| Before you answer | 3, 7 | A short recap of the checks that decide whether the answer is usable at all |
 
 Length is written as an instruction that **sets no lower bound**: "a few paragraphs to a few thousand characters as a guide; do not add background, generalities, examples or a conclusion to reach a length; what holds in a short text stays short" (requirement 7.1).
 

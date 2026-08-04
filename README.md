@@ -507,7 +507,7 @@ The repository is written in English. Four places keep Japanese because the stri
 |---|---|
 | `sizu_writer/formatter.py` | `BOILERPLATE` and `INSTRUCTION_LEAKS` are matched against a Japanese post body. An English translation would match nothing. |
 | `tests/test_formatter.py` | Its fixtures are Japanese bodies, because that is what the formatter is given. |
-| `prompts/system.md` | The forbidden openings and closings are quoted as the literal strings the model must not produce. |
+| `prompts/system.md` | The forbidden openings and closings are quoted as the literal strings the model must not produce, and the wide subjects it must not slide into are quoted the same way. |
 | `doc/REQUIREMENTS.md`, `doc/BASIC_DESIGN.md` | The same phrases, quoted as specification. |
 
 Everything else — comments, log messages, screen text, error messages, prompt instructions, documents — is English. The generated post is Japanese, and so is the memo the person writes; the elements carrying either are marked `lang="ja"` while the page itself is `lang="en"`.
