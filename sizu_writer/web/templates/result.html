@@ -6,7 +6,7 @@
 
   <section>
     <h2>Leading title</h2>
-    <p class="title-row"><span id="primary-title">{{ draft.primary_title }}</span>
+    <p class="title-row"><span id="primary-title" lang="ja">{{ draft.primary_title }}</span>
       <button type="button" data-copy-target="primary-title">Copy</button></p>
   </section>
 
@@ -15,7 +15,7 @@
     <h2>Other candidates</h2>
     <ul class="titles">
       {% for title in draft.alternative_titles %}
-      <li><span id="alt-title-{{ loop.index }}">{{ title }}</span>
+      <li><span id="alt-title-{{ loop.index }}" lang="ja">{{ title }}</span>
         <button type="button" data-copy-target="alt-title-{{ loop.index }}">Copy</button></li>
       {% endfor %}
     </ul>
@@ -28,7 +28,7 @@
 
   <section>
     <h2>Post body</h2>
-    <textarea id="post-body" readonly rows="24">{{ draft.body }}</textarea>
+    <textarea id="post-body" lang="ja" readonly rows="24">{{ draft.body }}</textarea>
     <div class="buttons">
       <button type="button" data-copy-target="post-body">Copy the body</button>
     </div>
@@ -47,7 +47,7 @@
 
   <details>
     <summary>Memo</summary>
-    <textarea name="input_text" rows="8">{{ input_text }}</textarea>
+    <textarea name="input_text" lang="ja" rows="8">{{ input_text }}</textarea>
   </details>
 
   <p class="meta">Model: {{ draft.model }} / Generated at: {{ draft.generated_at }}

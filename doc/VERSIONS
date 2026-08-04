@@ -15,8 +15,21 @@ v1.0.0 (Release Date: 2026-08-04)
   session store.
 - The repository is written in English throughout, including the
   screens, the documents and the prompts. Only the generated post is
-  Japanese, because the medium is.
+  Japanese, because the medium is. The Japanese that remains in the
+  source is load bearing: the phrases formatter.py matches against a
+  generated body, the fixtures that exercise it, and the openings and
+  closings quoted in the prompts and the specifications as the literal
+  strings the model must not produce. The screens are marked lang="en",
+  with lang="ja" on the elements carrying the memo and the draft.
+- Documented to the level of id774/ai-digest: a README covering the
+  concept, installation, every setting, both entry points, the notices,
+  the failures and the deployment, plus doc/PROMPTS.md for the prompt
+  layer, which is where the quality of the output actually lives.
+- OPENAI_TEMPERATURE is validated like every other numeric setting, so
+  a bad value is refused by name instead of raising a bare float error.
 - Not implemented yet, and deliberately left for a later change: the
   space inserted between full width characters and ASCII, the
-  json_schema and none response format modes, the PROMPT_RELOAD reload
-  of the prompts, and the Origin check on POST.
+  json_schema and none response format modes, the Origin check on POST,
+  and LOG_PAYLOAD. PROMPT_RELOAD is absent for a different reason: it
+  was to switch off a cache, and no cache was built, so the prompts are
+  read on every generation already.

@@ -121,17 +121,17 @@ Raising `OPENAI_MAX_RETRIES` means revisiting the gunicorn and Apache values. Th
 │   ├── errors.py                   The exception hierarchy and the messages shown to the user
 │   ├── prompts.py                  Reading prompts/ and assembling the messages
 │   ├── generator.py                The API call and the validation of its answer
-│   └── formatter.py                Post processing and inspection of the body
-│       └── web/
-│           ├── __init__.py         Resolution of TEMPLATE_DIR and STATIC_DIR
-│           ├── templates/
-│           │   ├── base.html
-│           │   ├── index.html      Input screen
-│           │   ├── result.html     Result screen
-│           │   └── error.html      Error screen
-│           └── static/
-│               ├── style.css
-│               └── copy.js         Clipboard copying and nothing else
+│   ├── formatter.py                Post processing and inspection of the body
+│   └── web/
+│       ├── __init__.py             Resolution of TEMPLATE_DIR and STATIC_DIR
+│       ├── templates/
+│       │   ├── base.html
+│       │   ├── index.html          Input screen
+│       │   ├── result.html         Result screen
+│       │   └── error.html          Error screen
+│       └── static/
+│           ├── style.css
+│           └── copy.js             Clipboard copying and nothing else
 ├── prompts/
 │   ├── system.md                   The policy for the body and the titles
 │   ├── body_user.md                The user message carrying the memo

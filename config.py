@@ -109,8 +109,10 @@ def load_config() -> Config:
     if load_dotenv is not None:
         load_dotenv()
 
+    # Read through _number so that a bad value is refused with the same
+    # message as every other numeric setting, not a bare float() error.
     temperature_raw = _text("OPENAI_TEMPERATURE", "")
-    temperature = float(temperature_raw) if temperature_raw else None
+    temperature = _number("OPENAI_TEMPERATURE", 0.0) if temperature_raw else None
 
     return Config(
         openai_api_key=_text("OPENAI_API_KEY", ""),
