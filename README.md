@@ -13,6 +13,7 @@ The repository is written in English — the code, the comments, the screens, th
 - Requirements: [doc/REQUIREMENTS.md](doc/REQUIREMENTS.md)
 - Basic design: [doc/BASIC_DESIGN.md](doc/BASIC_DESIGN.md)
 - The prompts: [doc/PROMPTS.md](doc/PROMPTS.md)
+- Debian and Apache deployment: [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md)
 - Implementation policy: [doc/POLICY](doc/POLICY)
 
 ## Features
@@ -319,34 +320,12 @@ A passing suite says nothing about the endpoint being reachable or the writing b
 
 ## Deployment
 
-gunicorn listens on `127.0.0.1` only, so the application is reachable through Apache and nowhere else. HTTPS, authentication and IP restriction belong to Apache.
+gunicorn listens on `127.0.0.1` only. Apache provides HTTPS and access control.
 
-[deploy/](deploy) holds an example systemd unit and an example Apache configuration.
+[doc/DEPLOYMENT.md](doc/DEPLOYMENT.md) gives the complete Debian and Apache procedure.
+[deploy/](deploy) holds the matching systemd unit and Apache virtual host examples.
 
-```sh
-sudo cp deploy/sizu-writer.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now sizu-writer
-
-sudo cp deploy/sizu-writer.conf /etc/apache2/sites-available/
-sudo a2ensite sizu-writer && sudo systemctl reload apache2
-```
-
-Adjust the user, the paths and the port in both files first. The unit reads `.env` through `EnvironmentFile` and restarts the service on failure and on boot.
-
-### Restricting the readers
-
-The Apache example ships with Basic authentication and an IP restriction commented out. Enable one, or put the whole thing behind a VPN. This system spends money per request on someone else's API, so an open instance is not merely a privacy question.
-
-Rate limiting is deliberately not implemented in the application: it cannot count across gunicorn workers, so a limit enforced there would not hold. Use `mod_ratelimit` or `mod_qos`, or authentication, instead.
-
-### Checking that it runs
-
-```sh
-curl -s http://127.0.0.1:8090/healthz
-```
-
-`{"status": "ok"}` means the process is alive. The route calls no API, so it stays cheap enough for a monitor to poll and says nothing about the endpoint being reachable.
+The guide covers installation, TLS, reader restrictions, API compatibility and operations.
 
 ## Repository Structure
 
@@ -388,6 +367,7 @@ curl -s http://127.0.0.1:8090/healthz
     ├── REQUIREMENTS.md             requirements
     ├── BASIC_DESIGN.md             basic design
     ├── PROMPTS.md                  the prompt files and how to work on them
+    ├── DEPLOYMENT.md               Debian, Apache and API integration
     ├── POLICY                      implementation policy
     ├── VERSIONS                    repository version history
     ├── LICENSE
