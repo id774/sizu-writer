@@ -21,6 +21,9 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-08-05
+#       Stop advising a shorter memo on a timeout. The wait is set by
+#       the answer and the endpoint, not by the length of the input.
 #  v1.1 2026-08-05
 #       Name GENERATION_TIMEOUT as the limit a timeout reports.
 #  v1.0 2026-08-04
@@ -61,9 +64,18 @@ class UpstreamConnectionError(SizuWriterError):
 
 
 class UpstreamTimeoutError(SizuWriterError):
-    """ Raised when one request exceeds GENERATION_TIMEOUT. """
+    """
+    Raised when one request exceeds GENERATION_TIMEOUT.
 
-    user_message = "Generation took too long and was stopped. Shorten the memo, or try again in a while."
+    The message asks for another attempt and nothing else. Shortening
+    the memo was the earlier advice and it does not hold: the wait is
+    the time the endpoint spends writing the answer, and a one line memo
+    asks for the same post as a long one. Advice that cannot work sends
+    the person editing their memo while the server waits on a setting
+    only the operator can change.
+    """
+
+    user_message = "Generation took too long and was stopped. Generate it once more, or try again in a while."
     status_code = 504
 
 

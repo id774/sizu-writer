@@ -101,6 +101,15 @@ class WebTest(unittest.TestCase):
         self.assertIn("Generation took too long", page)
         self.assertNotIn("Traceback", page)
 
+    def test_does_not_blame_the_memo_for_a_timeout(self):
+        # The wait is the answer being written, not the memo being read.
+        # A one line memo asks for the same post as a long one, so advice
+        # to shorten it sends the person editing while nothing changes.
+        with mock.patch.object(web, "generate_draft", side_effect=UpstreamTimeoutError()):
+            answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
+
+        self.assertNotIn("Shorten the memo", answer.get_data(as_text=True))
+
 
 if __name__ == "__main__":
     unittest.main()

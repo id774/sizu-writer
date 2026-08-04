@@ -34,6 +34,9 @@
 #  - Standard library only; a provider module brings its own client
 #
 #  Version History:
+#  v1.1 2026-08-05
+#       Carry the elapsed seconds of one request in CompletionResult and
+#       record them, next to the limit, on the response line.
 #  v1.0 2026-08-05
 #       Initial release, with the OpenAI compatible backend.
 #
@@ -57,6 +60,9 @@ class CompletionResult:
     Only content is required. A compatible endpoint may report no usage
     and no request id, and a draft is still usable without them, so a
     missing count is carried as None rather than treated as a failure.
+
+    elapsed_seconds is measured on this side rather than read from the
+    answer, so it is present whatever the endpoint reports.
     """
 
     content: str
@@ -66,6 +72,7 @@ class CompletionResult:
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
 
 
 class GenerationProvider(Protocol):
@@ -124,11 +131,17 @@ def log_response(config: Config, result: CompletionResult) -> None:
     The memo, the prompt, the generated body and the token stay out of
     the log at every level. What is left is what an operator needs to
     match a run against the usage counted by the provider.
+
+    The elapsed seconds are part of that shape. A run that succeeded in
+    almost the whole of GENERATION_TIMEOUT is the same event as the
+    timeout that follows it, seen one moment earlier, and only a log
+    that records the successful ones can show that the margin was
+    already gone.
     """
     logger.info(
         "generation response: backend=%s endpoint_host=%s request_id=%s "
         "model=%s finish_reason=%s prompt_tokens=%s completion_tokens=%s "
-        "total_tokens=%s",
+        "total_tokens=%s elapsed=%s timeout=%s",
         config.generation_backend,
         config.endpoint_host,
         result.request_id or "-",
@@ -137,4 +150,6 @@ def log_response(config: Config, result: CompletionResult) -> None:
         result.prompt_tokens,
         result.completion_tokens,
         result.total_tokens,
+        result.elapsed_seconds if result.elapsed_seconds is not None else "-",
+        config.generation_timeout,
     )

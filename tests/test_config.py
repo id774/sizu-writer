@@ -33,7 +33,7 @@ class LoadConfigTest(unittest.TestCase):
         loaded = self.load({})
 
         self.assertEqual("prompt-json", loaded.generation_response_mode)
-        self.assertEqual(60.0, loaded.generation_timeout)
+        self.assertEqual(120.0, loaded.generation_timeout)
         self.assertEqual(6000, loaded.max_output_tokens)
         self.assertEqual(4000, loaded.max_input_chars)
         self.assertEqual(4, loaded.max_alt_titles)
@@ -47,7 +47,7 @@ class LoadConfigTest(unittest.TestCase):
         loaded = self.load({"PROMPT_DIR": "   ", "GENERATION_TIMEOUT": ""})
 
         self.assertEqual("prompts", loaded.prompt_dir)
-        self.assertEqual(60.0, loaded.generation_timeout)
+        self.assertEqual(120.0, loaded.generation_timeout)
 
     def test_sends_no_temperature_unless_it_is_set(self):
         self.assertIsNone(self.load({}).generation_temperature)

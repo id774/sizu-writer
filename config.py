@@ -53,7 +53,9 @@
 #      response_format, 'prompt-json' asks in the prompt alone.
 #      Defaults to prompt-json.
 #  - GENERATION_TIMEOUT
-#      Seconds allowed for one request. Defaults to 60.
+#      Seconds allowed for one request. Defaults to 120, which is the
+#      time a whole post plus its titles takes on a shared endpoint;
+#      the answer is not streamed, so the wait is the generation.
 #  - GENERATION_MAX_RETRIES
 #      Retries left to the SDK. Defaults to 0, so that one operation
 #      spends one request on a plan that counts them.
@@ -73,6 +75,9 @@
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
+#  v1.2 2026-08-05
+#       Default GENERATION_TIMEOUT to 120 seconds, so that a whole post
+#       written by a shared endpoint fits inside one request.
 #  v1.1 2026-08-05
 #       Replace the OPENAI_* settings with provider neutral GENERATION_*
 #       ones, require the backend, token, base URL and model instead of
@@ -133,7 +138,7 @@ class Config:
     generation_base_url: str = ""
     generation_model: str = ""
     generation_response_mode: str = "prompt-json"
-    generation_timeout: float = 60.0
+    generation_timeout: float = 120.0
     generation_max_retries: int = 0
     generation_temperature: Optional[float] = None
     max_output_tokens: int = 6000
@@ -212,7 +217,7 @@ def load_config() -> Config:
             "GENERATION_RESPONSE_MODE is '{0}'; expected one of: {1}.".format(
                 response_mode, ", ".join(RESPONSE_MODES)))
 
-    timeout = _number("GENERATION_TIMEOUT", 60.0)
+    timeout = _number("GENERATION_TIMEOUT", 120.0)
     if timeout <= 0:
         raise ConfigError(
             "GENERATION_TIMEOUT is {0}; expected a positive number.".format(

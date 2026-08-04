@@ -131,7 +131,7 @@ class ClientTest(ProviderTest):
         self.complete(module)
 
         self.assertEqual(0, module.calls["options"]["max_retries"])
-        self.assertEqual(60.0, module.calls["options"]["timeout"])
+        self.assertEqual(120.0, module.calls["options"]["timeout"])
 
 
 class RequestTest(ProviderTest):
@@ -200,6 +200,12 @@ class ResponseTest(ProviderTest):
         self.assertEqual(22, result.completion_tokens)
         self.assertEqual(33, result.total_tokens)
 
+    def test_measures_how_long_the_one_request_took(self):
+        result = self.complete(fake_openai(answer(content="{}")))
+
+        self.assertIsNotNone(result.elapsed_seconds)
+        self.assertGreaterEqual(result.elapsed_seconds, 0.0)
+
     def test_accepts_an_answer_without_usage(self):
         result = self.complete(fake_openai(answer(content="{}", usage=None)))
 
@@ -265,6 +271,29 @@ class LogTest(ProviderTest):
         self.assertIn("model=served-model", recorded)
         self.assertNotIn(TOKEN, recorded)
         self.assertNotIn("secret text", recorded)
+
+    def test_records_the_wait_next_to_the_limit_on_an_answer(self):
+        module = fake_openai(answer(content="{}"))
+
+        with self.assertLogs("sizu_writer.providers", level=logging.INFO) as logged:
+            self.complete(module, settings(generation_timeout=120.0))
+
+        recorded = "\n".join(logged.output)
+        self.assertIn("elapsed=", recorded)
+        self.assertIn("timeout=120.0", recorded)
+
+    def test_records_the_wait_of_a_timeout_next_to_the_limit(self):
+        # Without the elapsed seconds a timeout line cannot say whether
+        # the limit was reached or the connection died well short of it,
+        # and only one of the two is answered by raising the limit.
+        with self.assertLogs("sizu_writer.providers.openai_compatible",
+                             level=logging.ERROR) as logged:
+            with self.assertRaises(UpstreamTimeoutError):
+                self.raise_from_sdk(FakeTimeoutError("too slow"))
+
+        recorded = "\n".join(logged.output)
+        self.assertIn("elapsed=", recorded)
+        self.assertIn("timeout=120.0", recorded)
 
     def test_keeps_the_token_out_of_a_failure_line(self):
         with self.assertLogs("sizu_writer.providers.openai_compatible",
