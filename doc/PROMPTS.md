@@ -212,7 +212,13 @@ them would leave the instruction describing a shape of English sentence that
 never appears in a Japanese post, and the model would have nothing to match
 against.
 
-The same phrases appear again in `sizu_writer/formatter.py`, where they are
+The wide subjects quoted in `system.md` — 「社会では」, 「人間は」, 「私たちは」 —
+are Japanese for the same reason and are not forbidden strings. The instruction
+around them asks the model to check that the text needs the move, not to avoid
+the words, so they belong in the prompt only and not in the tables described
+next.
+
+The forbidden phrases appear again in `sizu_writer/formatter.py`, where they are
 matched against the generated body so that a notice can be raised when one
 slipped through. Adding a forbidden phrase to a prompt is therefore two edits:
 the prompt tells the model not to write it, and `BOILERPLATE` or

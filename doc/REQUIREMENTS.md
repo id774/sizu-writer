@@ -44,6 +44,8 @@ It does not extend to:
 
 The same idea may later feed an article; that is not prevented. But no point, explanation, evidence or generalization is added in anticipation of it.
 
+The grain of the material decides the length. What one line on a microblog would exhaust stays short here rather than being inflated to fill the medium, and what has research, a systematic argument or a reproducible procedure at its centre is written as the memo carries it, without the argument such an article would need. Being unfinished, reaching no conclusion and concerning the writer alone are none of them reasons to treat a text as unsuited to this medium.
+
 ## 4. Expected flow
 
 1. The person opens the system in a browser.
@@ -197,6 +199,8 @@ Do not widen into:
 - a bibliography
 - a systematic argument
 
+No causal link and no generalization is added that the material does not carry. Before the text moves to a wide subject — 「社会では」, 「人間は」, 「私たちは」 — that move has to be needed, and it says no more than the particular observation supports.
+
 ### 7.5 Register
 
 - Follow the voice of the memo.
@@ -204,6 +208,7 @@ Do not widen into:
 - If the original is consistently in the plain form, that form may be kept.
 - Do not shift into an academic, advertising or social media register.
 - Avoid what is typical of generated text: a generic opening, a syllogism that is too neat, a safe summary, formulaic connectives.
+- Do not bait the reader, put the conclusion first, repeat a keyword for the sake of search or call the reader to act.
 
 ### 7.6 Opening
 
@@ -238,6 +243,30 @@ When a familiar theme is being sorted out, a stance of "known for a while" or "t
 - Do not add a bibliography by default.
 - Put a space between a full width character and an adjacent ASCII alphanumeric.
 
+### 7.9 The shape of the text
+
+- Three to six paragraphs is the usual shape, and fewer when the material is short.
+- A paragraph is not added to fill the medium.
+- One usual order: the scene, word or event that set it off; the discomfort, association or question it raised; what became visible after a little thought; the point where the text stops.
+- That order follows the material rather than being applied mechanically, and a text with nothing settled may end on the question.
+
+### 7.10 What is not looked up
+
+- Research and the gathering of references are no part of the work. The text is written from the input alone.
+- What has not been checked is not stated as established. Where a particular fact would have to be verified, the text writes around it or leaves the uncertainty visible.
+
+### 7.11 What the text is judged on
+
+In this order:
+
+1. the observation or the thought of the input has not been altered
+2. the concrete scene and the subject are still in the text
+3. where the writer hesitated, and how far the thinking went, can be seen
+4. it reads naturally as a piece of a few paragraphs
+5. the notation and the grammar are correct
+
+The first three are never given up for the sake of the last two.
+
 ## 8. Requirements on the titles
 
 A title stays close to what the body actually contains:
@@ -258,6 +287,7 @@ The policy is:
 - avoid a question form suggesting a resolution the body does not reach
 - when the matter is unsettled, an observed fact or the point where the thinking started makes a fine title
 - do not force a symbolic, literary or sensational title
+- when the content carries no natural title, a title made from the date is a candidate
 
 The number of candidates:
 
