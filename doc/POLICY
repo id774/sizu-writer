@@ -1,0 +1,82 @@
+# Implementation Policies
+
+sizu-writer is a single Python application. Its implementation policy is the
+one of id774/ai-digest, restated here for this repository, with the additions
+that follow from what this system must never do.
+
+---
+
+## General Policy
+
+### Design Philosophy
+- Prioritize clarity, portability, and explicit control over convenience.
+- Favor predictable behavior and long-term maintainability.
+- Avoid implicit behavior; make control flow, errors, and side effects explicit.
+- Keep the generation core (`sizu_writer/`) independent from Flask, so that
+  `cli.py` and `app.py` exercise exactly the same code.
+
+### Invariants
+These lines are not crossed by a setting or by an extension.
+
+- Do not send anything to the posting site. The only host this system contacts
+  is the OpenAI compatible endpoint.
+- Do not accept credentials of the posting site, neither as a setting nor as a
+  form field.
+- Do not depend on browser automation. `playwright` and `selenium` do not
+  belong in `requirements.txt`.
+- Do not let the API key leave the server process: not into a template, not
+  into JavaScript, not into an error page.
+- Do not mix an instruction to the model, an editing note, or a review result
+  into the generated body. The screen separates the body from every other
+  piece of information, structurally and not only visually.
+- Do not render model output with `|safe`.
+
+### Logging and Output
+- Use the standard `logging` module. Obtain a module logger with
+  `logging.getLogger(__name__)`; do not print status from library modules.
+- Configure logging once, at the entry point, with `logging.basicConfig`
+  writing to standard error, in the format
+  `%(asctime)s %(levelname)s %(name)s: %(message)s`.
+- The screen shows `user_message` only. The cause, the endpoint, the model and
+  the traceback stay in the log, next to the reference id shown to the user.
+- Do not log the memo or the generated text at the default level.
+
+### Control Flow Rules
+- Reserve `sys.exit` for the process entry point. Commands and helpers return
+  their status.
+- Raise a `SizuWriterError` subclass for every failure the user is allowed to
+  see, and let the entry point map it to a screen or an exit code.
+
+---
+
+## Python Policy
+
+### Structure
+- Python 3.9 or later.
+- Every module starts with the header block used across id774 repositories:
+  Description, Author, Source Code, License, Contact, Requirements and
+  Version History, plus Usage, Routes and Options where they apply.
+- Comments are written in English, in the imperative, and stay short.
+- Type hints are used on the public functions of a module.
+- Prefer `str.format()` over an f-string. Substitution into an external text
+  such as a prompt is done with `str.replace()`, so that a brace written in
+  the prompt does not need escaping.
+
+### Configuration
+- Every setting lives in `config.py`, in the `Config` dataclass, read from the
+  environment or from `.env`. `config.py` performs no network access and
+  touches no file beyond `.env`.
+- A credential never gets a command line option: a command line is readable by
+  every user of the host.
+
+### Tests
+- `tests/test_*.py`, `unittest` and `unittest.mock` only.
+- No network access and no API call. The OpenAI client is replaced by a stub.
+- Run them with `python -m unittest discover -s tests`.
+
+### Versioning
+- A module version is `major.minor`; `minor` is carried over before it reaches
+  10. The repository version is recorded in `doc/VERSIONS`.
+
+### License
+- GPL version 3 or LGPL version 3, dual licensed.

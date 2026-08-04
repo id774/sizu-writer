@@ -1,0 +1,19 @@
+# Example systemd unit. Copy it to /etc/systemd/system/ and adjust the
+# user, the paths and the port before enabling it.
+
+[Unit]
+Description=sizu-writer
+After=network.target
+
+[Service]
+Type=simple
+User=sizu
+WorkingDirectory=/opt/sizu-writer
+EnvironmentFile=/opt/sizu-writer/.env
+ExecStart=/opt/sizu-writer/.venv/bin/gunicorn app:app \
+          --bind 127.0.0.1:8090 --workers 2 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

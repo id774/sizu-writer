@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form method="post" action="{{ url_for('generate') }}">
+  <input type="hidden" name="body" value="{{ draft.body }}">
+
+  <section>
+    <h2>タイトル第一候補</h2>
+    <p class="title-row"><span id="primary-title">{{ draft.primary_title }}</span>
+      <button type="button" data-copy-target="primary-title">コピー</button></p>
+  </section>
+
+  {% if draft.alternative_titles %}
+  <section>
+    <h2>その他のタイトル候補</h2>
+    <ul class="titles">
+      {% for title in draft.alternative_titles %}
+      <li><span id="alt-title-{{ loop.index }}">{{ title }}</span>
+        <button type="button" data-copy-target="alt-title-{{ loop.index }}">コピー</button></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div class="buttons">
+    <button type="submit" name="mode" value="titles">タイトルだけ再生成</button>
+  </div>
+
+  <section>
+    <h2>投稿本文</h2>
+    <textarea id="post-body" readonly rows="24">{{ draft.body }}</textarea>
+    <div class="buttons">
+      <button type="button" data-copy-target="post-body">本文をコピー</button>
+    </div>
+  </section>
+
+  {% if draft.notices %}
+  <section class="notices">
+    <h2>注意</h2>
+    <ul>{% for notice in draft.notices %}<li>{{ notice }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <div class="buttons">
+    <button type="submit" name="mode" value="full">全文を再生成</button>
+  </div>
+
+  <details>
+    <summary>入力内容</summary>
+    <textarea name="input_text" rows="8">{{ input_text }}</textarea>
+  </details>
+
+  <p class="meta">モデル: {{ draft.model }} / 生成時刻: {{ draft.generated_at }}
+    <a href="{{ url_for('index') }}">新しく書き始める</a></p>
+</form>
+{% endblock %}
