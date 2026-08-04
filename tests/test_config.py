@@ -35,8 +35,17 @@ class LoadConfigTest(unittest.TestCase):
         self.assertEqual(0.7, self.load({"OPENAI_TEMPERATURE": "0.7"}).openai_temperature)
 
     def test_refuses_a_value_that_is_not_a_number(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as refused:
             self.load({"OPENAI_TIMEOUT": "soon"})
+
+        self.assertIn("OPENAI_TIMEOUT", str(refused.exception))
+        self.assertIn("soon", str(refused.exception))
+
+    def test_names_the_setting_when_the_temperature_is_not_a_number(self):
+        with self.assertRaises(ValueError) as refused:
+            self.load({"OPENAI_TEMPERATURE": "warm"})
+
+        self.assertIn("OPENAI_TEMPERATURE", str(refused.exception))
 
     def test_hides_the_api_key_from_repr(self):
         loaded = self.load({"OPENAI_API_KEY": "sk-secret-value"})
