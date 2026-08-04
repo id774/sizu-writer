@@ -1,0 +1,22 @@
+sizu-writer Repository Version History
+======================================
+
+v1.0.0 (Release Date: 2026-08-04)
+---------------------------------
+- Initial release. A Flask application that turns a short memo into a
+  post body and title candidates for Shizuka na Internet, with the
+  generation core (sizu_writer/) kept independent from the web layer so
+  that cli.py can settle the prompts before any screen is involved.
+- The prompts live in prompts/*.md, outside the Python package, so that
+  adjusting the writing policy needs neither a code change nor a
+  reinstall.
+- The server keeps no state: the memo and the current body travel with
+  the form, which is what lets the titles be regenerated without a
+  session store.
+- The repository is written in English throughout, including the
+  screens, the documents and the prompts. Only the generated post is
+  Japanese, because the medium is.
+- Not implemented yet, and deliberately left for a later change: the
+  space inserted between full width characters and ASCII, the
+  json_schema and none response format modes, the PROMPT_RELOAD reload
+  of the prompts, and the Origin check on POST.

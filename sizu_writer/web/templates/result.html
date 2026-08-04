@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form method="post" action="{{ url_for('generate') }}">
+  <input type="hidden" name="body" value="{{ draft.body }}">
+
+  <section>
+    <h2>Leading title</h2>
+    <p class="title-row"><span id="primary-title">{{ draft.primary_title }}</span>
+      <button type="button" data-copy-target="primary-title">Copy</button></p>
+  </section>
+
+  {% if draft.alternative_titles %}
+  <section>
+    <h2>Other candidates</h2>
+    <ul class="titles">
+      {% for title in draft.alternative_titles %}
+      <li><span id="alt-title-{{ loop.index }}">{{ title }}</span>
+        <button type="button" data-copy-target="alt-title-{{ loop.index }}">Copy</button></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div class="buttons">
+    <button type="submit" name="mode" value="titles">Regenerate the titles only</button>
+  </div>
+
+  <section>
+    <h2>Post body</h2>
+    <textarea id="post-body" readonly rows="24">{{ draft.body }}</textarea>
+    <div class="buttons">
+      <button type="button" data-copy-target="post-body">Copy the body</button>
+    </div>
+  </section>
+
+  {% if draft.notices %}
+  <section class="notices">
+    <h2>Notices</h2>
+    <ul>{% for notice in draft.notices %}<li>{{ notice }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <div class="buttons">
+    <button type="submit" name="mode" value="full">Regenerate the whole draft</button>
+  </div>
+
+  <details>
+    <summary>Memo</summary>
+    <textarea name="input_text" rows="8">{{ input_text }}</textarea>
+  </details>
+
+  <p class="meta">Model: {{ draft.model }} / Generated at: {{ draft.generated_at }}
+    <a href="{{ url_for('index') }}">Start a new one</a></p>
+</form>
+{% endblock %}

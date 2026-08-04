@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}sizu-writer{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+<h1><a href="{{ url_for('index') }}">sizu-writer</a></h1>
+<p class="lead">Turn a short memo into a post body and title candidates.</p>
+</header>
+<main>
+{% if error %}<p class="error">{{ error }}{% if reference_id %} (error id: {{ reference_id }}){% endif %}</p>{% endif %}
+{% block content %}{% endblock %}
+</main>
+<script src="{{ url_for('static', filename='copy.js') }}"></script>
+</body>
+</html>
