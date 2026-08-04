@@ -3,7 +3,7 @@
 {% block content %}
 <form method="post" action="{{ url_for('generate') }}">
   <label for="input_text">Memo</label>
-  <textarea id="input_text" name="input_text" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
+  <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
   <div class="buttons">
     <button type="submit" name="mode" value="full">Generate</button>
     <button type="button" data-clear-target="input_text">Clear</button>
