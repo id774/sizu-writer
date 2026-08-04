@@ -530,7 +530,7 @@ Parts of the basic design deliberately left for a later change:
 Contributions are welcome. You can help by:
 
 - Improving the prompts, which is where the quality of the output actually lives
-- Adding the parts listed under [Not in this first version](#not-in-this-first-version)
+- Adding the parts listed under [Not implemented yet](#not-implemented-yet)
 - Reporting bugs or feature requests
 
 Please follow the style used in this repository: module level header comments describing purpose, requirements and version history, English comments, and documentation updated together with the code. [doc/POLICY](doc/POLICY) states the rules, including the invariants a change must not cross — above all, that nothing in this system posts to the site or holds a credential for it.
