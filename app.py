@@ -46,6 +46,7 @@ import logging
 import secrets
 
 from flask import Flask, render_template, request
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from config import load_config
 from sizu_writer.errors import (EmptyInputError, InputTooLongError,
@@ -120,6 +121,19 @@ def handle_known_error(error: SizuWriterError):
         max_input_chars=config.max_input_chars,
     )
     return page, error.status_code
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_too_large(error: RequestEntityTooLarge):
+    """ Refuse an oversized request without parsing its form again. """
+    reference_id = secrets.token_hex(4)
+    logger.info("RequestEntityTooLarge (reference %s): %s", reference_id, error)
+    page = render_template(
+        "error.html",
+        error="The request is too large. Reduce its contents and try again.",
+        reference_id=reference_id,
+    )
+    return page, error.code
 
 
 @app.errorhandler(Exception)

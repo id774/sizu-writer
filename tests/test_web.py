@@ -54,6 +54,14 @@ class WebTest(unittest.TestCase):
         self.assertEqual(400, answer.status_code)
         self.assertIn("Enter a memo first", answer.get_data(as_text=True))
 
+    def test_refuses_a_request_larger_than_the_server_limit(self):
+        text = "a" * (web.app.config["MAX_CONTENT_LENGTH"] + 1)
+
+        answer = self.client.post("/generate", data={"input_text": text, "mode": "full"})
+
+        self.assertEqual(413, answer.status_code)
+        self.assertIn("The request is too large", answer.get_data(as_text=True))
+
     def test_shows_the_body_and_the_titles_of_a_draft(self):
         with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
             answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})

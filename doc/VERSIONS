@@ -33,3 +33,5 @@ v1.0.0 (Release Date: 2026-08-04)
   and LOG_PAYLOAD. PROMPT_RELOAD is absent for a different reason: it
   was to switch off a cache, and no cache was built, so the prompts are
   read on every generation already.
+- Return a safe HTTP 413 response when a submitted request exceeds the
+  server limit, without parsing the oversized form again.
