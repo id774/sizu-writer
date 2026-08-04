@@ -278,7 +278,7 @@ model nor the token can be changed from a screen.
 | `GENERATION_BASE_URL` | yes | none | Base URL. Required so that no endpoint is implied |
 | `GENERATION_MODEL` | yes | none | Model name as the endpoint spells it |
 | `GENERATION_RESPONSE_MODE` | no | `prompt-json` | `json-object` or `prompt-json` |
-| `GENERATION_TIMEOUT` | no | `60` | Seconds for one request |
+| `GENERATION_TIMEOUT` | no | `120` | Seconds for one request, which is the whole generation |
 | `GENERATION_MAX_RETRIES` | no | `0` | Retries left to the SDK |
 | `GENERATION_TEMPERATURE` | no | not sent | Sent only when set |
 | `MAX_OUTPUT_TOKENS` | no | `6000` | Upper bound of one answer |
@@ -296,7 +296,7 @@ GENERATION_API_TOKEN=<UUID>:<secret>
 GENERATION_BASE_URL=https://api.ai.sakura.ad.jp/v1
 GENERATION_MODEL=
 GENERATION_RESPONSE_MODE=prompt-json
-GENERATION_TIMEOUT=60
+GENERATION_TIMEOUT=120
 GENERATION_MAX_RETRIES=0
 GENERATION_TEMPERATURE=
 ```
@@ -631,8 +631,13 @@ One line per answer:
 ```text
 generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp
 request_id=... model=... finish_reason=... prompt_tokens=... completion_tokens=...
-total_tokens=...
+total_tokens=... elapsed=... timeout=...
 ```
+
+`elapsed` is the seconds one request took, measured on this side around the
+create() call and rounded to a tenth. It is recorded on a successful answer as
+well, because an answer that arrived in almost the whole of `GENERATION_TIMEOUT`
+is the timeout of the next run, seen one run earlier.
 
 Never recorded, at any level: the API token, the memo, the generated body, the
 titles, the prompts, the `Authorization` header and the answer itself.
@@ -640,8 +645,11 @@ titles, the prompts, the `Authorization` header and the answer itself.
 ### 13.2 ERROR
 
 One line per failed request, carrying the backend, the endpoint host, the
-model, the SDK exception type, the HTTP status, the endpoint's request id and
-the timeout. The reference id shown to the user is logged by the error handler
+model, the SDK exception type, the HTTP status, the endpoint's request id, the
+seconds the request took and the timeout it was given. The last two decide what
+to do with a timeout: elapsed at the limit is an endpoint slower than the time
+allowed, elapsed well short of it is a connection lost on the way, and only the
+first is answered by raising the limit. The reference id shown to the user is logged by the error handler
 in `app.py`, next to the exception type.
 
 The status is worth recording even though the screen never distinguishes it:
@@ -703,11 +711,11 @@ No message quotes a secret.
 
 | Layer | Default |
 | --- | ---: |
-| `GENERATION_TIMEOUT` | 60s |
-| gunicorn `--timeout` | 120s |
-| Apache `ProxyTimeout` | 180s |
+| `GENERATION_TIMEOUT` | 120s |
+| gunicorn `--timeout` | 240s |
+| Apache `ProxyTimeout` | 300s |
 
-With `GENERATION_MAX_RETRIES=0` one API call uses the innermost 60 seconds.
+With `GENERATION_MAX_RETRIES=0` one API call uses the innermost 120 seconds.
 Raising the retries changes the worst case:
 
 ```text

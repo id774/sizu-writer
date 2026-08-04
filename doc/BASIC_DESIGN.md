@@ -116,11 +116,11 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 
 | Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
-| Generation client | `GENERATION_TIMEOUT` | 60s | The limit of one generation. Beyond it, the user is told it timed out |
-| gunicorn | `--timeout` | 120s | The client timeout plus room for one retry |
-| Apache | `ProxyTimeout` | 180s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
+| Generation client | `GENERATION_TIMEOUT` | 120s | The limit of one generation. The answer is not streamed, so this is the writing itself, not the network. Beyond it, the user is told it timed out |
+| gunicorn | `--timeout` | 240s | The client timeout plus room for one retry |
+| Apache | `ProxyTimeout` | 300s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the worst case wait is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`. The default is 0 retries, so 60 seconds sits comfortably inside gunicorn's 120. The README states this dependency in its deployment section.
+Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the worst case wait is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`. The default is 0 retries, so 120 seconds sits comfortably inside gunicorn's 240. The README states this dependency in its deployment section.
 
 ---
 
@@ -216,7 +216,7 @@ class SizuWriterError(Exception):
 | `EmptyInputError` | Empty or blank input | Enter a memo first. | 400 | INFO |
 | `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
 | `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
-| `UpstreamTimeoutError` | Beyond `GENERATION_TIMEOUT` | Generation took too long and was stopped. Shorten the memo, or try again in a while. | 504 | ERROR |
+| `UpstreamTimeoutError` | Beyond `GENERATION_TIMEOUT` | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
 | `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
 | `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
 | `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
@@ -520,7 +520,7 @@ User=sizu
 WorkingDirectory=/opt/sizu-writer
 EnvironmentFile=/opt/sizu-writer/.env
 ExecStart=/opt/sizu-writer/.venv/bin/gunicorn app:app \
-          --bind 127.0.0.1:8090 --workers 2 --timeout 120
+          --bind 127.0.0.1:8090 --workers 2 --timeout 240
 Restart=always
 RestartSec=5
 

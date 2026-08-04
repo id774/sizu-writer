@@ -34,6 +34,9 @@
 #  - openai
 #
 #  Version History:
+#  v1.1 2026-08-05
+#       Measure one request and carry the elapsed seconds into the log,
+#       so that a slow answer is visible before it becomes a timeout.
 #  v1.0 2026-08-05
 #       Initial release, moved out of generator.py so that the transport
 #       and the validation of a draft can change independently.
@@ -41,6 +44,7 @@
 ########################################################################
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from config import Config
@@ -66,8 +70,17 @@ class OpenAICompatibleProvider:
         """ Send one chat completion request and normalize its answer. """
         client = self._client(config)
         request = self._request(messages, config)
-        response = self._create(client, request, config)
+
+        # The clock starts at the call and not at the top of the method,
+        # so that what is reported is the wait on the endpoint alone.
+        # Nothing here is streamed: the whole answer arrives at the end,
+        # which makes this figure the generation time as the person
+        # waiting experienced it, and the one to compare against
+        # GENERATION_TIMEOUT when deciding whether to raise it.
+        started = time.monotonic()
+        response = self._create(client, request, config, started)
         result = self._result(response, config)
+        result.elapsed_seconds = self._elapsed(started)
         log_response(config, result)
         return result
 
@@ -113,25 +126,25 @@ class OpenAICompatibleProvider:
         return request
 
     def _create(self, client: Any, request: Dict[str, Any],
-                config: Config) -> Any:
+                config: Config, started: float) -> Any:
         """ Perform the one API call and map its failures. """
         import openai
 
         try:
             return client.chat.completions.create(**request)
         except openai.APITimeoutError as error:
-            self._log_failure(config, error, None)
+            self._log_failure(config, error, None, started)
             raise UpstreamTimeoutError()
         except openai.APIConnectionError as error:
-            self._log_failure(config, error, None)
+            self._log_failure(config, error, None, started)
             raise UpstreamConnectionError()
         except openai.APIStatusError as error:
             self._log_failure(config, error,
-                              getattr(error, "status_code", None))
+                              getattr(error, "status_code", None), started)
             raise UpstreamStatusError()
 
     def _log_failure(self, config: Config, error: Exception,
-                     status_code: Optional[int]) -> None:
+                     status_code: Optional[int], started: float) -> None:
         """
         Record a failed request without its input or its token.
 
@@ -139,19 +152,35 @@ class OpenAICompatibleProvider:
         told it apart: 401 is a token to replace, 403 a plan that does
         not cover the model, 429 a rate limit or an exhausted monthly
         allowance, and only the log can say which happened.
+
+        The elapsed seconds sit next to the limit for the same reason. A
+        timeout that fired at the limit is an endpoint slower than the
+        time allowed, which raising GENERATION_TIMEOUT addresses; one
+        that fired well short of it is a connection lost on the way, and
+        raising the limit would change nothing.
         """
         logger.error(
             "generation failure: backend=%s endpoint_host=%s model=%s "
-            "error=%s status=%s request_id=%s timeout=%s: %s",
+            "error=%s status=%s request_id=%s elapsed=%s timeout=%s: %s",
             config.generation_backend,
             config.endpoint_host,
             config.generation_model,
             type(error).__name__,
             status_code if status_code is not None else "-",
             getattr(error, "request_id", None) or "-",
+            self._elapsed(started),
             config.generation_timeout,
             error,
         )
+
+    def _elapsed(self, started: float) -> float:
+        """
+        Return the seconds spent since the given monotonic mark.
+
+        monotonic() rather than time(): a clock adjusted while a request
+        is in flight would otherwise report a wait that never happened.
+        """
+        return round(time.monotonic() - started, 1)
 
     def _result(self, response: Any, config: Config) -> CompletionResult:
         """ Read the answer into the shape generator.py works with. """

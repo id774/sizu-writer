@@ -210,7 +210,8 @@ sudo journalctl -u sizu-writer --since today | grep 'generation response'
 ```
 
 Those lines carry the backend, the endpoint host, the request id, the model, the
-finish reason and the token counts. They carry no token, no memo and no
+finish reason, the token counts and the seconds the request took against the
+limit it was given. They carry no token, no memo and no
 generated text, at any log level.
 
 ### Calling sizu-writer from another system

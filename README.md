@@ -120,7 +120,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. `https` only. |
 | `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
 | `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
-| `GENERATION_TIMEOUT` | `60` | Seconds allowed for one request. Raising it means revisiting the two outer timeouts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
+| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the two outer timeouts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
 | `GENERATION_MAX_RETRIES` | `0` | Retries the SDK may spend on one request. `0` spends exactly one; see [One action, one request](#one-action-one-request). |
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
@@ -204,9 +204,9 @@ Three timeouts sit one inside the other, and they widen outwards:
 
 | Timeout | Default | Set in |
 |---|---|---|
-| `GENERATION_TIMEOUT` | 60s | `.env` |
-| gunicorn `--timeout` | 120s | the systemd unit, or the `Procfile` |
-| Apache `ProxyTimeout` | 180s | the virtual host |
+| `GENERATION_TIMEOUT` | 120s | `.env` |
+| gunicorn `--timeout` | 240s | the systemd unit, or the `Procfile` |
+| Apache `ProxyTimeout` | 300s | the virtual host |
 
 Raising `GENERATION_TIMEOUT` means raising the other two. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
 
@@ -216,7 +216,9 @@ Retries widen the same window, because the SDK spends the timeout again on each 
 worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
 ```
 
-At the default of zero retries that is 60 seconds, comfortably inside gunicorn's 120. Raising the retries to 2 makes it 180, which is already outside both — so the outer two move with it.
+At the default of zero retries that is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes it 360, which is already outside both — so the outer two move with it.
+
+**Why the innermost one is 120 and not 60.** The request is not streamed: the client waits until the last character of the answer exists, so `GENERATION_TIMEOUT` is not a limit on the network but on the writing. What decides that wait is the length of the answer and the speed of the endpoint — a whole post of a few paragraphs plus five titles, from a model that may be sharing its hardware with everyone else on a free plan. The memo is a few dozen tokens of a prompt of a few thousand, so a one line memo and a four thousand character one ask for almost the same work. At 60 seconds that put ordinary generations on the wrong side of the limit and reported them as the person's fault. If your endpoint answers faster, lowering it again is a change to `.env` alone.
 
 ### Coming from an earlier checkout
 
@@ -375,13 +377,17 @@ Two cases are worth knowing by their log line rather than their screen:
 
 **`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
+**`error=APITimeoutError ... elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` and the two timeouts outside it, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
+
+Shortening the memo is not the answer to this one, which is why the screen no longer suggests it. The wait is the answer being written, and a memo of one line asks for the same post as a long one.
+
 **`The answer is not readable as JSON`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
 
 Both `cli.py` and `app.py` log in the same format, so a failure reproduced from the command line reads the same as the one from the screen:
 
 ```
-2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=...
-2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... timeout=60.0: ...
+2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=... elapsed=47.2 timeout=120.0
+2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0: ...
 ```
 
 The token, the memo, the prompts, the generated body and the titles appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
@@ -411,10 +417,10 @@ Narrower selections use the same runner:
 | Module | Subject |
 |---|---|
 | `test_config.py` | environment driven settings, blank values, refusal of a malformed value, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
-| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500 |
+| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500, and the elapsed seconds recorded next to the limit on both a success and a timeout |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
-| `test_web.py` | the screens, input limits, regeneration of the titles alone, and that a failure does not expose its cause |
+| `test_web.py` | the screens, input limits, regeneration of the titles alone, that a failure does not expose its cause, and that a timeout does not blame the memo |
 
 `test_web.py` sets the four required settings before importing `app`, because `app.py` validates them while it is imported. They are placeholders and no request is made; `setdefault` leaves a real `.env` alone when one is present.
 
