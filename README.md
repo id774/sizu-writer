@@ -17,7 +17,7 @@ The repository is written in English — the code, the comments, the screens, th
 - Debian and Apache deployment: [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md)
 - Implementation policy: [doc/POLICY](doc/POLICY)
 
-> **v2.0 changes the settings incompatibly.** The `OPENAI_*` variables are gone, replaced by provider neutral `GENERATION_*` ones, and a process that still finds an `OPENAI_*` variable refuses to start. See [Upgrading from v1.x](#upgrading-from-v1x).
+> **The `OPENAI_*` variables are refused.** Provider neutral `GENERATION_*` ones replaced them, and a process that still finds an `OPENAI_*` variable refuses to start. See [Coming from an earlier checkout](#coming-from-an-earlier-checkout).
 
 ## Features
 
@@ -218,15 +218,15 @@ worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
 
 At the default of zero retries that is 60 seconds, comfortably inside gunicorn's 120. Raising the retries to 2 makes it 180, which is already outside both — so the outer two move with it.
 
-### Upgrading from v1.x
+### Coming from an earlier checkout
 
-The `OPENAI_*` settings of v1.x are not read, and a process that finds one of them in its environment stops at startup naming its replacement:
+The `OPENAI_*` settings are not read, and a process that finds one of them in its environment stops at startup naming its replacement:
 
 ```text
 OPENAI_API_KEY is no longer supported; use GENERATION_API_TOKEN.
 ```
 
-| v1.x | v2.0 |
+| Earlier checkout | Now |
 |---|---|
 | `OPENAI_API_KEY` | `GENERATION_API_TOKEN` |
 | `OPENAI_BASE_URL` | `GENERATION_BASE_URL`, now required |
@@ -235,11 +235,11 @@ OPENAI_API_KEY is no longer supported; use GENERATION_API_TOKEN.
 | `OPENAI_MAX_RETRIES` | `GENERATION_MAX_RETRIES`, now defaulting to `0` |
 | `OPENAI_TEMPERATURE` | `GENERATION_TEMPERATURE` |
 
-Two settings have no predecessor: `GENERATION_BACKEND`, which must be `openai-compatible`, and `GENERATION_RESPONSE_MODE`, which v1.x had no choice about — it always sent `response_format`, so `json-object` is the setting that reproduces its behaviour.
+Two settings have no predecessor: `GENERATION_BACKEND`, which must be `openai-compatible`, and `GENERATION_RESPONSE_MODE`, which there was no choice about before — `response_format` was always sent, so `json-object` is the setting that reproduces that behaviour.
 
-There is no automatic translation, no aliasing and no precedence rule, which is deliberate. A mixture of old and new settings would leave the endpoint to be guessed; a stale `OPENAI_API_KEY` exported in a shell must not be picked up silently; the path back to OpenAI's default URL has to be closed completely; and a break of this size belongs in the open. Presence is what is refused, whatever the value: an exported but empty `OPENAI_BASE_URL` still says the host was set up for v1.
+There is no automatic translation, no aliasing and no precedence rule, which is deliberate. A mixture of old and new settings would leave the endpoint to be guessed; a stale `OPENAI_API_KEY` exported in a shell must not be picked up silently; the path back to OpenAI's default URL has to be closed completely; and a break of this size belongs in the open. Presence is what is refused, whatever the value: an exported but empty `OPENAI_BASE_URL` still says the host was set up for the old settings.
 
-Upgrading is therefore: rewrite `.env` from [.env.example](.env.example), unset any `OPENAI_*` variable exported elsewhere (a systemd `EnvironmentFile`, a shell profile, a CI secret), and restart.
+Moving a host over is therefore: rewrite `.env` from [.env.example](.env.example), unset any `OPENAI_*` variable exported elsewhere (a systemd `EnvironmentFile`, a shell profile, a CI secret), and restart.
 
 ## Usage
 
@@ -410,7 +410,7 @@ Narrower selections use the same runner:
 
 | Module | Subject |
 |---|---|
-| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, refusal of a v1.x `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
+| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
 | `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500 |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
@@ -518,7 +518,7 @@ Parts of the basic design deliberately left for a later change:
 
 - the space inserted between full width characters and ASCII (`BODY_ASCII_SPACING`)
 - the `json_schema` response format mode, for endpoints supporting Structured Outputs; `json-object` and `prompt-json` are the two modes that exist
-- a second backend in `providers/`; `openai-compatible` is the only one v2.0 speaks
+- a second backend in `providers/`; `openai-compatible` is the only one sizu-writer speaks
 - the `Origin` check on POST (`REQUIRE_SAME_ORIGIN`)
 - `LOG_PAYLOAD`, which would record the memo and the answer at DEBUG for prompt work
 - persistence of the generated drafts (requirement 11, a future extension)

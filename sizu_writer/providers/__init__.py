@@ -34,7 +34,7 @@
 #  - Standard library only; a provider module brings its own client
 #
 #  Version History:
-#  v2.0 2026-08-05
+#  v1.0 2026-08-05
 #       Initial release, with the OpenAI compatible backend.
 #
 ########################################################################

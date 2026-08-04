@@ -101,7 +101,7 @@ class LoadConfigTest(unittest.TestCase):
 
 
 class LegacyVariableTest(unittest.TestCase):
-    """ v1.x settings are refused, never translated. """
+    """ Legacy settings are refused, never translated. """
 
     def refuse(self, environment):
         with mock.patch.dict(os.environ, environment, clear=True):
@@ -119,8 +119,8 @@ class LegacyVariableTest(unittest.TestCase):
 
     def test_refuses_a_legacy_variable_that_is_exported_but_empty(self):
         # An exported OPENAI_BASE_URL says the host was set up for v1,
-        # whatever it holds. Reading it as unset would let v1.x and
-        # v2.0 settings coexist and decide the endpoint between them.
+        # whatever it holds. Reading it as unset would let the legacy and
+        # the current settings coexist and decide the endpoint between them.
         self.assertIn("OPENAI_BASE_URL",
                       self.refuse(dict(COMPLETE, OPENAI_BASE_URL="")))
 
