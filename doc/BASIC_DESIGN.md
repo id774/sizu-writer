@@ -46,10 +46,13 @@ From requirements 2, 13 and 14, the invariants come first. Neither a setting nor
 
 The new repository also carries a `doc/POLICY`, and inherits the following. The one difference follows.
 
-- The header block at the top of each module (Description / Usage / Options / Routes / Requirements / Version History, plus Author, Source Code, License, Contact).
+- The header block at the top of each module: Description, Routes (the web application only), the Author / Source Code / License / Contact block, Usage, Options, Exit Codes, Requirements, Environment Variables (`config.py` only), Version History.
 - Comments in English, imperative, short.
 - Settings collected in the `Config` dataclass of `config.py`, read from the environment (optionally from `.env`). `config.py` touches neither the network nor any file but `.env`.
-- `logging` rather than `print`. Logging is configured once, at the entry point.
+- `logging` rather than `print`. Logging is configured once, at the entry point, and `INFO`, `WARNING` and `ERROR` keep their usual meanings.
+- The CLI conventions: `-h`/`--help` and `-v`/`--version` through `argparse`, both exiting `0`, and exit codes documented in the module header.
+- The shape of an executable: `#!/usr/bin/env python`, the UTF-8 encoding header, `main() -> int` and `sys.exit(main())`.
+- Runtime dependencies pinned to a compatible range in `requirements.txt`.
 - Tests in `tests/test_*.py`, `unittest` and `unittest.mock` only, with no network and no API call.
 - Module versions as `major.minor`, `minor` carried over before it reaches 10, bumped for a change in behaviour and not for a documentation edit. Repository release versions are independent of them: they are recorded in `doc/VERSIONS`, may be three-level, are what a Git tag carries, and start at v1.0 with v1.0.1 after it. Work that is not released yet takes no version of its own.
 - Python 3.9 or later, `str.format()` preferred over an f-string, type hints.
@@ -370,7 +373,9 @@ The Flask application. Four routes.
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
 - `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
 - `MAX_CONTENT_LENGTH` keeps a huge POST from reaching the application.
-- An optional check that a POST comes from the same origin (`REQUIRE_SAME_ORIGIN`, default `on`) answers 400 when the `Origin` header is foreign. It needs `ProxyPreserveHost On` on the Apache side, which `deploy/sizu-writer.conf` and the README state.
+- An optional check that a POST comes from the same origin (`REQUIRE_SAME_ORIGIN`, default `on`) answers 400 when the `Origin` header is foreign. It needs `ProxyPreserveHost On` on the Apache side, which `deploy/sizu-writer.conf` sets.
+
+> **As implemented.** The `Origin` check is not implemented: `REQUIRE_SAME_ORIGIN` appears in neither `config.py` nor `app.py`, and the README lists it under [Not implemented yet](../README.md#not-implemented-yet). `deploy/sizu-writer.conf` already sets `ProxyPreserveHost On`, so adding the check later needs no change to the deployment. `MAX_CONTENT_LENGTH` is set in `app.py` at 1 MiB rather than read from `config.py`, because no operator has a reason to move it.
 
 ### 5.7 `cli.py`
 
@@ -383,9 +388,9 @@ python cli.py generate --input memo.txt --json   # print the Draft as JSON (test
 python cli.py titles --input memo.txt --body draft.md   # regenerate the titles only
 ```
 
-As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--max-output-tokens`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
+As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
 
-Exit codes: `0` success, `1` failure, as POLICY prescribes.
+Exit codes, as POLICY prescribes: `0` success, including `-h` and `-v`; `1` failure, a refused setting or a generation that produced no draft; `2` a command line argparse rejected. The list is repeated in the header of `cli.py`.
 
 ---
 

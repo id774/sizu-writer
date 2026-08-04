@@ -39,6 +39,15 @@
 #  - --json
 #      Print the draft as JSON instead of as text.
 #
+#  Exit Codes:
+#  - 0: The draft was generated and printed. Also what -h and -v return.
+#  - 1: The command failed: a setting was refused, the generation
+#       settings cannot address an endpoint, the input could not be
+#       read, or the endpoint did not return a usable draft.
+#  - 2: The command line was rejected by argparse, for example an
+#       unknown option, a missing subcommand, or --timeout given
+#       something that is not a number.
+#
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - openai

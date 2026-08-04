@@ -61,6 +61,13 @@ The settings decide where a memo is sent, so they are read strictly.
 - Configure logging once, at the entry point, with `logging.basicConfig`
   writing to standard error, in the format
   `%(asctime)s %(levelname)s %(name)s: %(message)s`.
+- Map severity to levels: `INFO` for normal progress, `WARNING` for a degraded
+  but recoverable condition, and `ERROR` for a failure that ends the current
+  command or request.
+- Keep the log low-noise. One generation must not leave a trail of per-step
+  lines at the default level.
+- When a third-party logger, such as the HTTP client the SDK carries, adds
+  nothing to a run, lower that logger rather than raising the global level.
 - The screen shows `user_message` only. The cause, the endpoint, the model and
   the traceback stay in the log, next to the reference id shown to the user.
 - Do not log the memo or the generated text at the default level.
@@ -70,13 +77,49 @@ The settings decide where a memo is sent, so they are read strictly.
   their status.
 - Raise a `SizuWriterError` subclass for every failure the user is allowed to
   see, and let the entry point map it to a screen or an exit code.
+- Do not swallow an error with a bare `except:`. Where a broad
+  `except Exception` is genuinely required, such as around a call whose failure
+  modes are open-ended, log the reason before returning a failure.
+
+### CLI Conventions
+- A command line tool provides `-h`, `--help` for usage and `-v`, `--version`
+  for the version, and both exit with code `0`: a user who asked for them got
+  what they asked for.
+- Build the parser with `argparse`. It provides `-h`/`--help`; `-v`/`--version`
+  is declared explicitly.
+- An invalid or unsupported option results in usage output.
+- Exit codes are consistent and are documented in the module header.
+
+### Error Handling and Exit Codes
+- Detect an unmet prerequisite early. A misconfiguration is refused before a
+  request is spent, not after.
+- Log the reason and the affected target when an error occurs.
+- Exit code semantics follow the usual UNIX/Linux conventions and stay
+  consistent across the repository.
+
+#### Exit Code Conventions
+- **0: Success**
+  The command completed. This includes terminating after help or version
+  output.
+- **1: General failure**
+  The default failure code: a refused setting, an unreadable input, or a
+  generation that did not produce a draft.
+- **2: The command line was rejected**
+  What `argparse` returns for an unknown option, a missing subcommand or an
+  argument it cannot convert. Do not raise it from application code.
+- **126, 127, 128 and above**
+  Reserved by the shell and by signal convention. Do not redefine them for
+  application errors.
 
 ---
 
 ## Python Policy
 
 ### Structure
-- Python 3.9 or later.
+- Python 3.9 or later. Every module states `Python Version: 3.9 or later` under
+  `Requirements`, and no module states a minimum higher than the code needs.
+- The shebang is `#!/usr/bin/env python`. Do not write `python3`.
+- The encoding header `# -*- coding: utf-8 -*-` follows the shebang.
 - Every module starts with the header block used across id774 repositories, in
   the order given under [Documentation and Versioning](#documentation-and-versioning).
 - Comments are written in English, in the imperative, and stay short.
@@ -84,6 +127,11 @@ The settings decide where a memo is sent, so they are read strictly.
 - Prefer `str.format()` over an f-string. Substitution into an external text
   such as a prompt is done with `str.replace()`, so that a brace written in
   the prompt does not need escaping.
+
+### Program Structure
+- An executable defines `main() -> int` and terminates with `sys.exit(main())`.
+- Use early returns rather than nesting the body of a function inside a
+  condition.
 
 ### Configuration
 - Every setting lives in `config.py`, in the `Config` dataclass, read from the
@@ -97,6 +145,13 @@ The settings decide where a memo is sent, so they are read strictly.
   API passes both; `cli.py --version` and the tests pass neither.
 - No error message quotes a secret. A token is reported as present or absent.
 
+### Dependencies and I/O
+- Runtime dependencies are declared in `requirements.txt` and pinned to a
+  compatible range, so that a future major release cannot break a running
+  service. Add a dependency only when it earns its place; prefer the standard
+  library otherwise.
+- Always pass `encoding="utf-8"` for a text file operation.
+
 ### Tests
 - `tests/test_*.py`, `unittest` and `unittest.mock` only.
 - No network access and no API call. The client is replaced by a stub, and the
@@ -106,11 +161,17 @@ The settings decide where a memo is sent, so they are read strictly.
 
 ### Documentation and Versioning
 - Every module must contain a structured header, in this order:
-  `Description`, `Usage` and `Options` (executables and modules that take
-  options only), `Routes` (the web application only), `Requirements`,
-  `Version History`.
-- The header keeps the standard `Author`, `Source Code`, `License`, `Contact`
-  block used across the repository.
+  `Description`, `Routes` (the web application only), the standard `Author`,
+  `Source Code`, `License`, `Contact` block, `Usage` and `Options`
+  (executables and modules that take options only), `Exit Codes` (a module
+  that can end the process with more than one status), `Requirements`,
+  `Environment Variables` (`config.py` only), `Version History`.
+- `Routes` sits next to `Description` because it says what the module serves,
+  which is part of what it is; `Usage`, `Options` and `Exit Codes` say how it
+  is driven, and follow the identifying block.
+- `config.py` carries every setting under `Environment Variables`: the name,
+  what it decides, whether it is required, and the default when it has one.
+  `.env.example` shows the same settings as a file to copy.
 - "Test Cases" belong in the test code under `tests/`, never in the application
   modules.
 - Documentation must be updated in sync with behavior changes.
@@ -126,6 +187,9 @@ The settings decide where a memo is sent, so they are read strictly.
     that change observable behavior) bumps the version.
   - Multiple updates on the same date are consolidated into a single version
     entry; do not increment the version multiple times on the same date.
+  - Finalizing only the release date of an entry that already exists, such as
+    changing `TBD` to the actual date, is not by itself a change. Classify that
+    entry by what it contains, not by the date edit.
 
 #### Module Version Numbering
 - Versions use a two-level `major.minor` scheme.
@@ -143,6 +207,8 @@ The settings decide where a memo is sent, so they are read strictly.
   The first release is v1.0 and the one after it is v1.0.1.
 - Work that is not released yet takes no version of its own: it belongs to the
   entry already standing at the top of `doc/VERSIONS`.
+- An unreleased entry carries `(Release Date: TBD)` until it ships. Replacing
+  that with the actual date is the release itself, not a change to record.
 - The package version exposed by `sizu_writer.__version__` and
   `cli.py --version` tracks the application, and is bumped when a release
   warrants it, not on every change.
