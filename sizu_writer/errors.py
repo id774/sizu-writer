@@ -21,13 +21,12 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.2 2026-08-05
-#       Stop advising a shorter memo on a timeout. The wait is set by
-#       the answer and the endpoint, not by the length of the input.
-#  v1.1 2026-08-05
-#       Name GENERATION_TIMEOUT as the limit a timeout reports.
-#  v1.0 2026-08-04
-#       Initial release.
+#  v1.0 2026-08-05
+#       Name GENERATION_TIMEOUT as the limit a timeout reports, and stop
+#       advising a shorter memo on a timeout. The wait is set by the
+#       answer and the endpoint, not by the length of the input.
+#  v0.1 2026-08-04
+#       Initial version.
 #
 ########################################################################
 

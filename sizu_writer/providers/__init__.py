@@ -34,11 +34,10 @@
 #  - Standard library only; a provider module brings its own client
 #
 #  Version History:
-#  v1.1 2026-08-05
-#       Carry the elapsed seconds of one request in CompletionResult and
-#       record them, next to the limit, on the response line.
 #  v1.0 2026-08-05
-#       Initial release, with the OpenAI compatible backend.
+#       Initial version, with the OpenAI compatible backend. Carry the
+#       elapsed seconds of one request in CompletionResult and record
+#       them, next to the limit, on the response line.
 #
 ########################################################################
 

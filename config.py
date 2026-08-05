@@ -75,16 +75,15 @@
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
-#  v1.2 2026-08-05
-#       Default GENERATION_TIMEOUT to 120 seconds, so that a whole post
-#       written by a shared endpoint fits inside one request.
-#  v1.1 2026-08-05
+#  v1.0 2026-08-05
 #       Replace the OPENAI_* settings with provider neutral GENERATION_*
 #       ones, require the backend, token, base URL and model instead of
 #       falling back to OpenAI, add the response mode, default the
-#       retries to zero, and refuse the legacy variables by name.
-#  v1.0 2026-08-04
-#       Initial release.
+#       retries to zero, refuse the legacy variables by name, and default
+#       GENERATION_TIMEOUT to 120 seconds, so that a whole post written
+#       by a shared endpoint fits inside one request.
+#  v0.1 2026-08-04
+#       Initial version.
 #
 ########################################################################
 
