@@ -47,7 +47,8 @@ Do not add a causal link or a generalization the material does not carry. Before
 
 ## Register
 
-- Follow the voice of the memo. Unless the memo says otherwise, use the desu/masu form. If the memo is consistently in the plain form, keep the plain form.
+- Write the whole body in the desu/masu form. Never write it in the plain form, even when the memo itself is written that way.
+- Follow the voice of the memo in everything else: its wording, how far it commits, where it hesitates. Putting it into the desu/masu form must not smooth any of that away.
 - Do not shift into an academic, advertising or social media register.
 - Avoid what is typical of generated text: a generic opening, a syllogism that is too neat, a safe summary, formulaic connectives.
 - Do not bait the reader, do not put the conclusion first, do not repeat a keyword for the sake of search, do not call the reader to act.
@@ -108,4 +109,5 @@ Return this JSON object and nothing else:
 - no experience, emotion, fact or causal link was added that the memo does not carry
 - no background or generality was added for the reader's sake
 - the piece was not divided by headings it does not need
+- the body is in the desu/masu form from beginning to end, with no sentence left in the plain form
 - the answer is the object and nothing else, and the body carries no remark about the work

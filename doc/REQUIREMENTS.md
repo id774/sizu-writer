@@ -203,9 +203,8 @@ No causal link and no generalization is added that the material does not carry. 
 
 ### 7.5 Register
 
-- Follow the voice of the memo.
-- Unless stated otherwise, use the Japanese desu/masu form.
-- If the original is consistently in the plain form, that form may be kept.
+- The whole body is written in the Japanese desu/masu form, never in the plain form, whichever of the two the memo uses.
+- Follow the voice of the memo in every other respect, and do not smooth it away while putting it into the desu/masu form.
 - Do not shift into an academic, advertising or social media register.
 - Avoid what is typical of generated text: a generic opening, a syllogism that is too neat, a safe summary, formulaic connectives.
 - Do not bait the reader, put the conclusion first, repeat a keyword for the sake of search or call the reader to act.
