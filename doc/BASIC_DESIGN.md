@@ -228,6 +228,8 @@ Four points matter.
 - An authentication failure (401 / 403) and a rate limit (429) are not distinguished for the user. Writing a misconfiguration onto the screen is leaking internal information. The log does distinguish them.
 - `UpstreamStatusError` keeps the status code as an attribute, for the log only.
 
+> **As implemented.** `UpstreamStatusError` carries no status attribute. The status is written by `sizu_writer/providers/openai_compatible.py`, which is where it is known, on the same failure line as the backend, the endpoint host, the model, the request id and the elapsed seconds. Carrying it up through the exception would have moved the log line away from the code that produces it without telling the operator anything more.
+
 ### 5.3 `sizu_writer/prompts.py`
 
 Its only job is reading the prompt files and assembling the messages. It performs no API call.
@@ -241,6 +243,8 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
 - The placeholders are `{{input}}` and `{{body}}` only, substituted with `str.replace()`. `str.format()` is avoided so that a brace appearing in a prompt does not have to be escaped. (The POLICY preference for `str.format()` concerns string building in code, not substitution into external text.)
 - What is read is cached in the process. With `PROMPT_RELOAD=on` it is read again on every request, so that adjusting a prompt needs no restart.
 - A missing file is treated as an `InternalError` at the first generation rather than at startup, with the file name in the log. A web process that cannot start because of a prompt is worse to operate than one whose health endpoint still answers.
+
+> **As implemented.** No cache was built, so `PROMPT_RELOAD` has nothing to switch off and does not exist. `load_prompt()` reads the file on every generation, which is what the setting was meant to arrange, and adjusting a prompt already takes effect without a restart. Reading four small files next to a request that takes tens of seconds costs nothing worth caching for. The README lists the setting under [Not implemented yet](../README.md#not-implemented-yet) for the same reason.
 
 #### The shape of the prompt
 
@@ -378,6 +382,7 @@ The Flask application. Four routes.
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
 - `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
 - `MAX_CONTENT_LENGTH` keeps a huge POST from reaching the application.
+- An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
 - An optional check that a POST comes from the same origin (`REQUIRE_SAME_ORIGIN`, default `on`) answers 400 when the `Origin` header is foreign. It needs `ProxyPreserveHost On` on the Apache side, which `deploy/sizu-writer.conf` sets.
 
 > **As implemented.** The `Origin` check is not implemented: `REQUIRE_SAME_ORIGIN` appears in neither `config.py` nor `app.py`, and the README lists it under [Not implemented yet](../README.md#not-implemented-yet). `deploy/sizu-writer.conf` already sets `ProxyPreserveHost On`, so adding the check later needs no change to the deployment. `MAX_CONTENT_LENGTH` is set in `app.py` at 1 MiB rather than read from `config.py`, because no operator has a reason to move it.
@@ -560,7 +565,7 @@ WantedBy=multi-user.target
 | `test_errors.py` | Each exception carrying `user_message` and `status_code`; no key, URL or path inside `user_message` |
 | `test_web.py` | With the Flask `test_client`: the input screen renders; an empty input errors and keeps the input; a successful generation shows the body and the titles; `mode=titles` updates the titles and keeps the body; no traceback in the body of an error answer; a POST with a foreign `Origin` answers 400; `/healthz` answers 200 without calling the API |
 
-> **As implemented.** The transport moved, and its tests moved with it into `test_openai_compatible_provider.py`: what reaches the SDK, the normalization of an answer, and the mapping of a timeout, a connection failure and each error status. `test_generator.py` keeps everything about a draft and gains the two response modes. `test_config.py` gains the refusal of the legacy `OPENAI_*` variables and the base URL rules. The stub is now the `openai` package itself, so the suite does not import the SDK at all. `test_prompts.py` and `test_errors.py` are still unwritten.
+> **As implemented.** The transport moved, and its tests moved with it into `test_openai_compatible_provider.py`: what reaches the SDK, the normalization of an answer, and the mapping of a timeout, a connection failure and each error status. `test_generator.py` keeps everything about a draft and gains the two response modes. `test_config.py` gains the refusal of the legacy `OPENAI_*` variables and the base URL rules. The stub is now the `openai` package itself, so the suite does not import the SDK at all. `test_web.py` covers the routing failures as well: an unknown address, a method an address does not accept, and a missing favicon not being reported as a server failure. `test_cli.py` was added for the command line entry point, which had no tests of its own: reading the memo, refusing an empty one, the `--model` and `--timeout` overrides, and the exit codes. `test_prompts.py` and `test_errors.py` are still unwritten.
 
 Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality of the writing and cannot be decided by a test. The README describes them as a manual step: run a real memo through `cli.py generate` and read the result.
 

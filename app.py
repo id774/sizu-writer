@@ -31,7 +31,7 @@
 #
 #  Usage:
 #      python app.py
-#      gunicorn app:app --bind 127.0.0.1:${PORT} --timeout 120
+#      gunicorn app:app --bind 127.0.0.1:${PORT} --timeout 240
 #
 #  Options:
 #  - None. Every setting comes from the environment or .env, through
@@ -42,15 +42,14 @@
 #  - Flask 3.x
 #
 #  Version History:
-#  v1.2 2026-08-05
-#       Answer an unknown address with its own status. A missing page
-#       was reported as a server failure, and a browser asking for
-#       /favicon.ico was enough to log a traceback.
-#  v1.1 2026-08-05
+#  v1.0 2026-08-05
 #       Validate the generation settings at startup, so that a worker
-#       without a usable endpoint never accepts a memo.
-#  v1.0 2026-08-04
-#       Initial release.
+#       without a usable endpoint never accepts a memo, and answer an
+#       unknown address with its own status. A missing page was reported
+#       as a server failure, and a browser asking for /favicon.ico was
+#       enough to log a traceback.
+#  v0.1 2026-08-04
+#       Initial version.
 #
 ########################################################################
 

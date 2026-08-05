@@ -348,7 +348,7 @@ class Config:
     generation_base_url: str = ""
     generation_model: str = ""
     generation_response_mode: str = "prompt-json"
-    generation_timeout: float = 60.0
+    generation_timeout: float = 120.0
     generation_max_retries: int = 0
     generation_temperature: Optional[float] = None
     max_output_tokens: int = 6000
@@ -404,6 +404,8 @@ the SDK appends the resource path itself.
 - `cli.py` calls `load_config()`, applies `--model`, `--prompt-dir` and
   `--timeout`, then calls `validate_generation_config()` before reading the
   input. `--model` can therefore stand in for a missing `GENERATION_MODEL`.
+  `--timeout` is checked where it is applied, because the override lands after
+  `load_config()` has already refused a non-positive `GENERATION_TIMEOUT`.
 - `cli.py --version` reaches neither: argparse answers and exits first.
 - The unit tests construct `Config` directly and need no credentials.
 
@@ -804,6 +806,12 @@ both response modes, a fenced answer, the refusal of prose around the object,
 the absence of any fragment extraction, a missing body, a missing primary
 title, the deduplication of alternatives, `MAX_ALT_TITLES`, and the body
 surviving a title regeneration.
+
+`tests/test_cli.py` covers the command line side of the settings: the `--model`
+and `--timeout` overrides reaching the generation, a `--timeout` that is not
+positive being refused before a request is spent, an empty memo being refused
+the same way, and a configuration that cannot address an endpoint ending the
+run with exit code 1.
 
 The suite uses no network and no token. Testing against the real Sakura AI
 Engine is a manual acceptance step, and no live token is put into CI.

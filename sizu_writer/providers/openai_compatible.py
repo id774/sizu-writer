@@ -34,12 +34,11 @@
 #  - openai
 #
 #  Version History:
-#  v1.1 2026-08-05
-#       Measure one request and carry the elapsed seconds into the log,
-#       so that a slow answer is visible before it becomes a timeout.
 #  v1.0 2026-08-05
-#       Initial release, moved out of generator.py so that the transport
-#       and the validation of a draft can change independently.
+#       Initial version, moved out of generator.py so that the transport
+#       and the validation of a draft can change independently. Measure
+#       one request and carry the elapsed seconds into the log, so that a
+#       slow answer is visible before it becomes a timeout.
 #
 ########################################################################
 
