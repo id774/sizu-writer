@@ -42,6 +42,10 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.2 2026-08-05
+#       Answer an unknown address with its own status. A missing page
+#       was reported as a server failure, and a browser asking for
+#       /favicon.ico was enough to log a traceback.
 #  v1.1 2026-08-05
 #       Validate the generation settings at startup, so that a worker
 #       without a usable endpoint never accepts a memo.
@@ -54,7 +58,7 @@ import logging
 import secrets
 
 from flask import Flask, render_template, request
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from config import load_config, validate_generation_config
 from sizu_writer.errors import (EmptyInputError, InputTooLongError,
@@ -77,6 +81,14 @@ validate_generation_config(config)
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+
+# What the screen says about an address the application does not serve.
+# The wording is ours rather than the one werkzeug carries, which
+# advises checking the spelling of a URL the visitor never typed.
+HTTP_MESSAGES = {
+    404: "That page does not exist.",
+    405: "That address does not accept this kind of request.",
+}
 
 
 def _input_text() -> str:
@@ -145,6 +157,34 @@ def handle_request_too_large(error: RequestEntityTooLarge):
         "error.html",
         error="The request is too large. Reduce its contents and try again.",
         reference_id=reference_id,
+        max_input_chars=config.max_input_chars,
+    )
+    return page, error.code
+
+
+@app.errorhandler(HTTPException)
+def handle_http_error(error: HTTPException):
+    """
+    Answer an address the application does not serve.
+
+    Flask looks an error handler up along the class hierarchy of the
+    exception, and every HTTPException is an Exception. Without this
+    handler a routing failure reached the one below, which logs a
+    traceback and answers 500: a browser asking for /favicon.ico was
+    reported as a server that had broken. A page that is not there is
+    not a failure of the server, so it keeps its own status and is
+    logged as a note.
+    """
+    reference_id = secrets.token_hex(4)
+    level = logging.INFO if error.code < 500 else logging.ERROR
+    logger.log(level, "%s (reference %s): %s %s",
+               type(error).__name__, reference_id, error.code, request.path)
+
+    page = render_template(
+        "error.html",
+        error=HTTP_MESSAGES.get(error.code, "The request could not be completed."),
+        reference_id=reference_id,
+        max_input_chars=config.max_input_chars,
     )
     return page, error.code
 
