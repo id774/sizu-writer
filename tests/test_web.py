@@ -1,6 +1,64 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+########################################################################
+# tests/test_web.py: Tests for app.py
+#
+#  Description:
+#  This test suite drives the Flask application through its test client.
+#  It covers the input screen, the liveness probe, the two generation
+#  modes, and the refusals the screen has to make on its own: an empty
+#  memo, a memo longer than MAX_INPUT_CHARS, and a request larger than
+#  the server limit, with the input kept on the page so that nothing
+#  typed is lost.
+#
+#  It also pins the error handling. Each failure is answered with its
+#  own status, 404 for an unknown address and 405 for a method the
+#  address does not accept included, and no page ever shows a traceback,
+#  the requested path or the cause of an upstream failure.
+#
+#  No request is made. generate_draft and regenerate_titles are replaced
+#  by stubs, and the settings app.py validates while it is imported are
+#  set with setdefault so that a real .env is left alone.
+#
+#  Author: id774 (More info: http://id774.net)
+#  Source Code: https://github.com/id774/sizu-writer
+#  License: The GPL version 3, or LGPL version 3 (Dual License).
+#  Contact: idnanashi@gmail.com
+#
+#  Running the tests:
+#  Run the whole suite from the repository root:
+#      python -m unittest discover -s tests
+#  Run this module alone:
+#      python -m unittest tests.test_web
+#
+#  Test Cases:
+#    - Show the input screen.
+#    - Answer the liveness probe without calling the API.
+#    - Keep the input on the page when the memo is too long.
+#    - Refuse an empty input.
+#    - Refuse a request larger than the server limit with status 413.
+#    - Show the body and the titles of a generated draft.
+#    - Regenerate the titles of the body it was given, without generating a body.
+#    - Hide the cause of a generation failure behind its own status.
+#    - Answer an unknown address with 404 rather than 500.
+#    - Do not report a missing favicon as a server failure.
+#    - Refuse a method the address does not accept with status 405.
+#    - Hide the cause and the requested path of a routing failure.
+#    - Keep answering an oversized request with 413 rather than the generic status.
+#    - Still report an unexpected failure as a server error, without its message.
+#    - Do not blame the memo for a timeout.
+#
+#  Requirements:
+#  - Python Version: 3.9 or later
+#  - Flask
+#
+#  Version History:
+#  v1.0 2026-08-05
+#       Initial release.
+#
+########################################################################
+
 import os
 import unittest
 from unittest import mock
