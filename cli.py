@@ -32,18 +32,21 @@
 #  - --body FILE
 #      Body handed to the titles command.
 #  - --model NAME / --prompt-dir DIR / --timeout SECONDS
-#      Override the matching setting for this invocation. The API token
-#      and the base URL have no option on purpose: a command line is
-#      readable by every user of the host through ps, and the token is
-#      a secret while the endpoint is a decision of the deployment.
+#      Override the matching setting for this invocation. --timeout is
+#      held to the rule GENERATION_TIMEOUT follows, a number greater
+#      than zero. The API token and the base URL have no option on
+#      purpose: a command line is readable by every user of the host
+#      through ps, and the token is a secret while the endpoint is a
+#      decision of the deployment.
 #  - --json
 #      Print the draft as JSON instead of as text.
 #
 #  Exit Codes:
 #  - 0: The draft was generated and printed. Also what -h and -v return.
-#  - 1: The command failed: a setting was refused, the generation
-#       settings cannot address an endpoint, the input could not be
-#       read, or the endpoint did not return a usable draft.
+#  - 1: The command failed: a setting or an option was refused, the
+#       generation settings cannot address an endpoint, the memo could
+#       not be read or was empty, or the endpoint did not return a
+#       usable draft.
 #  - 2: The command line was rejected by argparse, for example an
 #       unknown option, a missing subcommand, or --timeout given
 #       something that is not a number.
@@ -53,12 +56,13 @@
 #  - openai
 #
 #  Version History:
-#  v1.1 2026-08-05
-#       Validate the generation settings before a subcommand runs, and
-#       point --model and --timeout at the GENERATION_* settings.
-#       --version still needs no credentials.
-#  v1.0 2026-08-04
-#       Initial release.
+#  v1.0 2026-08-05
+#       Validate the generation settings before a subcommand runs, point
+#       --model and --timeout at the GENERATION_* settings, and refuse an
+#       empty memo and a --timeout that is not positive before a request
+#       is spent. --version still needs no credentials.
+#  v0.1 2026-08-04
+#       Initial version.
 #
 ########################################################################
 
@@ -70,7 +74,7 @@ import sys
 
 from config import ConfigError, load_config, validate_generation_config
 from sizu_writer import Draft, __version__
-from sizu_writer.errors import SizuWriterError
+from sizu_writer.errors import EmptyInputError, SizuWriterError
 from sizu_writer.generator import generate_draft, regenerate_titles
 
 logger = logging.getLogger("cli")
@@ -99,10 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def read_source(arguments: argparse.Namespace) -> str:
     """ Return the memo given on the command line or in a file. """
-    if arguments.text:
-        return arguments.text
-    with open(arguments.input, encoding="utf-8") as handle:
-        return handle.read()
+    # Test against None rather than emptiness. An empty --text is a memo
+    # that was given and is unusable, not one that was never given, and
+    # reading it as the latter left --input at None for open() to fail on.
+    if arguments.text is not None:
+        text = arguments.text
+    else:
+        with open(arguments.input, encoding="utf-8") as handle:
+            text = handle.read()
+
+    if not text.strip():
+        raise EmptyInputError()
+    return text
 
 
 def report(draft: Draft, as_json: bool) -> None:
@@ -145,7 +157,15 @@ def main() -> int:
         config.generation_model = arguments.model
     if arguments.prompt_dir:
         config.prompt_dir = arguments.prompt_dir
-    if arguments.timeout:
+
+    # Repeat the check load_config() performs on GENERATION_TIMEOUT. The
+    # override lands after it has run, so a value refused there would
+    # otherwise reach the SDK through the option instead.
+    if arguments.timeout is not None:
+        if arguments.timeout <= 0:
+            logger.error("--timeout is %s; expected a positive number.",
+                         arguments.timeout)
+            return 1
         config.generation_timeout = arguments.timeout
 
     # After the overrides, so that --model can stand in for a missing
@@ -165,7 +185,10 @@ def main() -> int:
         else:
             draft = generate_draft(source, config)
     except SizuWriterError as error:
-        logger.error("%s: %s", type(error).__name__, error)
+        # Fall back to user_message. Most of these carry no text of their
+        # own, so the name alone reached the terminal and said nothing.
+        logger.error("%s: %s", type(error).__name__,
+                     str(error) or error.user_message)
         return 1
     except OSError as error:
         logger.error("Cannot read the input: %s", error)
