@@ -101,6 +101,52 @@ class WebTest(unittest.TestCase):
         self.assertIn("Generation took too long", page)
         self.assertNotIn("Traceback", page)
 
+    def test_answers_an_unknown_address_with_not_found(self):
+        # Flask looks a handler up along the class hierarchy, and every
+        # HTTPException is an Exception. Without a handler of its own a
+        # missing page reached the catch-all one and was answered 500.
+        answer = self.client.get("/nothing-here")
+
+        self.assertEqual(404, answer.status_code)
+        self.assertIn("That page does not exist", answer.get_data(as_text=True))
+
+    def test_does_not_report_a_missing_favicon_as_a_server_failure(self):
+        # A browser asks for it on its own. It is not a request anyone
+        # made, and it must not be logged as the server having broken.
+        answer = self.client.get("/favicon.ico")
+
+        self.assertEqual(404, answer.status_code)
+
+    def test_refuses_a_method_the_address_does_not_accept(self):
+        answer = self.client.post("/healthz")
+
+        self.assertEqual(405, answer.status_code)
+
+    def test_hides_the_cause_of_a_routing_failure(self):
+        page = self.client.get("/nothing-here").get_data(as_text=True)
+
+        self.assertNotIn("Traceback", page)
+        self.assertNotIn("nothing-here", page)
+
+    def test_still_refuses_an_oversized_request_with_its_own_status(self):
+        # The handler for 413 is more specific than the one for every
+        # HTTPException, so adding the latter must not shadow it.
+        text = "a" * (web.app.config["MAX_CONTENT_LENGTH"] + 1)
+
+        answer = self.client.post("/generate", data={"input_text": text, "mode": "full"})
+
+        self.assertEqual(413, answer.status_code)
+        self.assertIn("The request is too large", answer.get_data(as_text=True))
+
+    def test_still_reports_an_unexpected_failure_as_a_server_error(self):
+        with mock.patch.object(web, "generate_draft", side_effect=RuntimeError("boom")):
+            answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(500, answer.status_code)
+        self.assertIn("The server failed to handle the request", page)
+        self.assertNotIn("boom", page)
+
     def test_does_not_blame_the_memo_for_a_timeout(self):
         # The wait is the answer being written, not the memo being read.
         # A one line memo asks for the same post as a long one, so advice
