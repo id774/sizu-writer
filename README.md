@@ -125,7 +125,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field, enforced on the server as well as in the browser. |
-| `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. |
+| `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
 | `LOG_LEVEL` | `INFO` | Level of the application log. |
 | `PORT` | `8090` | Port of the development server and of gunicorn. |
@@ -283,7 +283,7 @@ Each wins over the environment and `.env` for that invocation only:
 .venv/bin/python cli.py generate --input memo.txt --prompt-dir prompts-plain
 ```
 
-The overrides are applied before the settings are checked, so `--model` can stand in for a `GENERATION_MODEL` that is not configured at all. There is no option for the token or the base URL, for the reasons under [Configuration](#configuration).
+The overrides are applied before the settings are checked, so `--model` can stand in for a `GENERATION_MODEL` that is not configured at all. `--timeout` is held to the same rule as `GENERATION_TIMEOUT` — a number greater than zero — and a value outside that ends the run with exit status 1 rather than reaching the endpoint. There is no option for the token or the base URL, for the reasons under [Configuration](#configuration).
 
 `--prompt-dir` replaces the whole set of four prompts, not one file. Comparing two writing policies is a matter of copying the directory, editing the copy and pointing the option at it; see [doc/PROMPTS.md](doc/PROMPTS.md).
 
@@ -303,6 +303,8 @@ Enter a memo and generate. The result screen shows the leading title, the other 
 | `/static/<file>` | GET | Stylesheet and the copy script |
 
 Generation and regeneration share one endpoint, so the form always posts to the same place. Which one runs is decided by the submit button that was pressed.
+
+Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback.
 
 The copy buttons use the clipboard API when the page is served over HTTPS, and fall back to selecting the text so that it can be copied by hand when it is not. A failure to copy leaves the text selected rather than silently doing nothing.
 
@@ -359,6 +361,8 @@ The screen shows a message meant for the person and a short reference id. The ca
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
 | Generation took too long and was stopped. | 504 | Over `GENERATION_TIMEOUT` |
 | The result could not be read. | 502 | The answer was not the expected JSON object, or was cut off |
+| That page does not exist. | 404 | An address the application does not serve |
+| That address does not accept this kind of request. | 405 | The right address, the wrong method |
 | The server failed to handle the request. | 500 | Anything unexpected, including a missing prompt file |
 
 A misconfiguration never reaches this table, because the settings are checked before a request is made: the web process refuses to start and `cli.py` exits 1, each naming the setting at fault.
@@ -421,6 +425,7 @@ Narrower selections use the same runner:
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
 | `test_web.py` | the screens, input limits, regeneration of the titles alone, that a failure does not expose its cause, and that a timeout does not blame the memo |
+| `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model` and `--timeout` overrides and the refusal of a timeout that is not positive, the exit codes, and the failure named in the log |
 
 `test_web.py` sets the four required settings before importing `app`, because `app.py` validates them while it is imported. They are placeholders and no request is made; `setdefault` leaves a real `.env` alone when one is present.
 

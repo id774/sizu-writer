@@ -31,7 +31,7 @@
 #
 #  Usage:
 #      python app.py
-#      gunicorn app:app --bind 127.0.0.1:${PORT} --timeout 120
+#      gunicorn app:app --bind 127.0.0.1:${PORT} --timeout 240
 #
 #  Options:
 #  - None. Every setting comes from the environment or .env, through
