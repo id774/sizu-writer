@@ -300,7 +300,7 @@ In every case the validation of 5.4.3 runs. Choosing something other than `json_
 
 > **As implemented.** Two of these three are implemented, under `GENERATION_RESPONSE_MODE`: `json-object` sends `response_format={"type": "json_object"}`, and `prompt-json` sends nothing and additionally accepts an answer wrapped in a single code fence. `prompt-json` is the default, because it works against an endpoint or a model that rejects the parameter, and it is what the Sakura AI Engine example uses. `json_schema` is still unimplemented. There is no automatic choice between the modes: trying one and retrying with the other would make one generation cost two requests. The sentence above holds unchanged — the validation of 5.4.3 runs in either mode, and no mode weakens it.
 
-`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `GENERATION_TEMPERATURE` is set. This is the reasoning behind ai-digest's `ANTHROPIC_THINKING_MODE=default`.
+`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `GENERATION_TEMPERATURE` is set. This is the reasoning behind ai-digest's `SUMMARIZER_THINKING_MODE=default`.
 
 #### 5.4.2 The JSON schema
 
