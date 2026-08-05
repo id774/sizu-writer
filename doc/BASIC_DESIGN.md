@@ -260,7 +260,7 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
 | What you do not look up | 7.10 | No research, no references. What has not been checked is not stated as established |
 | How much to explain | 7.4 | Background only as far as the text requires. No generalities, systems, glossary, history, case lists, bibliography or systematic argument. No move to a wide subject beyond what the observation supports |
 | Shape | 7.9 | Three to six paragraphs, fewer when the material is short. The usual order given, to follow the material rather than be applied mechanically |
-| Register | 7.5 | Follow the memo. Desu/masu by default, plain form kept when the original is consistent. Not academic, advertising or social media. Avoid what is typical of generated text. No bait, no conclusion first, no keyword repetition, no call to act |
+| Register | 7.5 | Desu/masu throughout, never the plain form, whichever form the memo uses; the memo's voice followed in every other respect. Not academic, advertising or social media. Avoid what is typical of generated text. No bait, no conclusion first, no keyword repetition, no call to act |
 | Opening | 7.6 | Start from a concrete scene, subject, word or sensation. The forbidden openings are listed |
 | Ending | 7.7 | No manufactured lesson, recommendation or conclusion. The undecided stays undecided, without reading as abandoned. The forbidden closings are listed |
 | Markdown | 7.8 | No heading in a short text; `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. A link only where the reader needs it, no bibliography. A space between full width characters and ASCII |
