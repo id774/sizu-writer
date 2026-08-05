@@ -1,6 +1,69 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+########################################################################
+# tests/test_config.py: Tests for config.py
+#
+#  Description:
+#  This test suite covers the two stages of configuration handling.
+#  load_config() converts the environment and refuses a value that is
+#  malformed on its own terms; validate_generation_config() refuses a
+#  configuration that cannot address an endpoint. The suite also pins
+#  the documented defaults, the reading of a blank value as unset, and
+#  the refusal of a legacy OPENAI_* variable, which is reported by name
+#  rather than translated silently into its replacement.
+#
+#  A recurring concern of its own is that the API token never leaves the
+#  process: it must appear in no repr and in no error message, whichever
+#  setting was the one refused.
+#
+#  Author: id774 (More info: http://id774.net)
+#  Source Code: https://github.com/id774/sizu-writer
+#  License: The GPL version 3, or LGPL version 3 (Dual License).
+#  Contact: idnanashi@gmail.com
+#
+#  Running the tests:
+#  Run the whole suite from the repository root:
+#      python -m unittest discover -s tests
+#  Run this module alone:
+#      python -m unittest tests.test_config
+#
+#  Test Cases:
+#    - Load the documented defaults for every setting that has one.
+#    - Spend one request unless GENERATION_MAX_RETRIES says otherwise.
+#    - Treat a blank or whitespace-only value as unset.
+#    - Send no temperature unless GENERATION_TEMPERATURE is set.
+#    - Refuse a value that is not a number, naming the setting and the value.
+#    - Name the setting when the temperature is not a number.
+#    - Refuse a timeout that is not positive.
+#    - Refuse a negative retry count.
+#    - Refuse an unknown response mode, naming the accepted ones.
+#    - Refuse an output limit of zero.
+#    - Refuse a port outside the valid range.
+#    - Keep the API token out of repr while leaving the value readable.
+#    - Report the host of the base URL.
+#    - Refuse every legacy variable by name, naming its replacement.
+#    - Refuse a legacy variable that is exported but empty.
+#    - Keep the value of a legacy variable out of the message.
+#    - Accept a complete generation configuration.
+#    - Refuse a missing backend, and an unknown one by name.
+#    - Refuse a missing token, and one carrying a line break.
+#    - Refuse a missing, plain http or relative base URL.
+#    - Refuse a base URL carrying user information or a query.
+#    - Refuse a base URL that already holds the resource path.
+#    - Refuse a missing model.
+#    - Keep the token out of every refusal message.
+#
+#  Requirements:
+#  - Python Version: 3.9 or later
+#  - Standard library only
+#
+#  Version History:
+#  v1.0 2026-08-05
+#       Initial release.
+#
+########################################################################
+
 import os
 import unittest
 from unittest import mock

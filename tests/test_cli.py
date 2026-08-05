@@ -1,6 +1,60 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+########################################################################
+# tests/test_cli.py: Tests for cli.py
+#
+#  Description:
+#  This test suite covers the command line entry point. It checks how a
+#  memo is read from --text or from --input and that an empty or blank
+#  source is refused before a request is spent, how the --model and
+#  --timeout overrides reach the generation call, and which exit code
+#  each outcome produces: 0 for a draft, 1 for a refused setting or a
+#  failed generation, and 2 for a command line argparse rejects.
+#
+#  No request is made. generate_draft is replaced by a stub in every
+#  case, so the suite needs no token, no .env and no endpoint.
+#
+#  Author: id774 (More info: http://id774.net)
+#  Source Code: https://github.com/id774/sizu-writer
+#  License: The GPL version 3, or LGPL version 3 (Dual License).
+#  Contact: idnanashi@gmail.com
+#
+#  Running the tests:
+#  Run the whole suite from the repository root:
+#      python -m unittest discover -s tests
+#  Run this module alone:
+#      python -m unittest tests.test_cli
+#
+#  Test Cases:
+#    - Read the memo given on the command line with --text.
+#    - Refuse an empty --text, which was previously read as no --text at all.
+#    - Refuse a --text holding whitespace only.
+#    - Read the memo from the file named by --input.
+#    - Refuse a file whose content is empty.
+#    - Generate a draft and report success with exit status 0.
+#    - Apply the --model override to the configuration handed to the core.
+#    - Apply the --timeout override to the configuration handed to the core.
+#    - Refuse a --timeout that is not positive without spending a request.
+#    - Refuse an empty memo without spending a request.
+#    - Report a generation failure as a failed run.
+#    - Name the failure class and its user message in the log.
+#    - Refuse a configuration that cannot address an endpoint.
+#    - Require a subcommand, which argparse rejects with exit status 2.
+#    - Refuse --text and --input given at once.
+#    - Refuse a --timeout that is not a number.
+#    - Require a body for the titles command.
+#
+#  Requirements:
+#  - Python Version: 3.9 or later
+#  - Standard library only
+#
+#  Version History:
+#  v1.0 2026-08-05
+#       Initial release.
+#
+########################################################################
+
 import io
 import sys
 import unittest

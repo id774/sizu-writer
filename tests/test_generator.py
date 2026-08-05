@@ -1,6 +1,64 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+########################################################################
+# tests/test_generator.py: Tests for sizu_writer/generator.py
+#
+#  Description:
+#  This test suite covers the generation core: building a Draft from a
+#  CompletionResult, applying the title limit, and refusing an answer
+#  that does not carry a body and a leading title.
+#
+#  It also pins what each response mode accepts. json-object trusts the
+#  API to have enforced the shape and reads the whole answer, while
+#  prompt-json additionally unwraps a single fenced block, because a
+#  model asked in words for JSON routinely wraps it. Neither mode cuts
+#  an object out of surrounding prose, and the cases below state that
+#  refusal explicitly, including the answer whose first brace and last
+#  brace happen to delimit valid JSON.
+#
+#  No request is made. The provider and the prompt builders are replaced
+#  by stubs, so the suite needs no token, no .env and no endpoint.
+#
+#  Author: id774 (More info: http://id774.net)
+#  Source Code: https://github.com/id774/sizu-writer
+#  License: The GPL version 3, or LGPL version 3 (Dual License).
+#  Contact: idnanashi@gmail.com
+#
+#  Running the tests:
+#  Run the whole suite from the repository root:
+#      python -m unittest discover -s tests
+#  Run this module alone:
+#      python -m unittest tests.test_generator
+#
+#  Test Cases:
+#    - Build a draft from a completion result, carrying the served model name.
+#    - Name the configured model when the answer does not name one.
+#    - Keep at most max_alt_titles alternatives and drop duplicates and blanks.
+#    - Refuse an answer that is not JSON.
+#    - Refuse an answer that is JSON but not an object.
+#    - Refuse an answer without a body.
+#    - Refuse an answer without a leading title.
+#    - Read a raw object in both response modes.
+#    - Unwrap a single fenced block under prompt-json, with or without an info string.
+#    - Refuse a fenced block under json-object, where a fence means the API did not comply.
+#    - Refuse prose before or after a fenced block.
+#    - Refuse an object surrounded by prose.
+#    - Extract no JSON fragment out of a larger answer.
+#    - Keep the body it was given when only the titles are regenerated.
+#    - Read a fenced answer under prompt-json when regenerating titles.
+#    - Spend exactly one request through the configured provider.
+#
+#  Requirements:
+#  - Python Version: 3.9 or later
+#  - Standard library only
+#
+#  Version History:
+#  v1.0 2026-08-05
+#       Initial release.
+#
+########################################################################
+
 import json
 import unittest
 from unittest import mock

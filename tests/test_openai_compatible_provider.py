@@ -1,6 +1,75 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+########################################################################
+# tests/test_openai_compatible_provider.py: Tests for the OpenAI compatible provider
+#
+#  Description:
+#  This test suite covers the one provider the application ships with.
+#  It pins what reaches the SDK, namely the token, the base URL, the
+#  retry count and the timeout on the client, and the model, the
+#  messages, the output limit, the response format per mode and the
+#  temperature on the request. It covers the normalization of an answer
+#  into a CompletionResult, the refusal of an answer that carries no
+#  usable content, and the mapping of a timeout, a connection failure
+#  and an error status onto the error hierarchy.
+#
+#  The openai package is never imported. A stand-in module is installed
+#  in sys.modules for the duration of a call, so the suite needs neither
+#  the dependency nor a network. Its exception classes are defined once
+#  at module level rather than per call, because the provider catches
+#  them by identity.
+#
+#  The log cases are part of the contract rather than an extra: a line
+#  records the shape of an exchange and never its content, and the
+#  elapsed seconds appear next to the limit on a success and on a
+#  timeout alike, because only that pair says whether the limit was
+#  reached or the connection died well short of it.
+#
+#  Author: id774 (More info: http://id774.net)
+#  Source Code: https://github.com/id774/sizu-writer
+#  License: The GPL version 3, or LGPL version 3 (Dual License).
+#  Contact: idnanashi@gmail.com
+#
+#  Running the tests:
+#  Run the whole suite from the repository root:
+#      python -m unittest discover -s tests
+#  Run this module alone:
+#      python -m unittest tests.test_openai_compatible_provider
+#
+#  Test Cases:
+#    - Hand the token and the base URL to the SDK.
+#    - Pass the base URL even when it is empty, so the SDK never falls back.
+#    - Spend one request by default, with the configured timeout.
+#    - Send the model, the messages and the output limit.
+#    - Ask for a JSON object under json-object mode.
+#    - Send no response format under prompt-json mode.
+#    - Send no temperature unless it is set, and send it when it is.
+#    - Never stream.
+#    - Normalize a well formed answer, including the usage counters.
+#    - Measure how long the one request took.
+#    - Accept an answer that carries no usage.
+#    - Fall back to the configured model name when the answer names none.
+#    - Refuse an answer without a choice.
+#    - Refuse an empty content, and a content that is not a string.
+#    - Refuse an answer cut off by the output limit.
+#    - Map a timeout onto UpstreamTimeoutError.
+#    - Map a connection failure onto UpstreamConnectionError.
+#    - Map 401, 403, 429 and 500 onto one user facing error.
+#    - Record the shape of an answer without its content or the token.
+#    - Record the wait next to the limit on an answer and on a timeout.
+#    - Keep the token out of a failure line.
+#
+#  Requirements:
+#  - Python Version: 3.9 or later
+#  - Standard library only (the openai package is stubbed, never imported)
+#
+#  Version History:
+#  v1.0 2026-08-05
+#       Initial release.
+#
+########################################################################
+
 import logging
 import sys
 import unittest
