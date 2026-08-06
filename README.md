@@ -4,7 +4,7 @@
 
 **sizu-writer** turns a short memo — a passing thought, a small observation, a discomfort, a question, a short reflection — into a full post body and a set of title candidates for [Shizuka na Internet](https://sizu.me), a Japanese site for quiet, unhurried writing.
 
-It does not post. The work of this system ends on the screen: a person copies the body and the title they chose, pastes them into the posting form, reads them once more and publishes. There is no code path to the posting site and no place to hand it a credential. That is a line drawn in the design, not a feature left for later; see [doc/POLICY](doc/POLICY).
+It does not post. The work of this system ends on the screen: a person copies the body and the title they chose, pastes them into the posting form, reads them once more and publishes. There is no code path to the posting site and no place to hand it a credential. That is a line drawn in the design, not a feature left for later; see [doc/POLICY.md](doc/POLICY.md).
 
 The generation core is independent from Flask, so `app.py` and `cli.py` run exactly the same code. The quality of the output is settled with `cli.py`, before any screen is involved: prompts are what this kind of system iterates on, and iterating on them through a browser is slower for no gain.
 
@@ -15,7 +15,7 @@ The repository is written in English — the code, the comments, the screens, th
 - The generation API in detail: [doc/DETAILED_DESIGN_GENERATION_API.md](doc/DETAILED_DESIGN_GENERATION_API.md)
 - The prompts: [doc/PROMPTS.md](doc/PROMPTS.md)
 - Debian and Apache deployment: [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md)
-- Implementation policy: [doc/POLICY](doc/POLICY)
+- Implementation policy: [doc/POLICY.md](doc/POLICY.md)
 
 > **The `OPENAI_*` variables are refused.** Provider neutral `GENERATION_*` ones replaced them, and a process that still finds an `OPENAI_*` variable refuses to start. See [Coming from an earlier checkout](#coming-from-an-earlier-checkout).
 
@@ -544,9 +544,9 @@ Contributions are welcome. You can help by:
 - Adding the parts listed under [Not implemented yet](#not-implemented-yet)
 - Reporting bugs or feature requests
 
-Please follow the style used in this repository: module level header comments describing purpose, requirements and version history, English comments, and documentation updated together with the code. [doc/POLICY](doc/POLICY) states the rules, including the invariants a change must not cross — above all, that nothing in this system posts to the site or holds a credential for it.
+Please follow the style used in this repository: module level header comments describing purpose, requirements and version history, English comments, and documentation updated together with the code. [doc/POLICY.md](doc/POLICY.md) states the rules, including the invariants a change must not cross — above all, that nothing in this system posts to the site or holds a credential for it.
 
 ## License
 
 This repository is dual licensed under the [GPL version 3](https://www.gnu.org/licenses/gpl-3.0.html) or the [LGPL version 3](https://www.gnu.org/licenses/lgpl-3.0.html), at your option.
-For full details, please refer to the [LICENSE](doc/LICENSE) file. See also [COPYING](doc/COPYING) and [COPYING.LESSER](doc/COPYING.LESSER) for the complete license texts.
+For full details, please refer to the [LICENSE](doc/LICENSE.md) file. See also [COPYING](doc/COPYING) and [COPYING.LESSER](doc/COPYING.LESSER) for the complete license texts.
