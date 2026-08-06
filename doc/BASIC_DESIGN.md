@@ -44,7 +44,7 @@ From requirements 2, 13 and 14, the invariants come first. Neither a setting nor
 
 ### 2.2 What is inherited from ai-digest
 
-The new repository also carries a `doc/POLICY`, and inherits the following. The one difference follows.
+The new repository also carries a `doc/POLICY.md`, and inherits the following. The one difference follows.
 
 - The header block at the top of each module: Description, Routes (the web application only), the Author / Source Code / License / Contact block, Usage, Options, Exit Codes, Requirements, Environment Variables (`config.py` only), Version History.
 - Comments in English, imperative, short.
