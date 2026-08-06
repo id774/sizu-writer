@@ -1,6 +1,11 @@
 sizu-writer Repository Version History
 ======================================
 
+v1.0.1 (Release Date: TBD)
+--------------------------
+- Add .gitattributes, marking the Markdown documents for diff and language.
+- Add the document file naming and attribute rules to doc/POLICY.
+
 v1.0 (2026-08-05)
 -----------------
 - Initial release.
