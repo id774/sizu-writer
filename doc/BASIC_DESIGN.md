@@ -2,7 +2,7 @@
 
 Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md) (2026-08-04).
 
-This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout follow [id774/ai-digest](https://github.com/id774/ai-digest).
+This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout are the ones stated in [`POLICY.md`](POLICY.md).
 
 > **The generation path was redesigned after this document was written.** Sections 3, 5.4 and 6 below describe the first shape, in which the endpoint was an `OPENAI_*` setting that defaulted to OpenAI and the API call lived inside `generator.py`. What is implemented now — provider neutral settings, a required endpoint, the `providers/` layer and the two response modes — is in [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md). Where the two disagree, the detailed design is the one that matches the code. The paragraphs below are annotated where that happens; everything else in this document still holds.
 

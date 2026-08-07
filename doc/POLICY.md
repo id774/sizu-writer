@@ -1,8 +1,18 @@
 # Implementation Policies
 
-sizu-writer is a single Python application. Its implementation policy is the
-one of id774/ai-digest, restated here for this repository, with the additions
-that follow from what this system must never do.
+sizu-writer is a single Python application, so this policy is stated directly
+for Python rather than separating a shared section from per-language ones.
+
+This document stands on its own. It is the whole implementation policy of this
+repository, and no rule here is completed by a document kept somewhere else. A
+subject it does not cover is a gap in this document, to be filled here rather
+than looked up in another repository.
+
+The Invariants below decide over the rest of it. Some of what they forbid is
+what a general policy would otherwise ask for: this system does not fall back
+to a second endpoint when the first one fails, and does not infer what a
+compatible endpoint supports from a model name or a URL. Those are deliberate,
+and are not to be relaxed to match a more general rule.
 
 ---
 
@@ -89,6 +99,16 @@ The settings decide where a memo is sent, so they are read strictly.
   is declared explicitly.
 - An invalid or unsupported option results in usage output.
 - Exit codes are consistent and are documented in the module header.
+- An option that replaces a setting names the setting it replaces, so that a
+  reader of a command line sees which configured value it displaced. A
+  credential never gets one, and neither does `PORT`.
+- An option that is left out changes nothing, so an existing service unit or a
+  recorded command keeps behaving as before.
+- An option value the pipeline cannot use is refused by the parser, before a
+  request is spent.
+- Subcommands carry the verbs of the tool. A new mode of operation becomes a
+  subcommand; it does not become a flag that changes what an existing
+  subcommand means.
 
 ### Error Handling and Exit Codes
 - Detect an unmet prerequisite early. A misconfiguration is refused before a
@@ -111,6 +131,23 @@ The settings decide where a memo is sent, so they are read strictly.
   Reserved by the shell and by signal convention. Do not redefine them for
   application errors.
 
+### Environment Differences
+- Branch on what the environment provides, not on what it is called. A
+  distribution name, a release number, a platform string or a Python build
+  each answer a question the code is not asking. The question is whether the
+  command, the file, the service or the format it needs is there.
+- Keep that detection in one place. The same question answered separately in
+  several places drifts apart as environments change.
+- A capability the application can work without is detected where it is used,
+  not declared as a requirement. Detection asks whether the capability is
+  usable, not only whether it is present: a package can import while the
+  backend it needs is absent.
+- Decide in advance what an absent optional capability leads to: use the
+  alternative, skip the step and say so once, or refuse the run.
+- This section is about the host and the packages installed on it. It does not
+  reach the generation endpoint, where the Invariants forbid choosing an
+  alternative: one generation uses one route, whatever went wrong on it.
+
 ---
 
 ## Python Policy
@@ -122,8 +159,25 @@ The settings decide where a memo is sent, so they are read strictly.
 - The encoding header `# -*- coding: utf-8 -*-` follows the shebang.
 - Every module starts with the header block used across id774 repositories, in
   the order given under [Documentation and Versioning](#documentation-and-versioning).
-- Comments are written in English, in the imperative, and stay short.
+- Comments are written in English, in the imperative, and stay short, avoiding
+  a redundant lead-in such as `# Function to ...`.
+- A comment says why, not what. Where a decision looks arbitrary, such as
+  substituting with `str.replace()` rather than a format call, or refusing an
+  answer that is only part of a response, the comment gives the reason, so that
+  a later change does not quietly undo it.
+- Name a thing by what it is, not by a part of it. The shell is the interpreter
+  that runs a shell script, so a script is not "a shell", in the same way that
+  a USB memory stick is not "a USB". The same loss happens wherever a shorthand
+  reaches for the interface, the format or the container instead of the thing
+  itself. This applies to the headers, the documents and the commit messages as
+  much as to the comments.
 - Type hints are used on the public functions of a module.
+- Every public function, class and method carries a docstring stating what the
+  call returns or does. A one-line docstring stays on one line, with a space
+  inside each pair of quotes:
+  `""" Return the body with the review notes removed. """`. A longer one opens
+  on the line after the quotes, and describes the non-obvious parameters under
+  `Args:` and the result under `Returns:`.
 - Prefer `str.format()` over an f-string. Substitution into an external text
   such as a prompt is done with `str.replace()`, so that a brace written in
   the prompt does not need escaping.
@@ -132,6 +186,10 @@ The settings decide where a memo is sent, so they are read strictly.
 - An executable defines `main() -> int` and terminates with `sys.exit(main())`.
 - Use early returns rather than nesting the body of a function inside a
   condition.
+- Group imports as standard library, third party, then local. Import a
+  third-party package inside the function that needs it only when that package
+  is optional, so that the module still imports without it, and name the
+  package to install in the error raised when it is missing.
 
 ### Configuration
 - Every setting lives in `config.py`, in the `Config` dataclass, read from the
@@ -144,6 +202,11 @@ The settings decide where a memo is sent, so they are read strictly.
   configuration that cannot address an endpoint. Every path that reaches the
   API passes both; `cli.py --version` and the tests pass neither.
 - No error message quotes a secret. A token is reported as present or absent.
+- An empty or whitespace-only string setting reads as unset, so that a bare
+  `NAME=` line in `.env` behaves exactly like the absent line.
+- `.env.example` ships no placeholder credential. An empty value is honest
+  about being unset; a fake token would pass a presence check and fail only
+  after a generation has been spent.
 
 ### Dependencies and I/O
 - Runtime dependencies are declared in `requirements.txt` and pinned to a
@@ -151,13 +214,34 @@ The settings decide where a memo is sent, so they are read strictly.
   service. Add a dependency only when it earns its place; prefer the standard
   library otherwise.
 - Always pass `encoding="utf-8"` for a text file operation.
+- Every outbound request carries an explicit timeout, which `GENERATION_TIMEOUT`
+  supplies and `--timeout` replaces for one run. There is no request without
+  one: a request that hangs holds a web worker until the client gives up, and
+  holds an unattended run until the next one starts.
+- Treat the answer as untrusted input. It is validated before it reaches a
+  template or a file, and one that does not validate is refused rather than
+  repaired into something that passes.
 
-### Tests
+### Testing and Operation
 - `tests/test_*.py`, `unittest` and `unittest.mock` only.
 - No network access and no API call. The client is replaced by a stub, and the
   provider tests stub the `openai` package itself rather than importing it.
 - No test needs a token, a `.env` or a real endpoint.
+- A test writes nothing outside a temporary directory.
 - Run them with `python -m unittest discover -s tests`.
+- The runner exits `0` only when every test passed, which is what a service
+  check or a CI step reads. A passing suite says nothing about the endpoint
+  being reachable; only an actual generation does.
+- A fix for a defect arrives with the test that fails without it.
+- Assume unattended execution as a service by default. The process reads its
+  configuration from the environment or `.env`, so every required variable is
+  defined explicitly there rather than inherited from a login session.
+- Anything that changes state on the host, the deployment steps included, is
+  safe to run twice. Check the current state before changing it, rather than
+  assuming the state a previous run left behind.
+- The service runs with the privileges its work needs and no more. A step that
+  needs a raised privilege takes it for that step; the process does not run its
+  whole body under it.
 
 ### Documentation and Versioning
 - Every module must contain a structured header, in this order:
@@ -169,9 +253,10 @@ The settings decide where a memo is sent, so they are read strictly.
 - `Routes` sits next to `Description` because it says what the module serves,
   which is part of what it is; `Usage`, `Options` and `Exit Codes` say how it
   is driven, and follow the identifying block.
-- `config.py` carries every setting under `Environment Variables`: the name,
-  what it decides, whether it is required, and the default when it has one.
-  `.env.example` shows the same settings as a file to copy.
+- Every setting is documented in three places that must agree: the
+  `Environment Variables` block of `config.py` (the name, what it decides,
+  whether it is required, and the default when it has one), `.env.example` as
+  a file to copy, and the README for a reader who is not editing code.
 - "Test Cases" belong in the test code under `tests/`, never in the application
   modules.
 - Documentation must be updated in sync with behavior changes.
@@ -377,4 +462,9 @@ The settings decide where a memo is sent, so they are read strictly.
   was chosen.
 
 ### License
-- GPL version 3 or LGPL version 3, dual licensed.
+- The repository is dual licensed under the GPL version 3 or the LGPL version
+  3, at the user's option. The full texts live in `doc/LICENSE.md`,
+  `doc/COPYING` and `doc/COPYING.LESSER`.
+- Every module header repeats the license line of the standard identifying
+  block, so that a file read on its own still states its terms.
+- Add a dependency only when its license is compatible with that choice.
