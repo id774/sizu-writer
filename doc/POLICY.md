@@ -4,6 +4,17 @@ sizu-writer is a single Python application. Its implementation policy is the
 one of id774/ai-digest, restated here for this repository, with the additions
 that follow from what this system must never do.
 
+Where this document is silent, the ai-digest policy applies. Silence here means
+that the rule carries over unchanged, not that this repository is exempt from
+it, so a reader who does not find a subject below looks for it there.
+
+Where the two disagree, this document decides, and the Invariants below decide
+over everything else here. Some of what they forbid is what a general policy
+would otherwise ask for: this system does not fall back to a second endpoint
+when the first one fails, and does not infer what an endpoint supports from a
+model name or a URL. Those are deliberate, and are not to be corrected against
+the inherited policy.
+
 ---
 
 ## General Policy
@@ -122,8 +133,25 @@ The settings decide where a memo is sent, so they are read strictly.
 - The encoding header `# -*- coding: utf-8 -*-` follows the shebang.
 - Every module starts with the header block used across id774 repositories, in
   the order given under [Documentation and Versioning](#documentation-and-versioning).
-- Comments are written in English, in the imperative, and stay short.
+- Comments are written in English, in the imperative, and stay short, avoiding
+  a redundant lead-in such as `# Function to ...`.
+- A comment says why, not what. Where a decision looks arbitrary, such as
+  substituting with `str.replace()` rather than a format call, or refusing an
+  answer that is only part of a response, the comment gives the reason, so that
+  a later change does not quietly undo it.
+- Name a thing by what it is, not by a part of it. The shell is the interpreter
+  that runs a shell script, so a script is not "a shell", in the same way that
+  a USB memory stick is not "a USB". The same loss happens wherever a shorthand
+  reaches for the interface, the format or the container instead of the thing
+  itself. This applies to the headers, the documents and the commit messages as
+  much as to the comments.
 - Type hints are used on the public functions of a module.
+- Every public function, class and method carries a docstring stating what the
+  call returns or does. A one-line docstring stays on one line, with a space
+  inside each pair of quotes:
+  `""" Return the body with the review notes removed. """`. A longer one opens
+  on the line after the quotes, and describes the non-obvious parameters under
+  `Args:` and the result under `Returns:`.
 - Prefer `str.format()` over an f-string. Substitution into an external text
   such as a prompt is done with `str.replace()`, so that a brace written in
   the prompt does not need escaping.
@@ -151,13 +179,30 @@ The settings decide where a memo is sent, so they are read strictly.
   service. Add a dependency only when it earns its place; prefer the standard
   library otherwise.
 - Always pass `encoding="utf-8"` for a text file operation.
+- Every outbound request carries an explicit timeout, which `GENERATION_TIMEOUT`
+  supplies and `--timeout` replaces for one run. There is no request without
+  one: a request that hangs holds a web worker until the client gives up, and
+  holds an unattended run until the next one starts.
+- Treat the answer as untrusted input. It is validated before it reaches a
+  template or a file, and one that does not validate is refused rather than
+  repaired into something that passes.
 
 ### Tests
 - `tests/test_*.py`, `unittest` and `unittest.mock` only.
 - No network access and no API call. The client is replaced by a stub, and the
   provider tests stub the `openai` package itself rather than importing it.
 - No test needs a token, a `.env` or a real endpoint.
+- A test writes nothing outside a temporary directory.
 - Run them with `python -m unittest discover -s tests`.
+- The runner exits `0` only when every test passed. A passing suite says
+  nothing about the endpoint being reachable; only an actual generation does.
+- A fix for a defect arrives with the test that fails without it.
+- Anything that changes state on the host, the deployment steps included, is
+  safe to run twice. Check the current state before changing it, rather than
+  assuming the state a previous run left behind.
+- The service runs with the privileges its work needs and no more. A step that
+  needs a raised privilege takes it for that step; the process does not run its
+  whole body under it.
 
 ### Documentation and Versioning
 - Every module must contain a structured header, in this order:

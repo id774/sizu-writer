@@ -6,7 +6,7 @@ v1.0.1 (Release Date: TBD)
 - Add .gitattributes, marking the Markdown documents for diff.
 - Rename doc/POLICY and doc/LICENSE to doc/POLICY.md and doc/LICENSE.md, so
   that GitHub renders them, and update the references to them.
-- Add the document file naming and attribute rules to doc/POLICY.md.
+- Expand doc/POLICY.md across documents, inheritance from ai-digest, request timeouts, docstrings, testing and naming.
 - Add the shared version history description guidelines to the end of this file.
 
 v1.0 (2026-08-05)
