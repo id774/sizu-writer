@@ -7,7 +7,8 @@ v1.0.1 (Release Date: TBD)
 - Rename doc/POLICY and doc/LICENSE to doc/POLICY.md and doc/LICENSE.md, so
   that GitHub renders them, and update the references to them.
 - Expand doc/POLICY.md into a standalone policy, adding the rules it had
-  left to another repository.
+  left to another repository, the scope and history of a pull request among
+  them.
 - Add the shared version history description guidelines to the end of this
   file.
 
