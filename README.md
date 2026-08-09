@@ -1,5 +1,24 @@
 # sizu-writer
 
+## Contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+5. [Configuration](#configuration)
+6. [Usage](#usage)
+7. [The writing policy](#the-writing-policy)
+8. [Notices](#notices)
+9. [When something fails](#when-something-fails)
+10. [Tests](#tests)
+11. [Deployment](#deployment)
+12. [Repository Structure](#repository-structure)
+13. [The Japanese that stays](#the-japanese-that-stays)
+14. [Not implemented yet](#not-implemented-yet)
+15. [Contribution](#contribution)
+16. [License](#license)
+
 ## Overview
 
 **sizu-writer** turns a short memo — a passing thought, a small observation, a discomfort, a question, a short reflection — into a full post body and a set of title candidates for [Shizuka na Internet](https://sizu.me), a Japanese site for quiet, unhurried writing.
