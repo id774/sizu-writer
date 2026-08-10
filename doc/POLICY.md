@@ -8,6 +8,18 @@ repository, and no rule here is completed by a document kept somewhere else. A
 subject it does not cover is a gap in this document, to be filled here rather
 than looked up in another repository.
 
+[`REQUIREMENTS.md`](REQUIREMENTS.md) and [`BASIC_DESIGN.md`](BASIC_DESIGN.md)
+are the higher specification of this repository, and this document is
+subordinate to both. Where it contradicts either of them, this document is what
+is corrected, and behaviour they do not allow is introduced by changing them
+first. [`PROMPTS.md`](PROMPTS.md) governs what the prompts say and what their
+output must satisfy,
+[`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md) how
+the generation API is called, and [`DEPLOYMENT.md`](DEPLOYMENT.md) how the
+system is installed and run. This document governs the code that sits between
+them, and where it is silent, the invariants of the basic design and the order
+of priorities in the requirements decide.
+
 The Invariants below decide over the rest of it. Some of what they forbid is
 what a general policy would otherwise ask for: this system does not fall back
 to a second endpoint when the first one fails, and does not infer what a
@@ -25,6 +37,24 @@ and are not to be relaxed to match a more general rule.
 - Keep the generation core (`sizu_writer/`) independent from Flask, so that
   `cli.py` and `app.py` exercise exactly the same code.
 
+Where there are several ways to do something and the rest of this document does
+not settle which, these come in order:
+
+1. Keep the line at which the person reads the post and publishes it.
+2. Do not hold or forward what the person wrote beyond what generating the post
+   takes.
+3. Carry the memo to the model correctly.
+4. Keep it always possible to say which generation API is being talked to.
+5. Do not mix the responsibilities of the web layer, the generation core and
+   the provider layer.
+6. Do not put into Python what belongs to a prompt.
+7. Introduce no persistence and no state management that is not needed.
+8. Depend on no posting path, official or otherwise.
+9. Add no feature that is not needed.
+
+A decision this list does not settle is settled by the requirements, and
+recorded here once it has been.
+
 ### 1.2 Invariants
 These lines are not crossed by a setting or by an extension.
 
@@ -34,6 +64,9 @@ These lines are not crossed by a setting or by an extension.
   form field.
 - Do not depend on browser automation. `playwright` and `selenium` do not
   belong in `requirements.txt`.
+- Do not store the memo, the prompts or the generated text. No database, no
+  session store, no temporary file, no cache of what a person entered: they
+  live for the request that carries them and no longer.
 - Do not let the API token leave the server process: not into a template, not
   into JavaScript, not into an error page.
 - Do not mix an instruction to the model, an editing note, or a review result
@@ -51,6 +84,9 @@ The settings decide where a memo is sent, so they are read strictly.
   refused before a request, never read as the one backend that does exist.
 - Do not switch to a second endpoint when the first one fails. One generation
   uses one route, whatever went wrong on it.
+- Do not rewrite the URL the operator named. The code does not change its
+  scheme, does not attach a host of its own and does not append a resource path
+  the setting did not carry.
 - Do not infer what a compatible endpoint supports from its model name or its
   URL. A difference in behavior is expressed as a named setting.
 - Do not read a legacy setting as its successor. A renamed variable is refused
@@ -195,6 +231,52 @@ finally intended, and merges as if it had been written that way.
 - A rewritten branch invalidates the copies others have fetched. Force pushing
   is confined to the branch under review, and the rewrite is stated whenever
   the branch is shared.
+
+### 1.10 Prompts
+- The prompts are files under `prompts/`, outside the Python package, and the
+  directory is named by a setting.
+- A change to how a post reads is an edit to a prompt. Adding a rule about
+  register, length, formulae or repetition to Python is the wrong place for it
+  unless the rule is mechanical and cannot be expressed as an instruction.
+- The prompt keeps the memo plainly apart from the instructions given by the
+  system, and says which is which.
+- Substitution into a prompt is textual and literal. A prompt is not treated as
+  a format string, so a brace or a percent sign written in it needs no
+  escaping.
+- A prompt file that is missing, unreadable or empty is a configuration error,
+  refused before a request is spent. The code ships no built-in text to fall
+  back to, because a post written by a fallback prompt would be
+  indistinguishable from one written by the intended prompt.
+- Post processing is mechanical and changes no meaning: an outer code fence, a
+  heading level, an excess of blank lines, the spacing between full width
+  characters and ASCII. A problem with how the post reads is solved in the
+  prompts.
+- An inspection that finds a forbidden formula, or a phrase that reads as a
+  remark about the work, reports it and rewrites nothing. Handing the finding
+  to the person is closer to what this system is for than breaking a sentence
+  on a false positive.
+- What each prompt is for, and the contract its output has to keep, are
+  documented in [`PROMPTS.md`](PROMPTS.md), and the file and the document are
+  changed together.
+
+### 1.11 Judging a Change
+Before a change is proposed, it answers these:
+
+- Does it cross an Invariant? Then it is not made.
+- Does it need the requirements or the basic design to say something they do
+  not? Then those documents change first.
+- Does it move a decision about how a post reads out of the prompts and into
+  Python, or let post processing change a meaning?
+- Does it widen what leaves the process, or what is kept after the request
+  ends?
+- Can the API token reach a template, a page, a URL or an error through it?
+- Does it change an existing option, setting, output or exit code that a
+  service unit or a recorded command depends on?
+- Does it add a dependency, and does that dependency earn its place?
+- Is it the smallest change that serves its purpose?
+- Does a test fail without it?
+- Which documents change with it: the module header, `.env.example`, the
+  README, the prompt specification, `doc/VERSIONS`?
 
 ---
 
