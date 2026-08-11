@@ -442,6 +442,7 @@ Exit codes, as POLICY prescribes: `0` success, including `-h` and `-v`; `1` fail
 
 - `base.html` carries `index.html`, `result.html` and `error.html`, as in ai-digest.
 - The CSS uses system fonts only and makes no external request. A `max-width` and a single column serve both a phone and a desktop (requirement 10.4). One breakpoint, stacking the buttons on a narrow screen, is enough.
+- The page declares the light color scheme, and every foreground color it relies on is stated beside its background rather than left to a system color. A phone in dark appearance otherwise renders the form controls with its own colors, which is what put white button labels on the near-white button background.
 - The only JavaScript is `copy.js`. Generation and navigation work as plain HTML forms; with JavaScript disabled, nothing degrades except the copy buttons.
 - After the generate button is pressed, it is disabled and a waiting state is shown, to prevent a double submission (with JavaScript only; without it the submission still works).
 
