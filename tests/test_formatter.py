@@ -36,6 +36,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-08-11
+#       Cover separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -56,6 +58,15 @@ class NormalizeBodyTest(unittest.TestCase):
 
     def test_keeps_a_code_block_inside_the_body(self):
         source = "前置きです。\n\n```sh\n# comment\nls\n```\n\n続きです。"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_keeps_separate_code_blocks_at_the_body_boundaries(self):
+        source = ("```python\nprint('first')\n```\n\n本文です。\n\n"
+                  "```python\nprint('second')\n```")
 
         body, notices = normalize_body(source)
 
