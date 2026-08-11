@@ -18,8 +18,8 @@
 #  the requested path or the cause of an upstream failure.
 #
 #  No request is made. generate_draft and regenerate_titles are replaced
-#  by stubs, and the settings app.py validates while it is imported are
-#  set with setdefault so that a real .env is left alone.
+#  by stubs, and app.py is imported with an isolated test configuration so
+#  that settings from the host environment or a real .env cannot affect it.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -64,15 +64,17 @@ import unittest
 from unittest import mock
 
 # app.py validates the generation settings while it is imported, so a
-# worker that cannot address an endpoint refuses to start. These values
-# are what that check needs and nothing more: no request is ever made,
-# and setdefault leaves a real .env alone when one is present.
-os.environ.setdefault("GENERATION_BACKEND", "openai-compatible")
-os.environ.setdefault("GENERATION_API_TOKEN", "test-token")
-os.environ.setdefault("GENERATION_BASE_URL", "https://api.example.test/v1")
-os.environ.setdefault("GENERATION_MODEL", "test-model")
-
-import app as web  # noqa: E402  imported after the settings above
+# worker that cannot address an endpoint refuses to start. Keep that
+# import independent of both the host environment and a local .env.
+TEST_ENVIRONMENT = {
+    "GENERATION_BACKEND": "openai-compatible",
+    "GENERATION_API_TOKEN": "test-token",
+    "GENERATION_BASE_URL": "https://api.example.test/v1",
+    "GENERATION_MODEL": "test-model",
+}
+with mock.patch.dict(os.environ, TEST_ENVIRONMENT, clear=True):
+    with mock.patch("config.load_dotenv", None):
+        import app as web  # noqa: E402  imported with the settings above
 from sizu_writer import Draft
 from sizu_writer.errors import UpstreamTimeoutError
 
