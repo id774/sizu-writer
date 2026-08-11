@@ -22,6 +22,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-08-11
+#       Preserve separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -54,7 +56,9 @@ FENCE = re.compile(r"^\s*```")
 def _strip_outer_fence(text: str) -> str:
     """ Remove a code fence wrapping the whole answer. """
     lines = text.strip().split("\n")
-    if len(lines) >= 2 and FENCE.match(lines[0]) and FENCE.match(lines[-1]):
+    inner_has_fence = any(FENCE.match(line) for line in lines[1:-1])
+    if (len(lines) >= 2 and FENCE.match(lines[0])
+            and FENCE.match(lines[-1]) and not inner_has_fence):
         return "\n".join(lines[1:-1]).strip()
     return text.strip()
 

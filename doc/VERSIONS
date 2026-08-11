@@ -1,6 +1,10 @@
 sizu-writer Repository Version History
 ======================================
 
+v1.0.2 (Release Date: TBD)
+--------------------------
+- Preserve separate fenced code blocks at the boundaries of generated Markdown bodies.
+
 v1.0.1 (2026-08-09)
 -------------------
 - Add .gitattributes, marking the Markdown documents for diff.
