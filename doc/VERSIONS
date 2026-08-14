@@ -6,12 +6,7 @@ v1.0.2 (Release Date: TBD)
 - Preserve separate fenced code blocks at the boundaries of generated Markdown bodies.
 - Keep the web buttons legible on a phone in dark appearance, declaring the
   light color scheme and stating the button text color with its background.
-- Complete the versioning rules in doc/POLICY.md with what section 2.6 left
-  unsaid: when major moves for a reason other than the rollover, what counts as
-  an incompatible change, that an unreleased version number is provisional until
-  it ships, that a documentation-only change takes no entry here unless its
-  scale warrants one, the heading form an entry in this file opens with, and
-  that its width is a deliberate exception rather than a defect to correct.
+- Complete the versioning rules in doc/POLICY.md.
 
 v1.0.1 (2026-08-09)
 -------------------
