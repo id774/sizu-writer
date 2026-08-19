@@ -75,6 +75,9 @@
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
+#  v1.1 2026-08-19
+#       Refuse non-finite numeric settings before they reach the client
+#       or an integer conversion.
 #  v1.0 2026-08-05
 #       Replace the OPENAI_* settings with provider neutral GENERATION_*
 #       ones, require the backend, token, base URL and model instead of
@@ -87,6 +90,7 @@
 #
 ########################################################################
 
+import math
 import os
 from dataclasses import dataclass, field
 from typing import Optional
@@ -166,9 +170,13 @@ def _number(name: str, default: float) -> float:
     if not raw:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         raise ConfigError("{0} must be a number, got '{1}'".format(name, raw))
+    if not math.isfinite(value):
+        raise ConfigError("{0} must be a finite number, got '{1}'".format(
+            name, raw))
+    return value
 
 
 def _whole(name: str, default: int, minimum: int) -> int:
