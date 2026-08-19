@@ -34,6 +34,7 @@
 #    - Treat a blank or whitespace-only value as unset.
 #    - Send no temperature unless GENERATION_TEMPERATURE is set.
 #    - Refuse a value that is not a number, naming the setting and the value.
+#    - Refuse non-finite numeric values, naming the setting and the value.
 #    - Name the setting when the temperature is not a number.
 #    - Refuse a timeout that is not positive.
 #    - Refuse a negative retry count.
@@ -59,6 +60,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-08-19
+#       Cover the refusal of non-finite numeric settings.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -122,6 +125,15 @@ class LoadConfigTest(unittest.TestCase):
 
         self.assertIn("GENERATION_TIMEOUT", message)
         self.assertIn("soon", message)
+
+    def test_refuses_non_finite_numeric_values(self):
+        for name, value in (("GENERATION_TIMEOUT", "nan"),
+                            ("GENERATION_TEMPERATURE", "inf"),
+                            ("MAX_OUTPUT_TOKENS", "-inf")):
+            message = self.refuse({name: value})
+
+            self.assertIn(name, message)
+            self.assertIn(value, message)
 
     def test_names_the_setting_when_the_temperature_is_not_a_number(self):
         self.assertIn("GENERATION_TEMPERATURE",

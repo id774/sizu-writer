@@ -7,6 +7,8 @@ v1.0.2 (Release Date: TBD)
 - Keep the web buttons legible on a phone in dark appearance, declaring the
   light color scheme and stating the button text color with its background.
 - Complete the versioning rules in doc/POLICY.md.
+- Refuse non-finite values in numeric configuration instead of passing them to
+  the generation client or raising an unexpected conversion error.
 
 v1.0.1 (2026-08-09)
 -------------------
