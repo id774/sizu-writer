@@ -81,12 +81,14 @@ The settings decide where a memo is sent, so they are read strictly.
   and the model are required, and a missing one stops the process instead of
   being filled in with a default.
 - Do not accept an unknown backend. A value the code has no provider for is
-  refused before a request, never read as the one backend that does exist.
+  refused before a request, never coerced to a supported backend.
 - Do not switch to a second endpoint when the first one fails. One generation
   uses one route, whatever went wrong on it.
-- Do not rewrite the URL the operator named. The code does not change its
-  scheme, does not attach a host of its own and does not append a resource path
-  the setting did not carry.
+- Do not rewrite the base URL the operator named. The code does not change its
+  scheme or host and does not substitute a different base URL. The configured
+  provider may use the resource path defined by its wire protocol; for the
+  OpenAI-compatible provider, the SDK appends `/chat/completions` to
+  `GENERATION_BASE_URL`.
 - Do not infer what a compatible endpoint supports from its model name or its
   URL. A difference in behavior is expressed as a named setting.
 - Do not read a legacy setting as its successor. A renamed variable is refused

@@ -81,12 +81,14 @@ The same four prompts serve both modes. There is no `prompts-json-object/`
 alongside `prompts/`: a policy that differs by transport would have to be
 edited twice and would drift.
 
-`sizu_writer/generator.py` validates what comes back and refuses the answer,
-raising `InvalidResponseError`, when:
+The provider layer rejects transport-level unusable answers before
+`sizu_writer/generator.py` sees them: no choice, a truncating finish reason, or
+no usable content raise `InvalidResponseError` in
+`sizu_writer/providers/openai_compatible.py`.
 
-- there is no choice in the response
-- `finish_reason` says the output limit was reached, meaning the body was cut
-  off partway
+`sizu_writer/generator.py` then validates the content returned in
+`CompletionResult` and raises `InvalidResponseError` when:
+
 - the content does not parse as JSON, or parses as something other than an object
 - `body_markdown` is missing, not a string, or blank (checked on `generate` only)
 - `primary_title` is missing, not a string, or blank

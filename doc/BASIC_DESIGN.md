@@ -115,10 +115,10 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 | Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
 | Generation client | `GENERATION_TIMEOUT` | 120s | The limit of one generation. The answer is not streamed, so this is the writing itself, not the network. Beyond it, the user is told it timed out |
-| gunicorn | `--timeout` | 240s | The client timeout plus room for one retry |
+| gunicorn | `--timeout` | 240s | The default client timeout plus headroom for request handling. Raising retries requires increasing this outer timeout |
 | Apache | `ProxyTimeout` | 300s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the worst case wait is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`. The default is 0 retries, so 120 seconds sits comfortably inside gunicorn's 240. The README states this dependency in its deployment section.
+Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the request budget is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)` before SDK and application overhead. The default is 0 retries, so 120 seconds remains below gunicorn's 240. A retry does not fit inside 240 without increasing the outer timeout. The README states this dependency in its deployment section.
 
 ---
 
@@ -494,7 +494,7 @@ click
 
 ### 8.1 Security
 
-- The API key comes from the environment of the server process (or from `.env`, mode `600`, owned by the service user). It is not handed to a template. `Config.__repr__` hides it.
+- The generation API token comes from the environment of the server process (or from `.env`, mode `600`, owned by the service user). It is not handed to a template. `Config.__repr__` hides it.
 - When published, Apache terminates HTTPS. Basic authentication, IP restriction and a VPN are operational choices; `deploy/sizu-writer.conf` holds a commented template.
 - gunicorn listens on `127.0.0.1` only.
 - `MAX_CONTENT_LENGTH` and `MAX_INPUT_CHARS` bound the input.
@@ -579,7 +579,7 @@ post reads well.
 | 8. Regenerating the whole text | Section 7.3 item 7, `mode=full` |
 | 9. Regenerating the titles only | Section 7.3 item 3, `mode=titles`, `regenerate_titles()` |
 | 10. Basic error handling | Sections 5.2 and 7.5 |
-| 11. The API key on the server | Sections 6 and 8.1 |
+| 11. The generation API token on the server | Sections 6 and 8.1 |
 
 ### 10.2 Acceptance conditions (requirement 14)
 
