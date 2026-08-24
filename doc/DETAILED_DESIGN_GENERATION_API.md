@@ -3,7 +3,7 @@
 - Repository: `id774/sizu-writer`
 - Version: v1.0
 - Written: 2026-08-05
-- First endpoint supported: Sakura AI Engine, free plan for foundational models
+- First endpoint supported: Sakura AI Engine
 - Protocol: OpenAI-compatible Chat Completions
 
 This document takes [`BASIC_DESIGN.md`](BASIC_DESIGN.md) down to the level the
@@ -20,8 +20,7 @@ sizu-writer must not assume that the endpoint it talks to belongs to OpenAI.
 Any service speaking the OpenAI-compatible Chat Completions API is a candidate,
 and which one answers is a decision of the deployment, stated explicitly.
 
-The first service supported this way is Sakura AI Engine, on its free plan for
-foundational models.
+The first service supported this way is Sakura AI Engine.
 
 The design holds these conditions:
 
@@ -57,9 +56,11 @@ were not:
    documents read as though OpenAI were the default.
 
 Sakura AI Engine offers an OpenAI-compatible Chat Completions API and
-authenticates with an account token used as a Bearer token. Its free plan for
-foundational models allows 3,000 chat completion requests per month, and rate
-limits beyond that.
+authenticates with an account token used as a Bearer token. Current plan limits,
+rate limits and model availability are service-owned information; consult the
+[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
+and the control panel for their current values instead of copying them into this
+design.
 
 ## 3. Design decisions
 
@@ -133,10 +134,10 @@ timeouts at the same time (section 12).
 ## 4. Scope
 
 **In scope.** Switching the OpenAI-compatible endpoint; Sakura AI Engine
-account token authentication; the models the free plan for foundational models
-covers; the structured response mode; configuration validation; separation of
-the transport; response normalization; error classification; logging; unit
-tests; and the README, `.env.example`, design documents and version history.
+account token authentication; the structured response mode; configuration
+validation; separation of the transport; response normalization; error
+classification; logging; unit tests; and the README, `.env.example`, design
+documents and version history.
 
 **Out of scope.** The Anthropic-compatible Messages API; the Responses API; the
 RAG API; embeddings; speech to text; text to speech; sending to several
@@ -176,10 +177,13 @@ SDK sends it as:
 Authorization: Bearer <UUID>:<secret>
 ```
 
-### 5.2 The free allowance
+### 5.2 Request accounting
 
-The free plan for foundational models covers 3,000 chat completion requests per
-month. In sizu-writer:
+`GENERATION_MAX_RETRIES=0` makes each normal application operation spend one
+request. Provider plan limits and rate limits are external current information
+and are not repeated here. For Sakura AI Engine, consult the
+[official documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
+and the control panel for those limits. In sizu-writer:
 
 | Action | Requests |
 | --- | ---: |
@@ -198,9 +202,11 @@ No default model is shipped, and no preview name is written into this
 repository. Models are added, renamed and withdrawn, and a name frozen into a
 document is wrong soon afterwards.
 
-Read the name off the endpoint's own list of available models and put it in
-`GENERATION_MODEL`. On the Sakura AI Engine free plan, pick a foundational
-model the free allowance covers; the closed models are outside it.
+Read the name off the endpoint's own current list of available models and put it
+in `GENERATION_MODEL`. For Sakura AI Engine, verify the model and its plan
+availability in the current control panel and the
+[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
+rather than relying on a copied model or plan list in this repository.
 
 ---
 
@@ -261,7 +267,7 @@ model nor the token can be changed from a screen.
     ├── DETAILED_DESIGN_GENERATION_API.md   this document
     ├── PROMPTS.md
     ├── DEPLOYMENT.md
-    ├── POLICY
+    ├── POLICY.md
     └── VERSIONS
 ```
 

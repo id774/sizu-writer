@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Take a short text a person wrote — a passing thought, an observation, a discomfort, a question, a short reflection — and use the OpenAI API to produce a post for Shizuka na Internet (sizu.me).
+Take a short text a person wrote — a passing thought, an observation, a discomfort, a question, a short reflection — and use an explicitly configured generation endpoint speaking the OpenAI-compatible Chat Completions API to produce a post for Shizuka na Internet (sizu.me).
 
 The system does not post. It shows the whole post body and the title candidates on the screen; the person reads them, copies them, pastes them into the posting form of Shizuka na Internet and publishes.
 
@@ -11,7 +11,7 @@ The system does not post. It shows the whole post body and the title candidates 
 - Run on a server as a Flask application, continuously.
 - Publish it through the Apache HTTP Server.
 - Let the person enter a short text through a web page.
-- Use the OpenAI API to produce the whole post body and the title candidates.
+- Use the explicitly configured generation endpoint to produce the whole post body and the title candidates.
 - Show the post body so that it can be copied whole.
 - Show each title candidate so that it can be copied on its own.
 - Leave the posting to the person.
@@ -51,8 +51,8 @@ The grain of the material decides the length. What one line on a microblog would
 1. The person opens the system in a browser.
 2. They enter a short text, a memo, an event, a fragment of a conversation.
 3. They press the generate button.
-4. The Flask application calls the OpenAI API.
-5. The API produces a text and title candidates suited to Shizuka na Internet.
+4. The Flask application calls the configured generation endpoint.
+5. The endpoint produces a text and title candidates suited to Shizuka na Internet.
 6. The system shows the result.
 7. The person copies the whole body.
 8. The person copies the title they choose.
@@ -77,10 +77,11 @@ The grain of the material decides the length. What one line on a microblog would
 
 ### 5.3 External API
 
-- Use the OpenAI API.
-- Do not write the API key into the source or onto a screen.
-- Read the API key from an environment variable or from a configuration file with restricted access.
+- Use an explicitly configured endpoint speaking the OpenAI-compatible Chat Completions API.
+- Do not write the generation API token into the source or onto a screen.
+- Read the token from an environment variable or from a configuration file with restricted access.
 - Receive the answer in a structured form, so that the body and the titles are separate.
+- Do not choose an endpoint implicitly and do not fall back to a second endpoint after a failure.
 
 ## 6. Functional requirements
 
@@ -143,8 +144,8 @@ Letting the AI revise a part of the body is not required in the initial implemen
 Report these in a form the person understands:
 
 - the input is empty
-- the OpenAI API could not be reached
-- the OpenAI API returned an error
+- the configured generation endpoint could not be reached
+- the configured generation endpoint returned an error
 - the answer had an unexpected shape
 - a timeout occurred
 - the server failed internally
@@ -328,9 +329,9 @@ At a minimum:
 
 ### 10.1 Security
 
-- Never send the OpenAI API key to the client.
-- Never put the key into the HTML, the JavaScript or the Git repository.
-- Call the OpenAI API from the server only.
+- Never send the generation API token to the client.
+- Never put the token into the HTML, the JavaScript or the Git repository.
+- Call the configured generation endpoint from the server only.
 - When published, terminate HTTPS at Apache.
 - Restrict the users with Basic authentication, IP restriction or a VPN as needed.
 - If the input and the answers are logged, state the purpose and the retention period.
@@ -379,7 +380,7 @@ Even with persistence, nothing is sent to the posting site.
 
 1. Apache and Flask working together
 2. the input screen
-3. generation through the OpenAI API
+3. generation through the configured OpenAI-compatible endpoint
 4. showing the whole body
 5. showing the title candidates
 6. copying the whole body at once
@@ -387,7 +388,7 @@ Even with persistence, nothing is sent to the posting site.
 8. regenerating the whole text
 9. regenerating the titles only
 10. basic error handling
-11. keeping the API key on the server
+11. keeping the generation API token on the server
 
 ## 13. Out of scope for the initial implementation
 
@@ -409,7 +410,7 @@ Even with persistence, nothing is sent to the posting site.
 The initial specification is met when:
 
 1. the person can enter a short text on a web page
-2. pressing generate calls the OpenAI API
+2. pressing generate calls the configured generation endpoint
 3. the whole body, suited to Shizuka na Internet, is shown
 4. the body can be copied and pasted into the posting form as it stands
 5. the leading title and several candidates are shown
@@ -419,13 +420,13 @@ The initial specification is met when:
 9. a familiar theme is not presented as a discovery
 10. the person can post by copying, pasting and reading it once more
 11. the system posts nothing by itself
-12. the OpenAI API key never reaches the browser
+12. the generation API token never reaches the browser
 
 ## 15. Summary
 
 The system runs on a server as a Flask application behind Apache.
 
-A person enters a short text, and the OpenAI API produces the whole post body and several title candidates for Shizuka na Internet. The result is shown as a screen where the body and each title can be copied individually.
+A person enters a short text, and the configured generation endpoint produces the whole post body and several title candidates for Shizuka na Internet. The result is shown as a screen where the body and each title can be copied individually.
 
 The person copies the title they choose and the whole body, pastes them into the posting form of Shizuka na Internet, reads them once more and publishes.
 
