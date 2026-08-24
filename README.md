@@ -190,7 +190,8 @@ GENERATION_RESPONSE_MODE=json-object
 
 OpenAI is one explicit endpoint among several here, not a privileged default. Nothing happens differently because that URL is the one configured.
 
-**Anything else.** Same four settings, different values. Speaking the same API does not mean behaving the same way: when an endpoint refuses `temperature`, leave `GENERATION_TEMPERATURE` empty and nothing is sent; when it refuses `response_format`, use `prompt-json`; when it answers slowly, raise `GENERATION_TIMEOUT` and the two timeouts outside it. Change one setting per run, so that the run which succeeds says which setting did it.
+**Anything else.** Set `GENERATION_BACKEND`, `GENERATION_API_TOKEN`,
+`GENERATION_BASE_URL`, and `GENERATION_MODEL` for that endpoint. Speaking the same API does not mean behaving the same way: when an endpoint refuses `temperature`, leave `GENERATION_TEMPERATURE` empty and nothing is sent; when it refuses `response_format`, use `prompt-json`; when it answers slowly, raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts. Change one setting per run, so that the run which succeeds says which setting did it.
 
 **No fallback.** An authentication failure, a rate limit or a timeout never causes a request to a second endpoint. One generation uses one route, which is what keeps it answerable afterwards which service received the memo, which model replied, how many requests were spent and whose failure ended the run.
 
@@ -236,7 +237,7 @@ The request path has nested timeouts, and they widen outwards:
 | gunicorn `--timeout` | 240s | the systemd unit, or the `Procfile` |
 | Apache `ProxyTimeout` | 300s | the virtual host |
 
-Raising `GENERATION_TIMEOUT` means raising the other two. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
+Raising `GENERATION_TIMEOUT` means raising the gunicorn and Apache timeouts. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
 
 Retries widen the same window, because the SDK spends the timeout again on each one:
 
@@ -244,7 +245,8 @@ Retries widen the same window, because the SDK spends the timeout again on each 
 worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
 ```
 
-At the default of zero retries that is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes it 360, which is already outside both — so the outer two move with it.
+At the default of zero retries that is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes it 360, which is already outside the gunicorn
+and Apache limits, so those limits move with it.
 
 **Why the innermost one is 120 and not 60.** The request is not streamed: the client waits until the last character of the answer exists, so `GENERATION_TIMEOUT` is not a limit on the network but on the writing. What decides that wait is the length of the answer and the speed of the endpoint — a whole post of a few paragraphs plus five titles, from a model that may be sharing its hardware with everyone else on a free plan. The memo is a few dozen tokens of a prompt of a few thousand, so a one line memo and a four thousand character one ask for almost the same work. At 60 seconds that put ordinary generations on the wrong side of the limit and reported them as the person's fault. If your endpoint answers faster, lowering it again is a change to `.env` alone.
 
@@ -409,7 +411,7 @@ Two cases are worth knowing by their log line rather than their screen:
 
 **`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
-**`error=APITimeoutError ... elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` and the two timeouts outside it, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
+**`error=APITimeoutError ... elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
 
 Shortening the memo is not the answer to this one, which is why the screen no longer suggests it. The wait is the answer being written, and a memo of one line asks for the same post as a long one.
 
