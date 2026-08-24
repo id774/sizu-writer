@@ -81,12 +81,14 @@ The settings decide where a memo is sent, so they are read strictly.
   and the model are required, and a missing one stops the process instead of
   being filled in with a default.
 - Do not accept an unknown backend. A value the code has no provider for is
-  refused before a request, never read as the one backend that does exist.
+  refused before a request, never coerced to a supported backend.
 - Do not switch to a second endpoint when the first one fails. One generation
   uses one route, whatever went wrong on it.
-- Do not rewrite the URL the operator named. The code does not change its
-  scheme, does not attach a host of its own and does not append a resource path
-  the setting did not carry.
+- Do not rewrite the endpoint identity the operator named. The code does not
+  change the URL scheme or host, substitute another base URL, or select a
+  different endpoint. Protocol-specific resource paths are handled by the
+  configured provider or SDK as part of that protocol and are not treated as a
+  change of endpoint identity.
 - Do not infer what a compatible endpoint supports from its model name or its
   URL. A difference in behavior is expressed as a named setting.
 - Do not read a legacy setting as its successor. A renamed variable is refused
