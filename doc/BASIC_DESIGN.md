@@ -4,8 +4,6 @@ Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md) (2026-08-04).
 
 This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout are the ones stated in [`POLICY.md`](POLICY.md).
 
-> **The generation path was redesigned after this document was written.** Sections 3, 5.4 and 6 below describe the first shape, in which the endpoint was an `OPENAI_*` setting that defaulted to OpenAI and the API call lived inside `generator.py`. What is implemented now — provider neutral settings, a required endpoint, the `providers/` layer and the two response modes — is in [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md). Where the two disagree, the detailed design is the one that matches the code. The paragraphs below are annotated where that happens; everything else in this document still holds.
-
 ---
 
 ## 1. Repository name
@@ -66,7 +64,7 @@ Requirement 11 does not ask for persistence. This design uses that: **the server
 
 - The memo and the current body, both needed for a regeneration, ride on the result form as a `textarea` and a `hidden` field, and travel with each request.
 - So Flask's `SECRET_KEY`, a session cookie and a store shared between workers are all unnecessary. Adding gunicorn workers or restarting the process changes nothing.
-- The future persistence of requirement 11 lands on top of this without touching it: add `storage.py` (section 10.3).
+- Persistence is not implemented. Section 10.3 records only the boundary that a future persistence design must preserve.
 
 ---
 
@@ -170,9 +168,9 @@ Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values
     ├── DETAILED_DESIGN_GENERATION_API.md   The generation path in detail
     ├── PROMPTS.md                  The prompt files and how to work on them
     ├── DEPLOYMENT.md               Debian, Apache and API integration
-    ├── POLICY                      Implementation policy (following ai-digest)
+    ├── POLICY.md                   Implementation policy
     ├── VERSIONS                    Repository version history
-    ├── LICENSE
+    ├── LICENSE.md
     ├── COPYING
     └── COPYING.LESSER
 ```
@@ -221,14 +219,12 @@ class SizuWriterError(Exception):
 | `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
 | `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
 
-Four points matter.
+These properties matter.
 
 - **Only `user_message` reaches the screen.** The `str()` of the exception, the traceback, the URL, the model name and any fragment of the key stay in the server log.
 - Each error answer carries an eight digit **reference id** (random per request), which also goes to the log. The user only has to quote "error id: 3f9c1a72" for the operator to find the entry.
 - An authentication failure (401 / 403) and a rate limit (429) are not distinguished for the user. Writing a misconfiguration onto the screen is leaking internal information. The log does distinguish them.
-- `UpstreamStatusError` keeps the status code as an attribute, for the log only.
-
-> **As implemented.** `UpstreamStatusError` carries no status attribute. The status is written by `sizu_writer/providers/openai_compatible.py`, which is where it is known, on the same failure line as the backend, the endpoint host, the model, the request id and the elapsed seconds. Carrying it up through the exception would have moved the log line away from the code that produces it without telling the operator anything more.
+- The provider logs an upstream status where it is known; `UpstreamStatusError` itself does not carry the status code.
 
 ### 5.3 `sizu_writer/prompts.py`
 
@@ -241,10 +237,8 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
 ```
 
 - The placeholders are `{{input}}` and `{{body}}` only, substituted with `str.replace()`. `str.format()` is avoided so that a brace appearing in a prompt does not have to be escaped. (The POLICY preference for `str.format()` concerns string building in code, not substitution into external text.)
-- What is read is cached in the process. With `PROMPT_RELOAD=on` it is read again on every request, so that adjusting a prompt needs no restart.
-- A missing file is treated as an `InternalError` at the first generation rather than at startup, with the file name in the log. A web process that cannot start because of a prompt is worse to operate than one whose health endpoint still answers.
-
-> **As implemented.** No cache was built, so `PROMPT_RELOAD` has nothing to switch off and does not exist. `load_prompt()` reads the file on every generation, which is what the setting was meant to arrange, and adjusting a prompt already takes effect without a restart. Reading four small files next to a request that takes tens of seconds costs nothing worth caching for. The README lists the setting under [Not implemented yet](../README.md#not-implemented-yet) for the same reason.
+- `load_prompt()` reads each prompt file on every generation, so prompt edits take effect without a restart.
+- An unreadable prompt file is logged by path and raises `InternalError` when generation attempts to load it.
 
 #### The shape of the prompt
 
@@ -282,90 +276,92 @@ def generate_draft(input_text: str, config: Config) -> Draft
 def regenerate_titles(input_text: str, body: str, config: Config) -> Draft
 ```
 
-> **As implemented.** The API call itself moved to `sizu_writer/providers/`, and `generator.py` now works from a `CompletionResult` rather than an SDK response. It handles no HTTP client, no authentication, no base URL and no SDK exception. Sections 5.4.1 and 5.4.4 below describe that first shape; the shape that is implemented is in [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md), sections 10 to 12. Section 5.4.3 still describes the validation exactly, because moving the transport was not allowed to change it.
+`generator.py` owns message assembly, JSON parsing, draft validation and `Draft`
+construction. It delegates the request itself to `sizu_writer/providers/`
+through `build_provider(config).complete(messages, config)`, and therefore knows
+nothing about HTTP, authentication, the base URL or SDK exceptions.
 
-#### 5.4.1 How the API is called
+#### 5.4.1 Calling the provider
 
-Chat Completions of the `openai` package, with a JSON Schema in `response_format` (Structured Outputs). The aim is the one behind the tool use of ai-digest: not to write heuristics that cut prose apart.
+`_complete()` calls `build_provider(config).complete(messages, config)`.
+`GENERATION_BACKEND` selects the provider; the current accepted value is
+`openai-compatible`.
 
-`base_url` is configurable, so a compatible endpoint works as well. Such an endpoint may not support `json_schema`, so — as ai-digest absorbs the differences of Anthropic compatible endpoints through settings — the response format can be stepped down.
+The OpenAI-compatible provider sends `model`, `messages` and `max_tokens` on
+every request. It sends `temperature` only when `GENERATION_TEMPERATURE` is set.
+Under `GENERATION_RESPONSE_MODE=json-object` it also sends
+`response_format={"type":"json_object"}`. Under
+`GENERATION_RESPONSE_MODE=prompt-json` it sends no `response_format` parameter.
+There is no automatic retry with another response mode and no fallback to a
+second endpoint.
 
-| `OPENAI_RESPONSE_FORMAT_MODE` | What is sent | For |
-| --- | --- | --- |
-| `json_schema` (default) | `response_format={"type": "json_schema", "json_schema": {..., "strict": true}}` | OpenAI itself and endpoints supporting Structured Outputs |
-| `json_object` | `response_format={"type": "json_object"}` | Endpoints that return JSON but cannot enforce a schema |
-| `none` | Nothing | Endpoints that accept neither; only the format instruction in the prompt remains |
+The provider maps SDK timeout, connection and status failures to the repository's
+upstream exception types. It also refuses an answer with no choice, no usable
+content, or a truncation finish reason before returning `CompletionResult` to
+`generator.py`.
 
-In every case the validation of 5.4.3 runs. Choosing something other than `json_schema` never makes the validation weaker.
+#### 5.4.2 The JSON object contract
 
-> **As implemented.** Two of these three are implemented, under `GENERATION_RESPONSE_MODE`: `json-object` sends `response_format={"type": "json_object"}`, and `prompt-json` sends nothing and additionally accepts an answer wrapped in a single code fence. `prompt-json` is the default, because it works against an endpoint or a model that rejects the parameter, and it is what the Sakura AI Engine example uses. `json_schema` is still unimplemented. There is no automatic choice between the modes: trying one and retrying with the other would make one generation cost two requests. The sentence above holds unchanged — the validation of 5.4.3 runs in either mode, and no mode weakens it.
-
-`temperature` is **not sent** by default. Sending nothing leaves the endpoint default in place and lets a model that refuses the parameter work. It is sent only when `GENERATION_TEMPERATURE` is set. This is the reasoning behind ai-digest's `SUMMARIZER_THINKING_MODE=default`.
-
-#### 5.4.2 The JSON schema
-
-For the body:
+For body generation the accepted object has this shape:
 
 ```json
 {
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["body_markdown", "primary_title", "alternative_titles"],
-  "properties": {
-    "body_markdown":      { "type": "string" },
-    "primary_title":      { "type": "string" },
-    "alternative_titles": { "type": "array", "items": { "type": "string" } }
-  }
+  "body_markdown": "the generated Markdown body",
+  "primary_title": "the leading title",
+  "alternative_titles": ["another title"]
 }
 ```
 
-Regenerating the titles uses the same schema without `body_markdown`.
+Title-only regeneration uses the same title fields and does not require
+`body_markdown`.
 
-`strict: true` Structured Outputs ignores constraints such as `maxItems`, so **the limit of four alternatives (requirement 8) is applied by the application**. Beyond four, the first four are kept; the excess goes to the DEBUG log and not to `notices`, being an internal matter of no interest to the user.
+`MAX_ALT_TITLES` is enforced by the application after parsing. Empty alternatives,
+duplicates of `primary_title` and duplicates already kept are removed, and only
+the first configured number of remaining alternatives is retained.
 
 #### 5.4.3 Validating the answer
 
-Checked in this order; any failure raises `InvalidResponseError`, with the reason written only to the log.
+The provider first rejects a response with no choice, a truncation finish reason,
+or no usable text. `generator.py` then applies the response-mode parsing rule:
+`prompt-json` may unwrap one outer code fence, while `json-object` parses the
+whole answer directly. In either mode the parsed value must be a JSON object.
 
-1. There is at least one choice.
-2. `finish_reason` is not `length`. A truncated body is not offered as a post. The log says to raise `MAX_OUTPUT_TOKENS` or shorten the input.
-3. The content parses as JSON and is an object.
-4. `body_markdown` is a non empty string (not checked when only the titles are regenerated).
-5. `primary_title` is a non empty string.
-6. `alternative_titles` is a list of strings. An empty list is fine; requirement 8 sets a maximum only.
-
-Each entry of `alternative_titles` is stripped of the empty ones and of duplicates of `primary_title`, and the first `MAX_ALT_TITLES` are kept.
+For body generation, `body_markdown` must be a non-empty string. In both
+generation modes, `primary_title` must be a non-empty string and
+`alternative_titles` must be a list containing strings only. A violation raises
+`InvalidResponseError` and is not turned into a partial draft.
 
 #### 5.4.4 Retries
 
-Left to `max_retries` of the client (default 2); no retry loop of our own. As in ai-digest, `OPENAI_MAX_RETRIES=0` spends exactly one request, which is what comparing endpoints needs.
-
-> **As implemented.** `GENERATION_MAX_RETRIES` defaults to `0`, so spending one request per action is the normal case rather than the one an operator opts into. A plan counting requests — Sakura AI Engine's 3,000 per month — makes an unpredictable multiplier expensive, and the retries the SDK would have spent are the least visible part of the total.
+Retries belong to the SDK through `GENERATION_MAX_RETRIES`; there is no retry
+loop in `generator.py` or in the provider. The default is zero retries, so a
+normal screen action or CLI generation spends one request. A retry repeats the
+same configured request and never changes the endpoint or response mode. The
+outer timeout relationship is defined in section 3.1.
 
 ### 5.5 `sizu_writer/formatter.py`
 
-Turns the model output into something postable. **It rewrites only what can be decided mechanically and never touches the meaning.**
+Turns the model output into something postable. It rewrites only what can be
+decided mechanically and never changes the meaning.
 
 ```python
-def normalize_body(text: str, ascii_spacing: bool) -> Tuple[str, List[str]]
+def normalize_body(text: str) -> Tuple[str, List[str]]
 ```
 
-Four rewrites:
+The rewrites are:
 
-1. **Remove an outer code fence**, only when the whole answer is wrapped in ` ```markdown ... ``` `. A code block inside the body is left alone.
-2. **Demote a `#` heading** to `## ` (requirement 7.8), pushing "the heading level of the body was adjusted" onto `notices`. A `#` inside a code fence is out of scope.
-3. **Tidy the surrounding whitespace**: three or more blank lines become two. Paragraphing is preserved.
-4. **Insert a space between full width characters and ASCII alphanumerics** (requirement 7.8, `BODY_ASCII_SPACING=on` by default), except:
-   - fenced code blocks and inline code (between backticks)
-   - the URL part of a Markdown link (`](...)`) and an autolink (`<...>`)
-   - an ASCII character followed by punctuation or a closing bracket, and a full width character preceded by an opening bracket (`（GPT）` does not become `（ GPT ）`)
+1. Remove one outer code fence only when it wraps the whole body and there is no
+   separate inner fence.
+2. Demote a level-one Markdown heading to level two outside fenced code blocks,
+   adding a notice when that happens.
+3. Collapse three or more consecutive line breaks to a normal paragraph gap and
+   strip surrounding whitespace.
 
-Beyond that, an **inspection** that rewrites nothing pushes findings onto `notices`:
-
-- a forbidden formula is present (「いかがだったでしょうか」, 「ぜひ考えてみてください」, 「今回は」, 「この記事では」, 「近年」, 「皆さんは」 and the like)
-- a phrase that looks like an instruction or a remark about the work is present (「以下の点に注意して」, 「ご指示のとおり」)
-
-The inspection **detects only**. Sending a suspicion to the human is closer to requirement 4 than breaking a sentence on a false positive.
+After those rewrites the formatter only inspects. It adds a notice when the body
+contains a configured boilerplate phrase or a phrase that looks like an
+instruction leak, and it does not rewrite that sentence. Spacing between Japanese
+text and ASCII belongs to the prompt policy described in section 5.3, not to the
+formatter.
 
 ### 5.6 `app.py`
 
@@ -381,11 +377,8 @@ The Flask application. Four routes.
 - Generation and regeneration share one endpoint, so the form always posts to the same place and the branching stays in the template. `mode` comes from the `name`/`value` of the submit button (`mode=full` / `mode=titles`).
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
 - `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
-- `MAX_CONTENT_LENGTH` keeps a huge POST from reaching the application.
+- `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
 - An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
-- An optional check that a POST comes from the same origin (`REQUIRE_SAME_ORIGIN`, default `on`) answers 400 when the `Origin` header is foreign. It needs `ProxyPreserveHost On` on the Apache side, which `deploy/sizu-writer.conf` sets.
-
-> **As implemented.** The `Origin` check is not implemented: `REQUIRE_SAME_ORIGIN` appears in neither `config.py` nor `app.py`, and the README lists it under [Not implemented yet](../README.md#not-implemented-yet). `deploy/sizu-writer.conf` already sets `ProxyPreserveHost On`, so adding the check later needs no change to the deployment. `MAX_CONTENT_LENGTH` is set in `app.py` at 1 MiB rather than read from `config.py`, because no operator has a reason to move it.
 
 ### 5.7 `cli.py`
 
@@ -406,33 +399,27 @@ Exit codes, as POLICY prescribes: `0` success, including `-h` and `-v`; `1` fail
 
 ## 6. Settings
 
-`config.py` holds the `Config` dataclass and `load_config()`. Validation lives in `validate_*()`; a wrong value fails at startup or before generation instead of falling back to a default (the policy behind ai-digest rejecting a misspelled `SUMMARIZER_BACKEND`).
+`config.py` is the single implementation source for runtime setting names,
+defaults and validation. The operator-facing copy is the Configuration table in
+README.md; this basic design does not maintain a second table of the same current
+defaults.
 
-> **As implemented.** The table below is the first naming. The settings that exist are `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL` — all four required, none defaulted — plus `GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and `GENERATION_TEMPERATURE`. The rows below them are unchanged. Validation is split into `load_config()`, which converts and checks values on their own terms, and `validate_generation_config()`, which refuses a configuration that cannot address an endpoint; the split is what lets `cli.py --version` and the test suite run without credentials. The `OPENAI_*` variables in the table are refused by name if they are still set. See [`DETAILED_DESIGN_GENERATION_API.md`](DETAILED_DESIGN_GENERATION_API.md), sections 8 and 9.
+The endpoint identity is explicit: `GENERATION_BACKEND`,
+`GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL` are required
+before a generation request can be made and have no implicit endpoint fallback.
+`GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and
+`GENERATION_TEMPERATURE` shape the request. `MAX_OUTPUT_TOKENS`,
+`MAX_INPUT_CHARS`, `MAX_ALT_TITLES`, `PROMPT_DIR`, `LOG_LEVEL` and `PORT` shape
+the application around it.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | (none, required) | The API key. Missing means an `InternalError` at generation; the log says the key is unset, the screen does not |
-| `OPENAI_BASE_URL` | (empty = OpenAI) | Base URL of a compatible endpoint, including the version path |
-| `OPENAI_MODEL` | (none, required) | The model. No default, because a sensible one differs per endpoint |
-| `OPENAI_TIMEOUT` | `60` | Seconds allowed for one request |
-| `OPENAI_MAX_RETRIES` | `2` | Retries left to the SDK; `0` spends one request |
-| `OPENAI_TEMPERATURE` | (empty = not sent) | Sent only when set |
-| `OPENAI_RESPONSE_FORMAT_MODE` | `json_schema` | `json_schema` / `json_object` / `none` |
-| `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer; enough for a few thousand Japanese characters and the titles |
-| `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field |
-| `MAX_ALT_TITLES` | `4` | Maximum number of alternative titles (requirement 8) |
-| `PROMPT_DIR` | `prompts` | Where the prompts live |
-| `PROMPT_RELOAD` | `off` | `on` reads them again on every request (for prompt work) |
-| `BODY_ASCII_SPACING` | `on` | Insert a space between full width characters and ASCII |
-| `REQUIRE_SAME_ORIGIN` | `on` | The `Origin` check on POST |
-| `LOG_LEVEL` | `INFO` | Level of the application log |
-| `LOG_PAYLOAD` | `off` | `on` records the memo and the answer at DEBUG. Off by default (requirement 10.1) |
-| `PORT` | `8090` | Port of the development server and of gunicorn |
+`load_config()` parses and validates values that are meaningful on their own.
+`validate_generation_config()` refuses a configuration that cannot address the
+selected endpoint. This separation lets `cli.py --version` and the offline test
+suite run without a token while every path that reaches generation validates the
+endpoint first.
 
-`.env.example` follows ai-digest: **a secret is left empty, with no placeholder**. A dummy value reads as configured, so an authentication failure would only surface at the actual call.
-
-`LOG_PAYLOAD=on` puts the input and the result into the log. The purpose and the retention that requirement 10.1 asks for are stated in the README and in `.env.example` (purpose: prompt work and troubleshooting; off by default; when enabled, set a retention with logrotate).
+Legacy `OPENAI_*` settings are refused by `config.py`; they are not translated
+into the current names.
 
 ---
 
@@ -543,7 +530,7 @@ WantedBy=multi-user.target
 - The prompts live outside the code (`prompts/*.md`). The model name, the timeout and the output limit are environment variables (section 6).
 - The HTML templates, the CSS, the JS, the Python and the prompts are separate files (section 4).
 - The application log goes to stderr and lands in the systemd journal, in a different file and a different process from the Apache log (requirement 10.3). The format is that of ai-digest: `%(asctime)s %(levelname)s %(name)s: %(message)s`.
-- Persistence will be `sizu_writer/storage.py` plus one call in `app.py` right after a successful generation. `Draft` already carries what is worth storing (the input, the body, the titles, the time, the model). The chosen title and a posted flag will be added as screen fields when persistence is implemented (requirement 11).
+- Persistence is not implemented. The current `Draft` carries the generated body, titles, model, generation time and notices; the memo remains on the request/form path. Neither is written to durable storage. Requirement 11 leaves persistence to a future design.
 
 ### 8.4 Usability
 
@@ -555,20 +542,24 @@ WantedBy=multi-user.target
 
 ## 9. Test design
 
-`unittest` under `tests/`. No network; the OpenAI client is replaced by a stub.
+The test suite uses `unittest` under `tests/` and performs no live network call.
+The current test inventory and exact assertions live in the test files rather
+than being duplicated here.
 
-| File | What it checks |
-| --- | --- |
-| `test_config.py` | The defaults, blank values, a misspelled `OPENAI_RESPONSE_FORMAT_MODE` being rejected, a missing required value being detected, the key not appearing in `repr` |
-| `test_prompts.py` | Reading a prompt, substituting `{{input}}` and `{{body}}`, leaving the rest of the prompt intact, behavior on a missing file, the effect of `PROMPT_RELOAD` |
-| `test_generator.py` | A `Draft` built from a good answer; five or more alternatives cut to four; duplicates of `primary_title` and empty entries removed; bad JSON, a missing field, an empty body and `finish_reason=length` all becoming `InvalidResponseError`; a connection failure, a timeout and a 4xx/5xx mapping to their exceptions; no `temperature` sent when it is unset; the request changing per `OPENAI_RESPONSE_FORMAT_MODE` while the validation does not |
-| `test_formatter.py` | Removing the outer fence; demoting `#` and the resulting notice; leaving a code block alone; the ASCII spacing and its exclusions (inline code, URLs, brackets and punctuation); `BODY_ASCII_SPACING=off` doing nothing; detecting the formulas |
-| `test_errors.py` | Each exception carrying `user_message` and `status_code`; no key, URL or path inside `user_message` |
-| `test_web.py` | With the Flask `test_client`: the input screen renders; an empty input errors and keeps the input; a successful generation shows the body and the titles; `mode=titles` updates the titles and keeps the body; no traceback in the body of an error answer; a POST with a foreign `Origin` answers 400; `/healthz` answers 200 without calling the API |
+- `test_config.py` covers setting parsing, required generation configuration,
+  legacy-name refusal and base-URL validation.
+- `test_generator.py` covers JSON parsing, draft validation, title filtering and
+  the two response modes independently of network transport.
+- `test_openai_compatible_provider.py` covers the Chat Completions request,
+  response normalization and mapping of timeout, connection and status failures.
+- `test_formatter.py` covers the mechanical body rewrites and notices.
+- `test_web.py` covers routes, rendering, user-visible failures and the health
+  endpoint without a live generation service.
+- `test_cli.py` covers command-line input, overrides and exit status behavior.
 
-> **As implemented.** The transport moved, and its tests moved with it into `test_openai_compatible_provider.py`: what reaches the SDK, the normalization of an answer, and the mapping of a timeout, a connection failure and each error status. `test_generator.py` keeps everything about a draft and gains the two response modes. `test_config.py` gains the refusal of the legacy `OPENAI_*` variables and the base URL rules. The stub is now the `openai` package itself, so the suite does not import the SDK at all. `test_web.py` covers the routing failures as well: an unknown address, a method an address does not accept, and a missing favicon not being reported as a server failure. `test_cli.py` was added for the command line entry point, which had no tests of its own: reading the memo, refusing an empty one, the `--model` and `--timeout` overrides, and the exit codes. `test_prompts.py` and `test_errors.py` are still unwritten.
-
-Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality of the writing and cannot be decided by a test. The README describes them as a manual step: run a real memo through `cli.py generate` and read the result.
+Writing-quality acceptance remains a manual check through `cli.py generate`;
+the offline test suite verifies the software contract, not whether a generated
+post reads well.
 
 ---
 
@@ -580,7 +571,7 @@ Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality o
 | --- | --- |
 | 1. Apache and Flask | Section 3, `deploy/sizu-writer.conf`, `deploy/sizu-writer.service` |
 | 2. Input screen | Section 7.2, `index.html` |
-| 3. Generation through the OpenAI API | Section 5.4, `generator.py` |
+| 3. Generation through the configured OpenAI-compatible endpoint | Sections 5.4 and 6, `generator.py`, `providers/` |
 | 4. Showing the whole body | Section 7.3 item 4, `result.html` |
 | 5. Showing the titles | Section 7.3 items 1 to 2 |
 | 6. Copying the whole body | Section 7.3 item 5, section 7.4 |
@@ -595,7 +586,7 @@ Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality o
 | Condition | How the design holds it |
 | --- | --- |
 | 1. A short text can be entered | Section 7.2 |
-| 2. Generate calls the OpenAI API | Section 5.6 `POST /generate` -> section 5.4 |
+| 2. Generate calls the configured generation endpoint | Section 5.6 `POST /generate` -> section 5.4 |
 | 3. The whole body is shown | Section 7.3 item 4 |
 | 4. It can be copied and pasted as it stands | The Markdown held in a `textarea`, section 7.4 |
 | 5. The leading title and several candidates are shown | The schema of section 5.4.2, section 7.3 items 1 to 2 |
@@ -605,43 +596,14 @@ Items 7 to 9 of the acceptance conditions (requirement 14) concern the quality o
 | 9. A familiar theme is not a discovery | "Stance" in section 5.3 |
 | 10. Copy, paste and read is enough to post | Section 8.4 |
 | 11. Nothing is posted automatically | Invariants 1 to 3 of section 2.1; no path to the posting site exists in the code |
-| 12. The key never reaches the browser | Invariant 4 of section 2.1, section 8.1 |
+| 12. The generation API token never reaches the browser | Invariant 4 of section 2.1, section 8.1 |
 
-### 10.3 Future extension (requirement 11)
+### 10.3 Persistence boundary (requirement 11)
 
-What persistence will touch is bounded in advance.
-
-- Added: `sizu_writer/storage.py` (JSON under `data/drafts/<date>/<id>.json`), a `DATA_DIR` setting, a list route and a detail route.
-- Changed: one call in `app.py` right after a successful generation, and a small form on the result screen recording the chosen title and whether it was posted.
-- Unchanged: `generator.py`, `formatter.py`, `prompts.py` and the prompts. The generation core stays unaware of persistence.
-
-Even with persistence, nothing is sent to the posting site (end of requirement 11).
+Persistence is not part of the current implementation. Requirement 11 permits a
+later persistence feature but does not define a current storage module, storage
+path, route or file format. A future persistence design must keep the generation
+core separate from storage and must not cross the invariant that this system
+never posts to Shizuka na Internet.
 
 ---
-
-## 11. Order of implementation
-
-| Stage | Content | Done when |
-| --- | --- | --- |
-| 1 | Initialize the repository: `doc/` (POLICY, VERSIONS, licenses, requirements, this document), `.gitignore`, `.python-version`, `requirements.txt` | `pip install -r requirements.txt` succeeds |
-| 2 | `config.py`, `.env.example`, `tests/test_config.py` | Reading and validating the settings is settled by tests |
-| 3 | The first `prompts/*.md` and `prompts.py`, `tests/test_prompts.py` | The prompts cover requirements 3, 7 and 8 |
-| 4 | `generator.py`, `formatter.py`, `errors.py` and their tests | The core can be verified without `cli.py` |
-| 5 | `cli.py` | Generation can be tried with a real key and the output fed back into the prompts |
-| 6 | `app.py`, the templates, the CSS, `copy.js`, `tests/test_web.py` | The whole flow works on the development server |
-| 7 | `deploy/` and the deployment section of the README | It runs on Apache, gunicorn and systemd |
-| 8 | Acceptance (the 12 items of requirement 14) | Items 7 to 9 confirmed by reading real output |
-
-Stage 5 comes before stage 6 on purpose. In a system of this kind the prompt is what costs the most to redo, and settling the output quality before the screens exist keeps the screens from being rebuilt.
-
----
-
-## 12. Open questions
-
-Points to decide before implementation. None of them affects the structure of this document.
-
-1. **The model**: `GENERATION_MODEL` has no default, so the model to run must be chosen. How closely a model follows instructions about register decides the result; compare several at stage 5.
-2. **The input limit**: `MAX_INPUT_CHARS=4000` is provisional. Revisit it with the memos actually written.
-3. **Who may reach it**: Basic authentication, IP restriction or a VPN. Reflect the choice in `deploy/sizu-writer.conf`.
-4. **`LOG_PAYLOAD`**: keep it off, or turn it on during a tuning period with a retention period defined (requirement 10.1).
-5. **A public repository**: if the repository is public, `prompts/` is public with it.

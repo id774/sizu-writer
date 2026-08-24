@@ -544,7 +544,7 @@ The registry holds loaders rather than classes, so importing `providers` does no
 
 ## The Japanese that stays
 
-The repository is written in English. Four places keep Japanese because the strings themselves are the data:
+The repository is written in English. The following places keep Japanese because the strings themselves are the data:
 
 | Where | Why |
 |---|---|
@@ -557,7 +557,7 @@ Everything else — comments, log messages, screen text, error messages, prompt 
 
 ## Not implemented yet
 
-Parts of the basic design deliberately left for a later change:
+Possible future extensions that are not part of the current implementation:
 
 - the space inserted between full width characters and ASCII (`BODY_ASCII_SPACING`)
 - the `json_schema` response format mode, for endpoints supporting Structured Outputs; `json-object` and `prompt-json` are the two modes that exist
@@ -566,7 +566,7 @@ Parts of the basic design deliberately left for a later change:
 - `LOG_PAYLOAD`, which would record the memo and the answer at DEBUG for prompt work
 - persistence of the generated drafts (requirement 11, a future extension)
 
-`PROMPT_RELOAD` appears in the basic design and is absent here for a different reason: it was to switch off a cache, and no cache was built. The prompts are read on every generation already, so the setting has nothing to control.
+`PROMPT_RELOAD` is not a setting because no prompt cache exists. The prompts are read on every generation, so there is no cache behavior for such a setting to control.
 
 ## Contribution
 

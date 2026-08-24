@@ -36,7 +36,7 @@ sudo -u sizu .venv/bin/pip install --upgrade pip
 sudo -u sizu .venv/bin/pip install -r requirements.txt
 ```
 
-Create the environment file and edit the two required values:
+Create the environment file and edit the required values:
 
 ```sh
 sudo -u sizu cp .env.example .env
@@ -44,8 +44,8 @@ sudo chmod 600 .env
 sudo -u sizu sensible-editor .env
 ```
 
-Set the four required values: `GENERATION_BACKEND`, `GENERATION_API_TOKEN`,
-`GENERATION_BASE_URL` and `GENERATION_MODEL`.
+Set `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and
+`GENERATION_MODEL`.
 None of them has a default, and the service refuses to start without them.
 The shipped example is filled in for Sakura AI Engine except for the token and
 the model; the README lists worked examples for other endpoints.
@@ -198,9 +198,11 @@ and remember that the innermost limit is spent once per attempt:
 ### Request budget
 
 `GENERATION_MAX_RETRIES` defaults to `0`, so one screen action or one CLI run
-costs one request. This matters on a plan that counts them: the Sakura AI Engine
-free plan for foundational models covers 3,000 chat completion requests a month
-and rate limits beyond that.
+costs one request. This matters on any plan that counts requests. Provider plan
+limits and rate limits are external current information. For Sakura AI Engine,
+consult the
+[official documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
+and the control panel for their current values.
 
 sizu-writer keeps no counter. The endpoint's own control panel is the record,
 and the application log gives the matching per-request lines:
