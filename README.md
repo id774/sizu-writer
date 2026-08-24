@@ -107,7 +107,8 @@ chmod 600 .env
 $EDITOR .env
 ```
 
-Four settings are required and none of them has a default: `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL`. The shipped example is already filled in for Sakura AI Engine except for the token and the model; see [Choosing an endpoint](#choosing-an-endpoint). Every setting is documented in [.env.example](.env.example) and under [Configuration](#configuration).
+The required settings are listed in
+[Configuration](#configuration), and none of them has a default: `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL`. The shipped example is already filled in for Sakura AI Engine except for the token and the model; see [Choosing an endpoint](#choosing-an-endpoint). Every setting is documented in [.env.example](.env.example) and under [Configuration](#configuration).
 
 The base URL is required rather than defaulted on purpose. A request that leaves for a service nobody named is worse than one that never leaves, so an unset endpoint stops the process instead of quietly becoming OpenAI's.
 
@@ -139,7 +140,8 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. `https` only. |
 | `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
 | `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
-| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the two outer timeouts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
+| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the outer timeouts described in
+[Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
 | `GENERATION_MAX_RETRIES` | `0` | Retries the SDK may spend on one request. `0` spends exactly one; see [One action, one request](#one-action-one-request). |
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
@@ -149,7 +151,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `LOG_LEVEL` | `INFO` | Level of the application log. |
 | `PORT` | `8090` | Port of the development server and of gunicorn. |
 
-A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. The four required settings are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
+A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
 `GENERATION_API_TOKEN` deliberately has no command line option: a command line is readable by every user of the host, through `ps`. The token stays in the environment or in `.env`. `GENERATION_BASE_URL` has none either, for a different reason — the endpoint is a decision of the deployment, not of an invocation.
 
@@ -167,7 +169,15 @@ GENERATION_MODEL=<a model from the control panel>
 GENERATION_RESPONSE_MODE=prompt-json
 ```
 
-The free plan for foundational models covers 3,000 chat completion requests per month, and rate limits beyond that. Model names are read off the control panel's list of available models rather than copied from a document: models are added, renamed and withdrawn, and the closed models are outside the free allowance. That is why no default model is shipped and no model name appears anywhere in this repository.
+Sakura AI Engine plan limits, rate limits, and the current model catalogue
+are service-owned information and are not duplicated here. Consult the
+[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
+and the control panel for their current values.
+
+This repository intentionally ships no default model. Model names are taken
+from the control panel's current list when configuring a deployment, so a
+service-side model addition, rename, withdrawal, or plan change does not
+require a documentation edit here.
 
 **OpenAI.**
 
@@ -219,7 +229,7 @@ Local counts are an estimate, not a ledger. A connection dropped at the wrong mo
 
 ### Timeouts that agree with each other
 
-Three timeouts sit one inside the other, and they widen outwards:
+The request path has nested timeouts, and they widen outwards:
 
 | Timeout | Default | Set in |
 |---|---|---|
