@@ -140,8 +140,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. `https` only. |
 | `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
 | `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
-| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the outer timeouts described in
-[Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
+| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the outer timeouts described in [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
 | `GENERATION_MAX_RETRIES` | `0` | Retries the SDK may spend on one request. `0` spends exactly one; see [One action, one request](#one-action-one-request). |
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
