@@ -1,8 +1,8 @@
 sizu-writer Repository Version History
 ======================================
 
-v1.0.2 (Release Date: TBD)
---------------------------
+v1.0.2 (2026-08-26)
+-------------------
 - Preserve separate fenced code blocks at the boundaries of generated Markdown bodies.
 - Keep the web buttons legible on a phone in dark appearance, declaring the
   light color scheme and stating the button text color with its background.
