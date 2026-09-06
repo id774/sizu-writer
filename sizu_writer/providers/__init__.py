@@ -35,9 +35,8 @@
 #
 #  Version History:
 #  v1.0 2026-08-05
-#       Initial version, with the OpenAI compatible backend. Carry the
-#       elapsed seconds of one request in CompletionResult and record
-#       them, next to the limit, on the response line.
+#       Initial version, with the OpenAI compatible backend. Carry the elapsed seconds of one
+#       request in CompletionResult and record them, next to the limit, on the response line.
 #
 ########################################################################
 

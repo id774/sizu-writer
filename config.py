@@ -85,12 +85,8 @@
 #       Refuse non-finite numeric settings before they reach the client
 #       or an integer conversion.
 #  v1.0 2026-08-05
-#       Replace the OPENAI_* settings with provider neutral GENERATION_*
-#       ones, require the backend, token, base URL and model instead of
-#       falling back to OpenAI, add the response mode, default the
-#       retries to zero, refuse the legacy variables by name, and default
-#       GENERATION_TIMEOUT to 120 seconds, so that a whole post written
-#       by a shared endpoint fits inside one request.
+#       Replace OPENAI_* with provider-neutral GENERATION_* settings, require
+#       the backend/token/base URL/model, and default the timeout to 120s.
 #  v0.1 2026-08-04
 #       Initial version.
 #
