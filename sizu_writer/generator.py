@@ -31,9 +31,8 @@
 #
 #  Version History:
 #  v1.0 2026-08-05
-#       Move the API call into sizu_writer/providers/, work from a
-#       CompletionResult instead of an SDK response, and read the JSON
-#       according to GENERATION_RESPONSE_MODE.
+#       Move the API call into sizu_writer/providers/, work from a CompletionResult instead
+#       of an SDK response, and read the JSON according to GENERATION_RESPONSE_MODE.
 #  v0.1 2026-08-04
 #       Initial version.
 #

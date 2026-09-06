@@ -62,10 +62,8 @@
 #       Refuse a non-finite --timeout and a whitespace-only --model
 #       instead of accepting them.
 #  v1.0 2026-08-05
-#       Validate the generation settings before a subcommand runs, point
-#       --model and --timeout at the GENERATION_* settings, and refuse an
-#       empty memo and a --timeout that is not positive before a request
-#       is spent. --version still needs no credentials.
+#       Validate the generation settings before a subcommand runs, point --model and --timeout at the GENERATION_* settings, and
+#       refuse an empty memo and a --timeout that is not positive before a request is spent. --version still needs no credentials.
 #  v0.1 2026-08-04
 #       Initial version.
 #
