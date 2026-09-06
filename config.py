@@ -70,11 +70,17 @@
 #  - PROMPT_DIR
 #      Directory holding the prompt files. Defaults to 'prompts'.
 #  - LOG_LEVEL
-#      Level of the application log. Defaults to INFO.
+#      Level of the application log. Defaults to INFO. Accepted values,
+#      matched case-insensitively: CRITICAL, FATAL, ERROR, WARNING, WARN,
+#      INFO, DEBUG, NOTSET. An unset, empty or whitespace-only value
+#      falls back to INFO; any other value is refused rather than read
+#      as INFO.
 #  - PORT
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
+#  v1.2 2026-09-06
+#       Refuse an unsupported LOG_LEVEL instead of falling back to INFO.
 #  v1.1 2026-08-19
 #       Refuse non-finite numeric settings before they reach the client
 #       or an integer conversion.
@@ -110,6 +116,12 @@ GENERATION_BACKENDS = ("openai-compatible",)
 # between the two by trying one and retrying with the other turns one
 # operation into two requests.
 RESPONSE_MODES = ("json-object", "prompt-json")
+
+# Accepted values of LOG_LEVEL, matched case-insensitively. An unknown
+# value is refused rather than read as INFO, so a typo in the setting is
+# reported instead of quietly changing what the log shows.
+LOG_LEVELS = ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO",
+              "DEBUG", "NOTSET")
 
 # The settings these replaced. They are refused rather than translated,
 # because a host with a stale OPENAI_API_KEY exported would otherwise
@@ -194,6 +206,19 @@ def _whole(name: str, default: int, minimum: int) -> int:
     return int(value)
 
 
+def _validate_timeout(name: str, value: float) -> None:
+    """ Refuse a timeout that is not a finite number greater than zero.
+
+    Shared by load_config() and the CLI --timeout override, so a value
+    GENERATION_TIMEOUT would refuse cannot reach the client through the
+    command line instead.
+    """
+    if not math.isfinite(value) or value <= 0:
+        raise ConfigError(
+            "{0} must be a finite number greater than zero, got {1}.".format(
+                name, value))
+
+
 def _refuse_legacy_variables() -> None:
     """ Refuse a legacy setting instead of reading it as its successor. """
     for name in sorted(LEGACY_VARIABLES):
@@ -225,15 +250,19 @@ def load_config() -> Config:
                 response_mode, ", ".join(RESPONSE_MODES)))
 
     timeout = _number("GENERATION_TIMEOUT", 120.0)
-    if timeout <= 0:
-        raise ConfigError(
-            "GENERATION_TIMEOUT is {0}; expected a positive number.".format(
-                _text("GENERATION_TIMEOUT", "")))
+    _validate_timeout("GENERATION_TIMEOUT", timeout)
 
     port = _whole("PORT", 8090, 1)
     if port > 65535:
         raise ConfigError(
             "PORT is {0}; expected an integer of 1 to 65535.".format(port))
+
+    log_level_raw = _text("LOG_LEVEL", "INFO")
+    log_level = log_level_raw.upper()
+    if log_level not in LOG_LEVELS:
+        raise ConfigError(
+            "LOG_LEVEL is '{0}'; expected one of: {1}.".format(
+                log_level_raw, ", ".join(LOG_LEVELS)))
 
     return Config(
         generation_backend=_text("GENERATION_BACKEND", ""),
@@ -248,7 +277,7 @@ def load_config() -> Config:
         max_input_chars=_whole("MAX_INPUT_CHARS", 4000, 1),
         max_alt_titles=_whole("MAX_ALT_TITLES", 4, 0),
         prompt_dir=_text("PROMPT_DIR", "prompts"),
-        log_level=_text("LOG_LEVEL", "INFO").upper(),
+        log_level=log_level,
         port=port,
     )
 

@@ -20,8 +20,6 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.1 2026-08-11
-#       Update the package version for repository release v1.0.2.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -30,7 +28,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 
 @dataclass

@@ -385,12 +385,13 @@ subclass of `ValueError`.
 | --- | --- |
 | the legacy `OPENAI_*` variables | none is present |
 | `GENERATION_RESPONSE_MODE` | `json-object` or `prompt-json` |
-| `GENERATION_TIMEOUT` | a number greater than zero |
+| `GENERATION_TIMEOUT` | a finite number greater than zero |
 | `GENERATION_MAX_RETRIES` | a whole number, zero or more |
 | `GENERATION_TEMPERATURE` | unset, or a number |
 | `MAX_OUTPUT_TOKENS`, `MAX_INPUT_CHARS` | a whole number greater than zero |
 | `MAX_ALT_TITLES` | a whole number, zero or more |
 | `PORT` | a whole number from 1 to 65535 |
+| `LOG_LEVEL` | unset, empty or whitespace-only, or one of the accepted levels |
 
 | Checked by `validate_generation_config()` | Condition |
 | --- | --- |
@@ -403,15 +404,23 @@ A base URL is refused when it uses `http`, is not absolute, carries user
 information, carries a query or a fragment, or ends with `/chat/completions` —
 the SDK appends the resource path itself.
 
+`LOG_LEVEL` is matched case-insensitively against `CRITICAL`, `FATAL`,
+`ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG` and `NOTSET`. An unset, empty or
+whitespace-only value falls back to `INFO`; any other value is refused rather
+than read as `INFO`, the same as every other malformed setting.
+
 ### 9.3 When each runs
 
 - `app.py` calls both while it is imported, so a worker that cannot address an
   endpoint never starts and systemd shows the message.
 - `cli.py` calls `load_config()`, applies `--model`, `--prompt-dir` and
   `--timeout`, then calls `validate_generation_config()` before reading the
-  input. `--model` can therefore stand in for a missing `GENERATION_MODEL`.
-  `--timeout` is checked where it is applied, because the override lands after
-  `load_config()` has already refused a non-positive `GENERATION_TIMEOUT`.
+  input. `--model` can therefore stand in for a missing `GENERATION_MODEL`; it
+  is trimmed of surrounding whitespace, and an explicit value that is blank
+  once trimmed is refused rather than treated as no override. `--timeout` is
+  checked where it is applied, under the same finite-positive rule
+  `load_config()` has already applied to `GENERATION_TIMEOUT`, because the
+  override lands after that check has run.
 - `cli.py --version` reaches neither: argparse answers and exits first.
 - The unit tests construct `Config` directly and need no credentials.
 
@@ -798,7 +807,9 @@ screens offer no way to switch endpoints.
 token kept out of `repr()`, the refusal of an unknown or missing backend, a
 missing token, a missing or `http` or resource-carrying base URL, a missing
 model, an unknown response mode, a negative retry count, a non-positive
-timeout, the legacy variables, and the absence of secrets from every message.
+timeout, the accepted `LOG_LEVEL` values and their case-insensitive
+normalization, the refusal of an unknown `LOG_LEVEL`, the legacy variables,
+and the absence of secrets from every message.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -815,9 +826,10 @@ surviving a title regeneration.
 
 `tests/test_cli.py` covers the command line side of the settings: the `--model`
 and `--timeout` overrides reaching the generation, a `--timeout` that is not
-positive being refused before a request is spent, an empty memo being refused
-the same way, and a configuration that cannot address an endpoint ending the
-run with exit code 1.
+positive or not finite and a whitespace-only `--model` being refused before a
+request is spent, a `--model` override trimmed of surrounding whitespace, an
+empty memo being refused the same way, and a configuration that cannot
+address an endpoint ending the run with exit code 1.
 
 The suite uses no network and no token. Testing against the real Sakura AI
 Engine is a manual acceptance step, and no live token is put into CI.

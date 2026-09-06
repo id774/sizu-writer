@@ -147,7 +147,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field, enforced on the server as well as in the browser. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
-| `LOG_LEVEL` | `INFO` | Level of the application log. |
+| `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
 | `PORT` | `8090` | Port of the development server and of gunicorn. |
 
 A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
@@ -313,7 +313,7 @@ Each wins over the environment and `.env` for that invocation only:
 .venv/bin/python cli.py generate --input memo.txt --prompt-dir prompts-plain
 ```
 
-The overrides are applied before the settings are checked, so `--model` can stand in for a `GENERATION_MODEL` that is not configured at all. `--timeout` is held to the same rule as `GENERATION_TIMEOUT` — a number greater than zero — and a value outside that ends the run with exit status 1 rather than reaching the endpoint. There is no option for the token or the base URL, for the reasons under [Configuration](#configuration).
+The overrides are applied before the settings are checked, so `--model` can stand in for a `GENERATION_MODEL` that is not configured at all. `--model` is trimmed of surrounding whitespace, and an explicit value that is blank once trimmed ends the run with exit status 1 rather than reaching the endpoint as a name nobody could resolve. `--timeout` is held to the same rule as `GENERATION_TIMEOUT` — a finite number greater than zero — and a value outside that likewise ends the run with exit status 1. There is no option for the token or the base URL, for the reasons under [Configuration](#configuration).
 
 `--prompt-dir` replaces the whole set of four prompts, not one file. Comparing two writing policies is a matter of copying the directory, editing the copy and pointing the option at it; see [doc/PROMPTS.md](doc/PROMPTS.md).
 
@@ -450,12 +450,12 @@ Narrower selections use the same runner:
 
 | Module | Subject |
 |---|---|
-| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
+| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
 | `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500, and the elapsed seconds recorded next to the limit on both a success and a timeout |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
 | `test_web.py` | the screens, input limits, regeneration of the titles alone, that a failure does not expose its cause, and that a timeout does not blame the memo |
-| `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model` and `--timeout` overrides and the refusal of a timeout that is not positive, the exit codes, and the failure named in the log |
+| `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model` and `--timeout` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model, the exit codes, and the failure named in the log |
 
 `test_web.py` sets the four required settings before importing `app`, because `app.py` validates them while it is imported. They are placeholders and no request is made; `setdefault` leaves a real `.env` alone when one is present.
 

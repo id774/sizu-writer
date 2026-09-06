@@ -54,12 +54,18 @@
 #    - Refuse a base URL that already holds the resource path.
 #    - Refuse a missing model.
 #    - Keep the token out of every refusal message.
+#    - Accept a documented LOG_LEVEL, and normalize its case.
+#    - Refuse an unknown, non-empty LOG_LEVEL, naming the setting.
+#    - Keep a credential out of the LOG_LEVEL refusal message.
+#    - Treat a blank or whitespace-only LOG_LEVEL as unset.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-06
+#       Cover the accepted LOG_LEVEL values and the refusal of an unknown one.
 #  v1.1 2026-08-19
 #       Cover the refusal of non-finite numeric settings.
 #  v1.0 2026-08-05
@@ -142,6 +148,30 @@ class LoadConfigTest(unittest.TestCase):
     def test_refuses_a_timeout_that_is_not_positive(self):
         self.assertIn("GENERATION_TIMEOUT",
                       self.refuse({"GENERATION_TIMEOUT": "0"}))
+
+    def test_accepts_a_documented_log_level(self):
+        self.assertEqual("DEBUG", self.load({"LOG_LEVEL": "DEBUG"}).log_level)
+
+    def test_normalizes_the_case_of_a_valid_log_level(self):
+        self.assertEqual("WARNING",
+                         self.load({"LOG_LEVEL": "warning"}).log_level)
+        self.assertEqual("DEBUG", self.load({"LOG_LEVEL": "Debug"}).log_level)
+
+    def test_refuses_an_unknown_log_level(self):
+        message = self.refuse({"LOG_LEVEL": "verbose"})
+
+        self.assertIn("LOG_LEVEL", message)
+        self.assertIn("verbose", message)
+
+    def test_keeps_a_credential_out_of_the_log_level_message(self):
+        message = self.refuse(dict(COMPLETE, LOG_LEVEL="verbose",
+                                   GENERATION_API_TOKEN="uuid:secret-value"))
+
+        self.assertNotIn("secret-value", message)
+
+    def test_treats_a_blank_log_level_as_unset(self):
+        self.assertEqual("INFO", self.load({"LOG_LEVEL": ""}).log_level)
+        self.assertEqual("INFO", self.load({"LOG_LEVEL": "   "}).log_level)
 
     def test_refuses_a_negative_retry_count(self):
         message = self.refuse({"GENERATION_MAX_RETRIES": "-1"})
