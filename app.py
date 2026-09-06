@@ -46,7 +46,7 @@
 #       Validate generation settings at startup so an unusable endpoint never
 #       accepts a memo, and answer unknown routes without a traceback.
 #  v0.1 2026-08-04
-#       Initial version.
+#       Initial release.
 #
 ########################################################################
 
