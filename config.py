@@ -88,7 +88,7 @@
 #       Replace OPENAI_* with provider-neutral GENERATION_* settings, require
 #       the backend/token/base URL/model, and default the timeout to 120s.
 #  v0.1 2026-08-04
-#       Initial version.
+#       Initial release.
 #
 ########################################################################
 
