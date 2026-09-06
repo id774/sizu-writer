@@ -3,28 +3,28 @@ sizu-writer Repository Version History
 
 v1.0.3 (Release Date: TBD)
 --------------------------
-- Refuse a non-finite --timeout override, a whitespace-only --model
-  override and an unsupported LOG_LEVEL instead of accepting them.
+- Refuse a non-finite --timeout override, a whitespace-only --model override and
+  an unsupported LOG_LEVEL instead of accepting them.
 - Ship GENERATION_MODEL blank in .env.example instead of a concrete model name.
 
 v1.0.2 (2026-08-26)
 -------------------
-- Preserve separate fenced code blocks at the boundaries of generated Markdown bodies.
-- Keep the web buttons legible on a phone in dark appearance, declaring the
-  light color scheme and stating the button text color with its background.
+- Preserve separate fenced code blocks at the boundaries of generated Markdown
+  bodies.
+- Keep the web buttons legible on a phone in dark appearance, declaring the light
+  color scheme and stating the button text color with its background.
 - Complete the versioning rules in doc/POLICY.md.
-- Refuse non-finite values in numeric configuration instead of passing them to
-  the generation client or raising an unexpected conversion error.
+- Refuse non-finite values in numeric configuration instead of passing them to the
+  generation client or raising an unexpected conversion error.
 
 v1.0.1 (2026-08-09)
 -------------------
 - Add .gitattributes, marking the Markdown documents for diff.
-- Rename doc/POLICY and doc/LICENSE to doc/POLICY.md and doc/LICENSE.md, so
-  that GitHub renders them, and update the references to them.
-- Expand doc/POLICY.md into a standalone policy, adding the rules it had left to another repository,
-  the scope and history of a pull request and the width a version history entry keeps among them.
-- Add the shared version history description guidelines to the end of this
-  file.
+- Rename doc/POLICY and doc/LICENSE to doc/POLICY.md and doc/LICENSE.md, so that
+  GitHub renders them, and update the references to them.
+- Expand doc/POLICY.md into a standalone policy, adding the rules it had deferred
+  elsewhere: pull request scope and version history width.
+- Add the shared version history description guidelines to the end of this file.
 
 v1.0 (2026-08-05)
 -----------------
