@@ -36,6 +36,9 @@
 #    - Apply the --model override to the configuration handed to the core.
 #    - Apply the --timeout override to the configuration handed to the core.
 #    - Refuse a --timeout that is not positive without spending a request.
+#    - Refuse a non-finite --timeout without spending a request.
+#    - Refuse a whitespace-only --model without spending a request.
+#    - Apply a --model override trimmed of surrounding whitespace.
 #    - Refuse an empty memo without spending a request.
 #    - Report a generation failure as a failed run.
 #    - Name the failure class and its user message in the log.
@@ -50,6 +53,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-09-06
+#       Cover the refusal of a non-finite --timeout and a whitespace-only --model.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -165,6 +170,40 @@ class MainTest(unittest.TestCase):
 
             self.assertEqual(1, status)
             stub.assert_not_called()
+
+    def test_refuses_a_non_finite_timeout(self):
+        # argparse converts "nan" and "inf" to a float without complaint;
+        # only the finite check catches what a bare positivity check does
+        # not, so a non-finite override reached the SDK before it existed.
+        for value in ("nan", "inf"):
+            status, stub = self.run_cli("generate", "--text", "a memo",
+                                        "--timeout", value)
+
+            self.assertEqual(1, status)
+            stub.assert_not_called()
+
+        # "-inf" is joined with "=": a value starting with "-" that argparse
+        # cannot read as a negative number is otherwise mistaken for another
+        # option, which is an argparse limitation this change does not touch.
+        status, stub = self.run_cli("generate", "--text", "a memo",
+                                    "--timeout=-inf")
+
+        self.assertEqual(1, status)
+        stub.assert_not_called()
+
+    def test_refuses_a_whitespace_only_model(self):
+        status, stub = self.run_cli("generate", "--text", "a memo",
+                                    "--model", "   ")
+
+        self.assertEqual(1, status)
+        stub.assert_not_called()
+
+    def test_trims_surrounding_whitespace_from_the_model_override(self):
+        status, stub = self.run_cli("generate", "--text", "a memo",
+                                    "--model", "  another-model  ")
+
+        self.assertEqual(0, status)
+        self.assertEqual("another-model", stub.call_args[0][1].generation_model)
 
     def test_refuses_an_empty_memo_without_spending_a_request(self):
         status, stub = self.run_cli("generate", "--text", "")

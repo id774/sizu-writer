@@ -33,11 +33,13 @@
 #      Body handed to the titles command.
 #  - --model NAME / --prompt-dir DIR / --timeout SECONDS
 #      Override the matching setting for this invocation. --timeout is
-#      held to the rule GENERATION_TIMEOUT follows, a number greater
-#      than zero. The API token and the base URL have no option on
-#      purpose: a command line is readable by every user of the host
-#      through ps, and the token is a secret while the endpoint is a
-#      decision of the deployment.
+#      held to the same rule GENERATION_TIMEOUT is read under: a finite
+#      number greater than zero. --model is trimmed of surrounding
+#      whitespace, and an explicit value that is blank once trimmed is
+#      refused rather than silently left as no override. The API token
+#      and the base URL have no option on purpose: a command line is
+#      readable by every user of the host through ps, and the token is a
+#      secret while the endpoint is a decision of the deployment.
 #  - --json
 #      Print the draft as JSON instead of as text.
 #
@@ -56,6 +58,9 @@
 #  - openai
 #
 #  Version History:
+#  v1.1 2026-09-06
+#       Refuse a non-finite --timeout and a whitespace-only --model
+#       instead of accepting them.
 #  v1.0 2026-08-05
 #       Validate the generation settings before a subcommand runs, point
 #       --model and --timeout at the GENERATION_* settings, and refuse an
@@ -72,7 +77,8 @@ import json
 import logging
 import sys
 
-from config import ConfigError, load_config, validate_generation_config
+from config import (ConfigError, _validate_timeout, load_config,
+                    validate_generation_config)
 from sizu_writer import Draft, __version__
 from sizu_writer.errors import EmptyInputError, SizuWriterError
 from sizu_writer.generator import generate_draft, regenerate_titles
@@ -153,8 +159,16 @@ def main() -> int:
     logging.getLogger().setLevel(
         getattr(logging, config.log_level, logging.INFO))
 
-    if arguments.model:
-        config.generation_model = arguments.model
+    # An explicit --model is trimmed the same way GENERATION_MODEL is,
+    # and a value that is blank once trimmed is refused rather than
+    # silently treated as no override: it would otherwise reach the
+    # endpoint as a name nobody could resolve.
+    if arguments.model is not None:
+        model = arguments.model.strip()
+        if not model:
+            logger.error("--model is blank; expected a model name.")
+            return 1
+        config.generation_model = model
     if arguments.prompt_dir:
         config.prompt_dir = arguments.prompt_dir
 
@@ -162,9 +176,10 @@ def main() -> int:
     # override lands after it has run, so a value refused there would
     # otherwise reach the SDK through the option instead.
     if arguments.timeout is not None:
-        if arguments.timeout <= 0:
-            logger.error("--timeout is %s; expected a positive number.",
-                         arguments.timeout)
+        try:
+            _validate_timeout("--timeout", arguments.timeout)
+        except ConfigError as error:
+            logger.error("%s", error)
             return 1
         config.generation_timeout = arguments.timeout
 

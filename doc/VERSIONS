@@ -1,6 +1,12 @@
 sizu-writer Repository Version History
 ======================================
 
+v1.0.3 (Release Date: TBD)
+--------------------------
+- Refuse a non-finite --timeout override, a whitespace-only --model
+  override and an unsupported LOG_LEVEL instead of accepting them.
+- Ship GENERATION_MODEL blank in .env.example instead of a concrete model name.
+
 v1.0.2 (2026-08-26)
 -------------------
 - Preserve separate fenced code blocks at the boundaries of generated Markdown bodies.
