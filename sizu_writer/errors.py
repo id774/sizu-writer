@@ -21,6 +21,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-09-07
+#       Refuse title-only regeneration when there is no settled post body.
 #  v1.0 2026-08-05
 #       Name GENERATION_TIMEOUT as the limit a timeout reports, and stop advising a shorter memo on
 #       a timeout. The wait is set by the answer and the endpoint, not by the length of the input.
@@ -52,6 +54,16 @@ class InputTooLongError(SizuWriterError):
     def __init__(self, limit: int) -> None:
         self.user_message = "The memo is too long. Keep it within {0} characters.".format(limit)
         super().__init__(self.user_message)
+
+
+class EmptyBodyError(SizuWriterError):
+    """ Raised when title regeneration has no usable settled body. """
+
+    user_message = (
+        "There is no post body to regenerate titles for. "
+        "Generate the whole draft first."
+    )
+    status_code = 400
 
 
 class UpstreamConnectionError(SizuWriterError):

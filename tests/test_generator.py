@@ -46,6 +46,8 @@
 #    - Refuse an object surrounded by prose.
 #    - Extract no JSON fragment out of a larger answer.
 #    - Keep the body it was given when only the titles are regenerated.
+#    - Refuse title regeneration without a settled body before building messages.
+#    - Keep the exact settled body while regenerating titles.
 #    - Read a fenced answer under prompt-json when regenerating titles.
 #    - Spend exactly one request through the configured provider.
 #
@@ -54,6 +56,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-09-07
+#       Cover blank-body refusal and exact body preservation for title regeneration.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -65,7 +69,7 @@ from unittest import mock
 
 from config import Config
 from sizu_writer import generator
-from sizu_writer.errors import InvalidResponseError
+from sizu_writer.errors import EmptyBodyError, InvalidResponseError
 from sizu_writer.providers import CompletionResult
 
 BODY = {
@@ -199,16 +203,30 @@ class ResponseModeTest(unittest.TestCase):
 class RegenerateTitlesTest(unittest.TestCase):
 
     def test_keeps_the_body_it_was_given(self):
+        body = "  The settled body\n"
         result = answer({"primary_title": "A new leading title",
                          "alternative_titles": []})
+        config = settings()
 
-        with mock.patch.object(generator, "build_titles_messages", return_value=[]):
+        with mock.patch.object(generator, "build_titles_messages",
+                               return_value=[]) as messages:
             with mock.patch.object(generator, "_complete", return_value=result):
-                draft = generator.regenerate_titles(
-                    "a memo", "The settled body", settings())
+                draft = generator.regenerate_titles("a memo", body, config)
 
-        self.assertEqual("The settled body", draft.body)
+        messages.assert_called_once_with("a memo", body, config.prompt_dir)
+        self.assertEqual(body, draft.body)
         self.assertEqual("A new leading title", draft.primary_title)
+
+    def test_refuses_a_blank_body_before_building_messages(self):
+        for body in ("", "   \n"):
+            with self.subTest(body=repr(body)):
+                with mock.patch.object(generator, "build_titles_messages") as messages:
+                    with mock.patch.object(generator, "_complete") as complete:
+                        with self.assertRaises(EmptyBodyError):
+                            generator.regenerate_titles("a memo", body, settings())
+
+                messages.assert_not_called()
+                complete.assert_not_called()
 
     def test_reads_a_fenced_answer_under_prompt_json(self):
         result = answer('```json\n{"primary_title": "A new leading title", '

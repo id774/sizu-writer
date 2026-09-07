@@ -213,6 +213,7 @@ class SizuWriterError(Exception):
 | --- | --- | --- | --- | --- |
 | `EmptyInputError` | Empty or blank input | Enter a memo first. | 400 | INFO |
 | `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
+| `EmptyBodyError` | Title-only generation without a non-blank settled body | There is no post body to regenerate titles for. Generate the whole draft first. | 400 | INFO |
 | `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
 | `UpstreamTimeoutError` | Beyond `GENERATION_TIMEOUT` | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
 | `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
@@ -321,6 +322,15 @@ the first configured number of remaining alternatives is retained.
 
 #### 5.4.3 Validating the answer
 
+Before title-only regeneration builds a prompt, `regenerate_titles()` requires
+the settled body to be a string with at least one non-whitespace character. An
+unusable body raises `EmptyBodyError` before message assembly or a provider call;
+it is never treated as a request to generate a whole draft.
+
+The check may inspect stripped text to decide whether content exists, but it does
+not strip or normalize the body itself. The exact body is handed to
+`build_titles_messages()` and returned as `Draft.body`.
+
 The provider first rejects a response with no choice, a truncation finish reason,
 or no usable text. `generator.py` then applies the response-mode parsing rule:
 `prompt-json` may unwrap one outer code fence, while `json-object` parses the
@@ -374,9 +384,18 @@ The Flask application. Four routes.
 | GET | `/healthz` | Liveness; no API call |
 | GET | `/static/<file>` | CSS and JS |
 
-- Generation and regeneration share one endpoint, so the form always posts to the same place and the branching stays in the template. `mode` comes from the `name`/`value` of the submit button (`mode=full` / `mode=titles`).
+- Generation and regeneration share one endpoint, so the form always posts to
+  the same place. `mode=titles` always means title-only regeneration; the
+  presence of `body` does not turn that operation into a full generation.
+  Missing or unrecognized `mode` keeps the existing full-generation behavior,
+  while a missing or blank title body is refused by the generation core.
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
 - `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- A generation error preserves the recognized operation. A title-only failure
+  passes `mode=titles` and the exact body to `error.html`, so the user's retry
+  remains title-only. A full-generation failure retries with `mode=full`.
+  Neither path is an automatic retry; a new request is made only when the user
+  presses the button.
 - `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
 - An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
 
@@ -484,8 +503,14 @@ click
 
 ### 7.5 Errors
 
-- An error caused by the input (empty, too long) re-renders the input screen with the input intact and the message on top. The input is not thrown away.
-- An error caused by the generation renders `error.html` while keeping the last input (and the body, for a title regeneration), so that it can be tried again.
+- A correctable form error (an empty memo, an overlong memo, or title-only
+  generation without a settled body) re-renders the input screen with the memo
+  intact and the message on top.
+- An error after generation starts renders `error.html` while keeping the last
+  input. A title-only failure also keeps the exact body and renders a
+  `mode=titles` button labelled "Regenerate the titles only"; a full-generation
+  failure renders `mode=full` and "Generate once more". Retrying therefore
+  repeats the failed operation instead of changing its scope.
 - Only `user_message` and the reference id are shown.
 
 ---
