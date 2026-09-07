@@ -286,7 +286,10 @@ Moving a host over is therefore: rewrite `.env` from [.env.example](.env.example
 .venv/bin/python cli.py titles --input memo.txt --body draft.md
 ```
 
-`generate` produces a body and its title candidates. `titles` produces candidates for a body that is already settled, and leaves that body untouched.
+`generate` produces a body and its title candidates. `titles` produces
+candidates for a body that is already settled, and leaves that body untouched.
+The body file must contain non-blank text; an empty or whitespace-only body ends
+the command with status 1 before a generation request is made.
 
 The memo comes from `--text` or from `--input`, one or the other. Human readable output prints the leading title as a `#` heading, the other candidates as a list, then the body; notices go to standard error, so redirecting standard output gives a clean draft:
 
@@ -332,7 +335,11 @@ Enter a memo and generate. The result screen shows the leading title, the other 
 | `/healthz` | GET | Liveness response; it calls no API |
 | `/static/<file>` | GET | Stylesheet and the copy script |
 
-Generation and regeneration share one endpoint, so the form always posts to the same place. Which one runs is decided by the submit button that was pressed.
+Generation and regeneration share one endpoint, so the form always posts to the
+same place. Which one runs is decided by the submit button that was pressed. A
+title-only request requires the settled body carried by the result form; if that
+body is missing or blank, the request is refused with status 400 rather than
+being turned into a full generation.
 
 Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback.
 
@@ -346,6 +353,10 @@ The copy buttons use the clipboard API when the page is served over HTTPS, and f
 4. Copy the body, copy the title.
 5. Paste both into the posting form of Shizuka na Internet.
 6. Read it once more and publish.
+
+If title generation fails, the error page keeps the settled body and retries
+title-only generation when the user asks to try again; it does not regenerate
+the body.
 
 Steps 5 and 6 are the person's. Nothing in this system reaches the posting site.
 
@@ -386,6 +397,7 @@ The screen shows a message meant for the person and a short reference id. The ca
 | What is shown | Status | Usually means |
 |---|---|---|
 | Enter a memo first. | 400 | The input was empty or blank |
+| There is no post body to regenerate titles for. Generate the whole draft first. | 400 | A title-only request did not carry a settled body |
 | The memo is too long. | 400 | Over `MAX_INPUT_CHARS` |
 | The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |

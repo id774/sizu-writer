@@ -40,6 +40,9 @@
 #    - Refuse a request larger than the server limit with status 413.
 #    - Show the body and the titles of a generated draft.
 #    - Regenerate the titles of the body it was given, without generating a body.
+#    - Refuse title regeneration without a body instead of generating a full draft.
+#    - Keep title-only mode and its body on a generation failure.
+#    - Keep full generation as the retry mode after a full-generation failure.
 #    - Hide the cause of a generation failure behind its own status.
 #    - Answer an unknown address with 404 rather than 500.
 #    - Do not report a missing favicon as a server failure.
@@ -54,6 +57,8 @@
 #  - Flask
 #
 #  Version History:
+#  v1.1 2026-09-07
+#       Cover title-only body refusal and preservation of the retry operation.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -76,7 +81,7 @@ with mock.patch.dict(os.environ, TEST_ENVIRONMENT, clear=True):
     with mock.patch("config.load_dotenv", None):
         import app as web  # noqa: E402  imported with the settings above
 from sizu_writer import Draft
-from sizu_writer.errors import UpstreamTimeoutError
+from sizu_writer.errors import EmptyBodyError, UpstreamTimeoutError
 
 
 def draft(body="The body."):
@@ -148,9 +153,65 @@ class WebTest(unittest.TestCase):
                 answer = self.client.post("/generate", data={
                     "input_text": "a memo", "body": "The settled body", "mode": "titles"})
 
+        titles.assert_called_once_with("a memo", "The settled body", web.config)
         generate.assert_not_called()
-        titles.assert_called_once()
         self.assertIn("The settled body", answer.get_data(as_text=True))
+
+    def test_refuses_title_regeneration_without_a_body(self):
+        for body in ("", "   \n"):
+            with self.subTest(body=repr(body)):
+                with mock.patch.object(
+                        web, "regenerate_titles",
+                        side_effect=EmptyBodyError()) as titles:
+                    with mock.patch.object(web, "generate_draft") as generate:
+                        answer = self.client.post("/generate", data={
+                            "input_text": "a memo",
+                            "body": body,
+                            "mode": "titles",
+                        })
+
+                page = answer.get_data(as_text=True)
+                self.assertEqual(400, answer.status_code)
+                self.assertIn(
+                    "There is no post body to regenerate titles for.", page)
+                titles.assert_called_once_with("a memo", body, web.config)
+                generate.assert_not_called()
+
+    def test_keeps_title_regeneration_as_the_retry_mode(self):
+        body = "The settled body"
+        with mock.patch.object(
+                web, "regenerate_titles",
+                side_effect=UpstreamTimeoutError()) as titles:
+            with mock.patch.object(web, "generate_draft") as generate:
+                answer = self.client.post("/generate", data={
+                    "input_text": "a memo",
+                    "body": body,
+                    "mode": "titles",
+                })
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(504, answer.status_code)
+        self.assertIn('name="body" value="The settled body"', page)
+        self.assertIn('name="mode" value="titles"', page)
+        self.assertIn("Regenerate the titles only", page)
+        self.assertNotIn("Generate once more", page)
+        titles.assert_called_once_with("a memo", body, web.config)
+        generate.assert_not_called()
+
+    def test_keeps_full_generation_as_the_retry_mode(self):
+        with mock.patch.object(
+                web, "generate_draft",
+                side_effect=UpstreamTimeoutError()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "mode": "full",
+            })
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(504, answer.status_code)
+        self.assertIn('name="mode" value="full"', page)
+        self.assertIn("Generate once more", page)
+        self.assertNotIn("Regenerate the titles only", page)
 
     def test_hides_the_cause_of_a_generation_failure(self):
         with mock.patch.object(web, "generate_draft", side_effect=UpstreamTimeoutError()):

@@ -42,6 +42,8 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.1 2026-09-07
+#       Keep title-only generation distinct from full generation through retries.
 #  v1.0 2026-08-05
 #       Validate generation settings at startup so an unusable endpoint never
 #       accepts a memo, and answer unknown routes without a traceback.
@@ -109,7 +111,8 @@ def generate():
     text = _input_text()
     body = request.form.get("body", "")
 
-    if request.form.get("mode") == "titles" and body.strip():
+    mode = request.form.get("mode")
+    if mode == "titles":
         draft = regenerate_titles(text, body, config)
     else:
         draft = generate_draft(text, config)
@@ -133,12 +136,14 @@ def handle_known_error(error: SizuWriterError):
     logger.log(level, "%s (reference %s): %s", type(error).__name__, reference_id, error)
 
     template = "index.html" if error.status_code == 400 else "error.html"
+    mode = "titles" if request.form.get("mode") == "titles" else "full"
     page = render_template(
         template,
         error=error.user_message,
         reference_id=reference_id,
         input_text=request.form.get("input_text", ""),
         body=request.form.get("body", ""),
+        mode=mode,
         max_input_chars=config.max_input_chars,
     )
     return page, error.status_code

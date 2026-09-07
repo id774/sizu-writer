@@ -6,7 +6,11 @@
   <label for="input_text">Memo</label>
   <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
   <div class="buttons">
+    {% if mode == "titles" %}
+    <button type="submit" name="mode" value="titles">Regenerate the titles only</button>
+    {% else %}
     <button type="submit" name="mode" value="full">Generate once more</button>
+    {% endif %}
     <a href="{{ url_for('index') }}">Back to the input screen</a>
   </div>
 </form>

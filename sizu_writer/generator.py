@@ -30,6 +30,8 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v1.1 2026-09-07
+#       Refuse title regeneration without a settled body before a request.
 #  v1.0 2026-08-05
 #       Move the API call into sizu_writer/providers/, work from a CompletionResult instead
 #       of an SDK response, and read the JSON according to GENERATION_RESPONSE_MODE.
@@ -45,7 +47,7 @@ from typing import Any, Dict, List
 
 from config import Config
 from sizu_writer import Draft
-from sizu_writer.errors import InvalidResponseError
+from sizu_writer.errors import EmptyBodyError, InvalidResponseError
 from sizu_writer.formatter import normalize_body
 from sizu_writer.prompts import build_body_messages, build_titles_messages
 from sizu_writer.providers import CompletionResult, build_provider
@@ -160,6 +162,9 @@ def generate_draft(input_text: str, config: Config) -> Draft:
 
 def regenerate_titles(input_text: str, body: str, config: Config) -> Draft:
     """ Generate title candidates for a body that is already settled. """
+    if not isinstance(body, str) or not body.strip():
+        raise EmptyBodyError()
+
     messages = build_titles_messages(input_text, body, config.prompt_dir)
     result = _complete(messages, config)
     titles = _titles(_payload(result.content, config.generation_response_mode),

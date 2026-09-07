@@ -6,6 +6,8 @@ v1.0.3 (Release Date: TBD)
 - Refuse a non-finite --timeout override, a whitespace-only --model override and
   an unsupported LOG_LEVEL instead of accepting them.
 - Ship GENERATION_MODEL blank in .env.example instead of a concrete model name.
+- Refuse title-only regeneration without a body and preserve title-only mode
+  when retrying a failed generation.
 
 v1.0.2 (2026-08-26)
 -------------------

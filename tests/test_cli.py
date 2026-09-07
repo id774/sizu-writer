@@ -12,8 +12,9 @@
 #  each outcome produces: 0 for a draft, 1 for a refused setting or a
 #  failed generation, and 2 for a command line argparse rejects.
 #
-#  No request is made. generate_draft is replaced by a stub in every
-#  case, so the suite needs no token, no .env and no endpoint.
+#  No request is made. Generation entry points or their request boundary
+#  are replaced by stubs, so the suite needs no token, no .env and no
+#  endpoint.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -47,12 +48,16 @@
 #    - Refuse --text and --input given at once.
 #    - Refuse a --timeout that is not a number.
 #    - Require a body for the titles command.
+#    - Run the titles command with a settled body.
+#    - Refuse an empty or whitespace-only body file before a request is spent.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-07
+#       Cover title-only body validation and the valid titles command.
 #  v1.1 2026-09-06
 #       Cover the refusal of a non-finite --timeout and a whitespace-only --model.
 #  v1.0 2026-08-05
@@ -236,6 +241,51 @@ class MainTest(unittest.TestCase):
                     self.assertEqual(1, cli.main())
 
         stub.assert_not_called()
+
+    def test_runs_the_titles_command_with_a_settled_body(self):
+        titles = mock.Mock(return_value=draft())
+        with mock.patch.dict("os.environ", ENVIRONMENT, clear=True):
+            with mock.patch.object(
+                    sys, "argv",
+                    ["cli.py", "titles", "--text", "a memo",
+                     "--body", "body.md"]):
+                with mock.patch("builtins.open",
+                                mock.mock_open(read_data="The settled body")):
+                    with mock.patch.object(cli, "regenerate_titles", titles):
+                        with mock.patch("builtins.print"):
+                            status = cli.main()
+
+        self.assertEqual(0, status)
+        self.assertEqual("a memo", titles.call_args[0][0])
+        self.assertEqual("The settled body", titles.call_args[0][1])
+
+    def test_refuses_a_blank_body_file_without_spending_a_request(self):
+        for body in ("", "   \n"):
+            with self.subTest(body=repr(body)):
+                with mock.patch.dict("os.environ", ENVIRONMENT, clear=True):
+                    with mock.patch.object(
+                            sys, "argv",
+                            ["cli.py", "titles", "--text", "a memo",
+                             "--body", "body.md"]):
+                        with mock.patch(
+                                "builtins.open",
+                                mock.mock_open(read_data=body)):
+                            with mock.patch(
+                                    "sizu_writer.generator.build_titles_messages"
+                                    ) as messages:
+                                with mock.patch(
+                                        "sizu_writer.generator._complete"
+                                        ) as complete:
+                                    with self.assertLogs(
+                                            "cli", level="ERROR") as recorded:
+                                        status = cli.main()
+
+                self.assertEqual(1, status)
+                messages.assert_not_called()
+                complete.assert_not_called()
+                self.assertIn(
+                    "There is no post body to regenerate titles for.",
+                    "\n".join(recorded.output))
 
 
 class ParserTest(unittest.TestCase):
