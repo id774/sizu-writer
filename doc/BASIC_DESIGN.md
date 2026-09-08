@@ -237,9 +237,17 @@ def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]
 def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[Dict[str, str]]
 ```
 
-- The placeholders are `{{input}}` and `{{body}}` only, substituted with `str.replace()`. `str.format()` is avoided so that a brace appearing in a prompt does not have to be escaped. (The POLICY preference for `str.format()` concerns string building in code, not substitution into external text.)
-- `load_prompt()` reads each prompt file on every generation, so prompt edits take effect without a restart.
-- An unreadable prompt file is logged by path and raises `InternalError` when generation attempts to load it.
+- The placeholders are `{{input}}` and `{{body}}` only. Substitution scans the
+  original prompt template once for the placeholders used by that message.
+  Memo and body values are opaque replacement text and are never scanned again,
+  so literal text such as `{{body}}` inside a memo remains part of that memo.
+- A placeholder not used by the message, or an unknown placeholder such as
+  `{{tone}}`, stays literal. The prompt is not a format string, so braces and
+  percent signs need no escaping.
+- `load_prompt()` reads each prompt file on every generation, so prompt edits
+  take effect without a restart. There is no prompt cache or built-in fallback.
+- A missing, unreadable, empty or whitespace-only prompt file is logged by path
+  and raises `InternalError` before the generation core reaches the provider.
 
 #### The shape of the prompt
 

@@ -11,9 +11,9 @@
 #  reads those files and assembles the message list handed to the API.
 #  It performs no API call.
 #
-#  Placeholders are {{input}} and {{body}} only, substituted with
-#  str.replace() rather than str.format(), so that a brace written in a
-#  prompt does not have to be escaped.
+#  Placeholders are {{input}} and {{body}} only. Substitution scans the
+#  prompt template once, so text inserted from a memo or a settled body
+#  is carried literally and is never interpreted as another placeholder.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -25,6 +25,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-09-08
+#       Refuse blank prompt files and preserve replacement text literally.
 #  v1.0 2026-08-04
 #       Initial release.
 #
@@ -32,6 +34,7 @@
 
 import logging
 import os
+import re
 from typing import Dict, List
 
 from sizu_writer.errors import InternalError
@@ -40,14 +43,39 @@ logger = logging.getLogger(__name__)
 
 
 def load_prompt(name: str, prompt_dir: str) -> str:
-    """ Read one prompt file and return its text. """
+    """ Read one usable prompt file and return its text. """
     path = os.path.join(prompt_dir, name)
     try:
         with open(path, encoding="utf-8") as handle:
-            return handle.read().strip()
+            text = handle.read().strip()
     except OSError as error:
         logger.error("Cannot read the prompt file %s: %s", path, error)
         raise InternalError("prompt file missing: {0}".format(path))
+
+    if not text:
+        logger.error("The prompt file is empty or blank: %s", path)
+        raise InternalError(
+            "prompt file empty or blank: {0}".format(path))
+
+    return text
+
+
+def _substitute(template: str,
+                replacements: Dict[str, str]) -> str:
+    """
+    Replace placeholders found in the template without rescanning values.
+
+    A replacement value is user data, not another template. Running one
+    regular-expression pass over the original template keeps a literal
+    {{input}} or {{body}} inside a memo or body untouched.
+    """
+    if not replacements:
+        return template
+
+    pattern = re.compile("|".join(
+        re.escape(placeholder) for placeholder in replacements))
+    return pattern.sub(
+        lambda match: replacements[match.group(0)], template)
 
 
 def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]]:
@@ -56,7 +84,8 @@ def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]
     user = load_prompt("body_user.md", prompt_dir)
     return [
         {"role": "system", "content": system},
-        {"role": "user", "content": user.replace("{{input}}", input_text)},
+        {"role": "user", "content": _substitute(
+            user, {"{{input}}": input_text})},
     ]
 
 
@@ -64,7 +93,13 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
     """ Build the messages that ask for titles of an existing body. """
     system = load_prompt("titles_system.md", prompt_dir)
     user = load_prompt("titles_user.md", prompt_dir)
-    user = user.replace("{{input}}", input_text).replace("{{body}}", body)
+    user = _substitute(
+        user,
+        {
+            "{{input}}": input_text,
+            "{{body}}": body,
+        },
+    )
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": user},

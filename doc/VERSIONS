@@ -8,6 +8,8 @@ v1.0.3 (Release Date: TBD)
 - Ship GENERATION_MODEL blank in .env.example instead of a concrete model name.
 - Refuse title-only regeneration without a body and preserve title-only mode
   when retrying a failed generation.
+- Preserve memo and body text literally during prompt substitution and refuse
+  empty prompt files before generation.
 
 v1.0.2 (2026-08-26)
 -------------------

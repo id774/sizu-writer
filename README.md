@@ -374,6 +374,12 @@ prompts/
 
 They are read on every generation, so a prompt edited while the server runs takes effect on the next request with no restart.
 
+A prompt file that is missing, unreadable, empty or whitespace-only stops the
+generation before any API request is made; there is no built-in fallback
+prompt. Placeholder substitution treats the memo and settled body literally,
+so text such as `{{body}}` typed in a memo is data rather than another round of
+template syntax.
+
 The policy they encode comes from the requirements: keep the concrete scene and the writer's own wording, invent no experience or causal link to tidy the text, do not present a familiar theme as freshly discovered, add nothing to reach a length, and do not manufacture a conclusion where the thinking has not reached one.
 
 [doc/PROMPTS.md](doc/PROMPTS.md) describes each file, the two placeholders, the JSON contract they must keep with `generator.py`, and how to iterate on a prompt without guessing which change did what.
@@ -405,7 +411,7 @@ The screen shows a message meant for the person and a short reference id. The ca
 | The result could not be read. | 502 | The answer was not the expected JSON object, or was cut off |
 | That page does not exist. | 404 | An address the application does not serve |
 | That address does not accept this kind of request. | 405 | The right address, the wrong method |
-| The server failed to handle the request. | 500 | Anything unexpected, including a missing prompt file |
+| The server failed to handle the request. | 500 | Anything unexpected, including a missing, unreadable or empty prompt file |
 
 A misconfiguration never reaches this table, because the settings are checked before a request is made: the web process refuses to start and `cli.py` exits 1, each naming the setting at fault.
 
@@ -464,6 +470,7 @@ Narrower selections use the same runner:
 |---|---|
 | `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
 | `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500, and the elapsed seconds recorded next to the limit on both a success and a timeout |
+| `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request, literal placeholder substitution, and unknown-placeholder preservation |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
 | `test_web.py` | the screens, input limits, regeneration of the titles alone, that a failure does not expose its cause, and that a timeout does not blame the memo |

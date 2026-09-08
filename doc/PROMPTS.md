@@ -40,10 +40,14 @@ Two, substituted by `sizu_writer/prompts.py`:
 | `{{input}}` | the memo the person entered | `body_user.md`, `titles_user.md` |
 | `{{body}}` | the body already settled | `titles_user.md` |
 
-Substitution is `str.replace()`, not `str.format()`, so a brace written in a
-prompt needs no escaping — which matters, because the output format section of
-`system.md` shows a JSON object full of braces.
+Substitution scans the original prompt template once for the placeholders used
+by that message. The inserted memo and settled body are opaque text and are not
+scanned again. A memo containing literal `{{body}}`, or a body containing
+literal `{{input}}`, therefore reaches the model with those characters
+unchanged. All occurrences of a used placeholder that were already in the
+template are replaced.
 
+The prompt is not a format string, so braces and percent signs need no escaping.
 An unknown placeholder is not an error. `{{tone}}` written into a prompt stays
 in the text literally and reaches the model as those eight characters, so a
 typo in a placeholder name fails quietly rather than loudly. Check a new
@@ -169,8 +173,9 @@ $EDITOR prompts-plain/system.md
 ```
 
 `--prompt-dir` replaces the whole set, not one file, so the copy must hold all
-four. A missing file raises `InternalError` and the log names the path it could
-not read.
+four. A file that is missing, unreadable, empty or whitespace-only raises
+`InternalError` before a generation request is made, and the log names the path.
+There is no built-in prompt to fall back to.
 
 `--json` prints the fields as the application sees them, which is what to look
 at when the question is whether the model is filling the right field rather
