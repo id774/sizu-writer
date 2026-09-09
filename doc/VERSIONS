@@ -10,6 +10,8 @@ v1.0.3 (Release Date: TBD)
   when retrying a failed generation.
 - Preserve memo and body text literally during prompt substitution and refuse
   empty prompt files before generation.
+- Require generation responses to report a finish reason, correlate failures by
+  error id, and keep raw upstream error text out of logs.
 
 v1.0.2 (2026-08-26)
 -------------------

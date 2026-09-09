@@ -42,6 +42,8 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.2 2026-09-09
+#       Reuse one request reference across generation failure diagnostics.
 #  v1.1 2026-09-07
 #       Keep title-only generation distinct from full generation through retries.
 #  v1.0 2026-08-05
@@ -55,10 +57,11 @@
 import logging
 import secrets
 
-from flask import Flask, render_template, request
+from flask import Flask, g, render_template, request
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from config import load_config, validate_generation_config
+from sizu_writer.diagnostics import reset_reference_id, set_reference_id
 from sizu_writer.errors import (EmptyInputError, InputTooLongError,
                                 InternalError, SizuWriterError)
 from sizu_writer.generator import generate_draft, regenerate_titles
@@ -87,6 +90,31 @@ HTTP_MESSAGES = {
     404: "That page does not exist.",
     405: "That address does not accept this kind of request.",
 }
+
+
+def _request_reference_id() -> str:
+    """ Return the one diagnostic reference assigned to this request. """
+    reference_id = getattr(g, "_sizu_reference_id", None)
+    if reference_id is None:
+        reference_id = secrets.token_hex(4)
+        g._sizu_reference_id = reference_id
+        g._sizu_reference_token = set_reference_id(reference_id)
+    return reference_id
+
+
+@app.before_request
+def begin_request_diagnostics():
+    """ Establish the request reference before application processing. """
+    _request_reference_id()
+
+
+@app.teardown_request
+def end_request_diagnostics(_error):
+    """ Restore the diagnostic context after this request. """
+    token = getattr(g, "_sizu_reference_token", None)
+    if token is not None:
+        reset_reference_id(token)
+        g._sizu_reference_token = None
 
 
 def _input_text() -> str:
@@ -130,7 +158,7 @@ def healthz():
 @app.errorhandler(SizuWriterError)
 def handle_known_error(error: SizuWriterError):
     """ Show the message meant for the user and log the cause. """
-    reference_id = secrets.token_hex(4)
+    reference_id = _request_reference_id()
     # An input the user can correct is not a failure of the server.
     level = logging.INFO if error.status_code == 400 else logging.ERROR
     logger.log(level, "%s (reference %s): %s", type(error).__name__, reference_id, error)
@@ -152,7 +180,7 @@ def handle_known_error(error: SizuWriterError):
 @app.errorhandler(RequestEntityTooLarge)
 def handle_request_too_large(error: RequestEntityTooLarge):
     """ Refuse an oversized request without parsing its form again. """
-    reference_id = secrets.token_hex(4)
+    reference_id = _request_reference_id()
     logger.info("RequestEntityTooLarge (reference %s): %s", reference_id, error)
     page = render_template(
         "error.html",
@@ -176,7 +204,7 @@ def handle_http_error(error: HTTPException):
     not a failure of the server, so it keeps its own status and is
     logged as a note.
     """
-    reference_id = secrets.token_hex(4)
+    reference_id = _request_reference_id()
     level = logging.INFO if error.code < 500 else logging.ERROR
     logger.log(level, "%s (reference %s): %s %s",
                type(error).__name__, reference_id, error.code, request.path)
@@ -193,7 +221,12 @@ def handle_http_error(error: HTTPException):
 @app.errorhandler(Exception)
 def handle_unexpected_error(error: Exception):
     """ Report an unexpected failure without exposing its detail. """
-    logger.exception("Unexpected failure: %s", error)
+    reference_id = _request_reference_id()
+    logger.exception(
+        "Unexpected failure (reference %s): %s",
+        reference_id,
+        error,
+    )
     return handle_known_error(InternalError(str(error)))
 
 

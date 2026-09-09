@@ -51,12 +51,15 @@
 #    - Keep answering an oversized request with 413 rather than the generic status.
 #    - Still report an unexpected failure as a server error, without its message.
 #    - Do not blame the memo for a timeout.
+#    - Keep one request reference through a generation failure and clear it afterwards.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Flask
 #
 #  Version History:
+#  v1.2 2026-09-09
+#       Cover one request reference across generation failure handling.
 #  v1.1 2026-09-07
 #       Cover title-only body refusal and preservation of the retry operation.
 #  v1.0 2026-08-05
@@ -64,6 +67,7 @@
 #
 ########################################################################
 
+import logging
 import os
 import unittest
 from unittest import mock
@@ -81,6 +85,7 @@ with mock.patch.dict(os.environ, TEST_ENVIRONMENT, clear=True):
     with mock.patch("config.load_dotenv", None):
         import app as web  # noqa: E402  imported with the settings above
 from sizu_writer import Draft
+from sizu_writer.diagnostics import get_reference_id
 from sizu_writer.errors import EmptyBodyError, UpstreamTimeoutError
 
 
@@ -276,6 +281,27 @@ class WebTest(unittest.TestCase):
             answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
 
         self.assertNotIn("Shorten the memo", answer.get_data(as_text=True))
+
+    def test_keeps_one_request_reference_through_a_generation_failure(self):
+        observed = {}
+
+        def fail_generation(*_args, **_kwargs):
+            observed["reference_id"] = get_reference_id()
+            raise UpstreamTimeoutError()
+
+        with mock.patch.object(web.secrets, "token_hex", return_value="deadbeef"):
+            with mock.patch.object(web, "generate_draft", side_effect=fail_generation):
+                with self.assertLogs("app", level=logging.ERROR) as logged:
+                    answer = self.client.post("/generate", data={
+                        "input_text": "a memo", "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(504, answer.status_code)
+        self.assertEqual("deadbeef", observed["reference_id"])
+        self.assertIn("(error id: deadbeef)", page)
+        self.assertIn("(reference deadbeef)", "\n".join(logged.output))
+        self.assertIsNone(get_reference_id())
+        self.assertNotIn("Traceback", page)
 
 
 if __name__ == "__main__":

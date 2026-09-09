@@ -21,8 +21,9 @@
 #
 #  The answer is normalized into a CompletionResult and nothing else is
 #  read from it. Metadata a compatible endpoint may omit — the usage
-#  counts, the request id — is carried as it comes; only an answer with
-#  no usable text, or one cut off by the output limit, is refused.
+#  counts, the request id — is carried as it comes; the finish reason is
+#  not: an answer with no usable text, no usable finish reason, or one
+#  cut off by the output limit, is refused.
 #
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -34,6 +35,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.1 2026-09-09
+#       Require a finish reason and keep raw upstream error text out of logs.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -44,6 +47,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from config import Config
+from sizu_writer.diagnostics import get_reference_id
 from sizu_writer.errors import (InternalError, InvalidResponseError,
                                 UpstreamConnectionError, UpstreamStatusError,
                                 UpstreamTimeoutError)
@@ -156,8 +160,9 @@ class OpenAICompatibleProvider:
         raising the limit would change nothing.
         """
         logger.error(
-            "generation failure: backend=%s endpoint_host=%s model=%s "
-            "error=%s status=%s request_id=%s elapsed=%s timeout=%s: %s",
+            "generation failure: reference=%s backend=%s endpoint_host=%s "
+            "model=%s error=%s status=%s request_id=%s elapsed=%s timeout=%s",
+            get_reference_id() or "-",
             config.generation_backend,
             config.endpoint_host,
             config.generation_model,
@@ -166,7 +171,6 @@ class OpenAICompatibleProvider:
             getattr(error, "request_id", None) or "-",
             self._elapsed(started),
             config.generation_timeout,
-            error,
         )
 
     def _elapsed(self, started: float) -> float:
@@ -186,7 +190,11 @@ class OpenAICompatibleProvider:
             raise InvalidResponseError()
 
         choice = choices[0]
-        finish_reason = getattr(choice, "finish_reason", None) or ""
+        finish_reason = getattr(choice, "finish_reason", None)
+        if not isinstance(finish_reason, str) or not finish_reason.strip():
+            logger.error("The answer carries no usable finish reason")
+            raise InvalidResponseError()
+
         if finish_reason in TRUNCATED_REASONS:
             logger.error(
                 "The output was cut off (finish_reason=%s); raise "
