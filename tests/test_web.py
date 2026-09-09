@@ -52,12 +52,16 @@
 #    - Still report an unexpected failure as a server error, without its message.
 #    - Do not blame the memo for a timeout.
 #    - Keep one request reference through a generation failure and clear it afterwards.
+#    - Keep title-only mode and its body when memo validation fails.
+#    - Return to full generation when title-only regeneration has no body.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Flask
 #
 #  Version History:
+#  v1.3 2026-09-10
+#       Cover title-only state across correctable memo validation errors.
 #  v1.2 2026-09-09
 #       Cover one request reference across generation failure handling.
 #  v1.1 2026-09-07
@@ -179,7 +183,36 @@ class WebTest(unittest.TestCase):
                 self.assertEqual(400, answer.status_code)
                 self.assertIn(
                     "There is no post body to regenerate titles for.", page)
+                self.assertIn('name="mode" value="full"', page)
+                self.assertIn(">Generate<", page)
+                self.assertNotIn("Regenerate the titles only", page)
+                self.assertNotIn('name="body"', page)
                 titles.assert_called_once_with("a memo", body, web.config)
+                generate.assert_not_called()
+
+    def test_keeps_title_only_state_when_the_memo_is_invalid(self):
+        cases = [
+            ("  ", "Enter a memo first"),
+            ("a" * (web.config.max_input_chars + 1), "The memo is too long"),
+        ]
+        for text, message in cases:
+            with self.subTest(text=repr(text)):
+                with mock.patch.object(web, "regenerate_titles") as titles:
+                    with mock.patch.object(web, "generate_draft") as generate:
+                        answer = self.client.post("/generate", data={
+                            "input_text": text,
+                            "body": "The settled body",
+                            "mode": "titles",
+                        })
+
+                page = answer.get_data(as_text=True)
+                self.assertEqual(400, answer.status_code)
+                self.assertIn(message, page)
+                self.assertIn('name="body" value="The settled body"', page)
+                self.assertIn('name="mode" value="titles"', page)
+                self.assertIn("Regenerate the titles only", page)
+                self.assertNotIn('name="mode" value="full"', page)
+                titles.assert_not_called()
                 generate.assert_not_called()
 
     def test_keeps_title_regeneration_as_the_retry_mode(self):

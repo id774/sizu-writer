@@ -42,6 +42,8 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.3 2026-09-10
+#       Preserve title-only state across correctable memo validation errors.
 #  v1.2 2026-09-09
 #       Reuse one request reference across generation failure diagnostics.
 #  v1.1 2026-09-07
@@ -164,13 +166,19 @@ def handle_known_error(error: SizuWriterError):
     logger.log(level, "%s (reference %s): %s", type(error).__name__, reference_id, error)
 
     template = "index.html" if error.status_code == 400 else "error.html"
+    body = request.form.get("body", "")
     mode = "titles" if request.form.get("mode") == "titles" else "full"
+
+    if error.status_code == 400 and (
+            mode != "titles" or not body.strip()):
+        mode = "full"
+
     page = render_template(
         template,
         error=error.user_message,
         reference_id=reference_id,
         input_text=request.form.get("input_text", ""),
-        body=request.form.get("body", ""),
+        body=body,
         mode=mode,
         max_input_chars=config.max_input_chars,
     )

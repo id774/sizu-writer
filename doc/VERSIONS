@@ -14,6 +14,8 @@ v1.0.3 (Release Date: TBD)
   error id, and keep raw upstream error text out of logs.
 - Preserve blank lines and headings inside backtick and tilde fenced code blocks
   during Markdown normalization.
+- Preserve title-only regeneration and its settled body when memo validation
+  fails before generation.
 
 v1.0.2 (2026-08-26)
 -------------------

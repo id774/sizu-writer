@@ -2,10 +2,17 @@
 
 {% block content %}
 <form method="post" action="{{ url_for('generate') }}">
+  {% if mode == "titles" %}
+  <input type="hidden" name="body" value="{{ body or '' }}">
+  {% endif %}
   <label for="input_text">Memo</label>
   <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
   <div class="buttons">
+    {% if mode == "titles" %}
+    <button type="submit" name="mode" value="titles">Regenerate the titles only</button>
+    {% else %}
     <button type="submit" name="mode" value="full">Generate</button>
+    {% endif %}
     <button type="button" data-clear-target="input_text">Clear</button>
   </div>
 </form>
