@@ -53,18 +53,24 @@
 #    - Refuse an answer without a choice.
 #    - Refuse an empty content, and a content that is not a string.
 #    - Refuse an answer cut off by the output limit.
+#    - Refuse an answer without a usable finish reason.
+#    - Accept an unknown non-empty finish reason.
 #    - Map a timeout onto UpstreamTimeoutError.
 #    - Map a connection failure onto UpstreamConnectionError.
 #    - Map 401, 403, 429 and 500 onto one user facing error.
 #    - Record the shape of an answer without its content or the token.
 #    - Record the wait next to the limit on an answer and on a timeout.
 #    - Keep the token out of a failure line.
+#    - Record the request reference on a failed generation.
+#    - Keep raw upstream error text out of a failure line.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only (the openai package is stubbed, never imported)
 #
 #  Version History:
+#  v1.1 2026-09-09
+#       Cover required finish reasons, sanitized failure logs and request references.
 #  v1.0 2026-08-05
 #       Initial release.
 #
@@ -77,6 +83,7 @@ from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 from config import Config
+from sizu_writer.diagnostics import reset_reference_id, set_reference_id
 from sizu_writer.errors import (InvalidResponseError, UpstreamConnectionError,
                                 UpstreamStatusError, UpstreamTimeoutError)
 from sizu_writer.providers.openai_compatible import OpenAICompatibleProvider
@@ -99,8 +106,11 @@ class FakeConnectionError(FakeError):
 class FakeStatusError(FakeError):
     """ Stands in for openai.APIStatusError. """
 
-    def __init__(self, status_code):
-        super().__init__("status {0}".format(status_code))
+    def __init__(self, status_code, message=None):
+        super().__init__(
+            message if message is not None
+            else "status {0}".format(status_code)
+        )
         self.status_code = status_code
         self.request_id = "req_1"
 
@@ -303,6 +313,26 @@ class ResponseTest(ProviderTest):
             with self.assertRaises(InvalidResponseError):
                 self.complete(fake_openai(answer(content="{}", finish_reason=reason)))
 
+    def test_refuses_an_answer_without_a_usable_finish_reason(self):
+        message = SimpleNamespace(content="{}")
+        choices = [SimpleNamespace(message=message)]
+
+        with self.assertRaises(InvalidResponseError):
+            self.complete(fake_openai(answer(choices=choices)))
+
+    def test_refuses_unusable_finish_reason_values(self):
+        for finish_reason in (None, "", "   "):
+            with self.subTest(finish_reason=repr(finish_reason)):
+                with self.assertRaises(InvalidResponseError):
+                    self.complete(fake_openai(
+                        answer(content="{}", finish_reason=finish_reason)))
+
+    def test_accepts_an_unknown_non_empty_finish_reason(self):
+        result = self.complete(fake_openai(
+            answer(content="{}", finish_reason="provider-specific")))
+
+        self.assertEqual("provider-specific", result.finish_reason)
+
 
 class FailureTest(ProviderTest):
 
@@ -373,6 +403,39 @@ class LogTest(ProviderTest):
         recorded = "\n".join(logged.output)
         self.assertIn("status=401", recorded)
         self.assertNotIn(TOKEN, recorded)
+
+    def test_keeps_raw_upstream_error_text_out_of_a_failure_line(self):
+        with self.assertLogs("sizu_writer.providers.openai_compatible",
+                             level=logging.ERROR) as logged:
+            with self.assertRaises(UpstreamStatusError):
+                self.raise_from_sdk(
+                    FakeStatusError(500, "SENSITIVE_UPSTREAM_RESPONSE_TEXT"))
+
+        recorded = "\n".join(logged.output)
+        self.assertIn("error=FakeStatusError", recorded)
+        self.assertIn("status=500", recorded)
+        self.assertIn("request_id=req_1", recorded)
+        self.assertIn("endpoint_host=api.ai.sakura.ad.jp", recorded)
+        self.assertIn("model=a-model", recorded)
+        self.assertIn("elapsed=", recorded)
+        self.assertIn("timeout=120.0", recorded)
+        self.assertNotIn("SENSITIVE_UPSTREAM_RESPONSE_TEXT", recorded)
+        self.assertNotIn(TOKEN, recorded)
+
+    def test_records_the_request_reference_on_a_failed_generation(self):
+        token = set_reference_id("deadbeef")
+        try:
+            with self.assertLogs("sizu_writer.providers.openai_compatible",
+                                 level=logging.ERROR) as logged:
+                with self.assertRaises(UpstreamStatusError):
+                    self.raise_from_sdk(FakeStatusError(500))
+        finally:
+            reset_reference_id(token)
+
+        recorded = "\n".join(logged.output)
+        self.assertIn("reference=deadbeef", recorded)
+        self.assertIn("status=500", recorded)
+        self.assertIn("request_id=req_1", recorded)
 
 
 if __name__ == "__main__":

@@ -238,6 +238,12 @@ rather than relying on a copied model or plan list in this repository.
 One process addresses one endpoint, fixed at startup. Neither the endpoint, the
 model nor the token can be changed from a screen.
 
+`app.py` sets a request-scoped diagnostic reference in
+`sizu_writer/diagnostics.py` before generation runs; provider failure logging
+reads it from there. The memo, the prompt and the completion data never pass
+through that module, and the generator and provider interfaces are unchanged
+by it.
+
 ---
 
 ## 7. Layout
@@ -250,6 +256,7 @@ model nor the token can be changed from a screen.
 ├── .env.example
 ├── sizu_writer/
 │   ├── __init__.py
+│   ├── diagnostics.py             request-scoped diagnostic reference
 │   ├── errors.py
 │   ├── generator.py
 │   ├── formatter.py
@@ -440,6 +447,7 @@ class CompletionResult:
     prompt_tokens: Optional[int] = None
     completion_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
+    elapsed_seconds: Optional[float] = None
 
 
 class GenerationProvider(Protocol):
@@ -538,11 +546,15 @@ is no retry loop of our own; retries are the SDK's, bounded by
 
 A compatible endpoint may report no usage and no id. A draft is usable without
 them, so a missing count is carried as `None` rather than treated as a failure.
+The finish reason is not optional in the same way: `choices[0].finish_reason`
+must be a string and non-blank once stripped, or the answer is refused before
+its value is even checked against the truncation list below.
 
 `InvalidResponseError` is raised when there is no choice, when the content is
-not a string, when it is empty, or when the finish reason says the output limit
-was reached. The JSON itself is read one layer up, in `generator.py`, and fails
-the same way.
+not a string, when it is empty, when `finish_reason` is missing, `None`, not a
+string, or blank, or when the finish reason says the output limit was reached.
+The JSON itself is read one layer up, in `generator.py`, and fails the same
+way.
 
 ### 11.5 Finish reasons
 
@@ -554,6 +566,11 @@ max_tokens
 Both mean a truncated body, which is not offered as a draft. The list is
 explicit: another value from a compatible endpoint is reported as itself and
 added here once a log has shown it, never assumed to mean the same thing.
+
+A response whose finish reason is missing or blank is refused before it
+reaches this list, as an invalid response rather than a truncated one — see
+11.4. An unknown non-empty reason is still not guessed at: it passes this
+check and is kept as itself on the `CompletionResult`.
 
 ---
 
@@ -661,18 +678,27 @@ titles, the prompts, the `Authorization` header and the answer itself.
 
 ### 13.2 ERROR
 
-One line per failed request, carrying the backend, the endpoint host, the
-model, the SDK exception type, the HTTP status, the endpoint's request id, the
-seconds the request took and the timeout it was given. The last two decide what
-to do with a timeout: elapsed at the limit is an endpoint slower than the time
-allowed, elapsed well short of it is a connection lost on the way, and only the
-first is answered by raising the limit. The reference id shown to the user is logged by the error handler
-in `app.py`, next to the exception type.
+One line per failed request, carrying the request reference, the backend, the
+endpoint host, the model, the SDK exception type, the HTTP status, the
+endpoint's request id, the seconds the request took and the timeout it was
+given. The last two decide what to do with a timeout: elapsed at the limit is
+an endpoint slower than the time allowed, elapsed well short of it is a
+connection lost on the way, and only the first is answered by raising the
+limit.
 
-The status is worth recording even though the screen never distinguishes it:
-401 is a token to replace, 403 a plan that does not cover the model, 429 a rate
-limit or an exhausted monthly allowance, and only the log can say which
-happened.
+The request reference comes from `sizu_writer/diagnostics.py`. For a request
+made through the Web application it is the same id `app.py` shows on the
+error page and logs next to the exception type, so a provider failure line and
+its error page can be matched by that value alone. Outside a Web request —
+the CLI, for instance — no reference has been set, and the field reads `-`.
+
+The raw SDK exception message and any upstream response body it carries are
+not recorded; only the exception's class name is. The status is worth
+recording on its own even though the screen never distinguishes it: 401 is a
+token to replace, 403 a plan that does not cover the model, 429 a rate limit
+or an exhausted monthly allowance, and only the log can say which happened.
+The API token, the memo, the prompt, the generated body, the title and the raw
+answer stay out of this line as they do everywhere else.
 
 ### 13.3 Usage
 
@@ -799,6 +825,11 @@ because the configuration is information for the operator, the allowance is not
 readable from the API, a model name must not end up in a copyable area, and the
 screens offer no way to switch endpoints.
 
+The error id's display format is unchanged as well. What changed is only where
+it comes from: it is established once, in the request scope, before generation
+runs, and the same value is what the provider diagnostic and the error handler
+both use.
+
 ---
 
 ## 19. Tests
@@ -816,7 +847,17 @@ reaching the SDK, `max_retries=0`, `response_format` under each mode,
 `temperature` sent only when set, the model and `max_tokens`, normalization of
 a good answer, an answer without usage, the refusal of a missing choice, an
 empty content and a truncated answer, the mapping of a timeout, a connection
-failure and 401, 403, 429 and 500, and the token staying out of the log.
+failure and 401, 403, 429 and 500, and the token staying out of the log. It
+also covers the refusal of a missing, `None`, empty or whitespace-only finish
+reason, an unknown non-empty finish reason surviving unchanged onto the
+`CompletionResult`, raw upstream error text staying out of a failure line, and
+a failure line carrying the current request reference.
+
+`tests/test_web.py` additionally covers a single request reference: the same
+id the Web application establishes before calling into generation is what a
+failed generation observes through `sizu_writer/diagnostics.py`, what the
+error page shows, and what the application error log records, and that id is
+no longer readable once the request has finished.
 
 `tests/test_generator.py` covers building a `Draft` from a `CompletionResult`,
 both response modes, a fenced answer, the refusal of prose around the object,
