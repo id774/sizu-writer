@@ -30,12 +30,18 @@
 #    - Demote a level one heading and report the adjustment as a notice.
 #    - Collapse a run of blank lines into a single blank line.
 #    - Report boilerplate as a notice without rewriting the body.
+#    - Preserve repeated blank lines inside a fenced code block.
+#    - Preserve headings inside tilde fenced code blocks.
+#    - Keep opposite fence markers from closing the current block.
+#    - Remove a tilde fence wrapping the whole answer.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-09
+#       Cover literal content inside backtick and tilde code fences.
 #  v1.1 2026-08-11
 #       Cover separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-05
@@ -91,6 +97,81 @@ class NormalizeBodyTest(unittest.TestCase):
 
         self.assertEqual(source, body)
         self.assertIn("The body may contain a formulaic opening or closing.", notices)
+
+    def test_preserves_blank_lines_inside_a_backtick_fence(self):
+        source = (
+            "前置きです。\n\n\n\n"
+            "```text\n"
+            "line one\n\n\n\n"
+            "line two\n"
+            "```\n\n\n\n"
+            "続きです。"
+        )
+
+        body, notices = normalize_body(source)
+
+        expected = (
+            "前置きです。\n\n"
+            "```text\n"
+            "line one\n\n\n\n"
+            "line two\n"
+            "```\n\n"
+            "続きです。"
+        )
+        self.assertEqual(expected, body)
+        self.assertEqual([], notices)
+
+    def test_preserves_a_heading_inside_a_tilde_fence(self):
+        source = (
+            "前置きです。\n\n"
+            "~~~sh\n"
+            "# literal comment\n"
+            "printf '%s\\n' value\n"
+            "~~~\n\n"
+            "# 外側の見出し"
+        )
+
+        body, notices = normalize_body(source)
+
+        expected = (
+            "前置きです。\n\n"
+            "~~~sh\n"
+            "# literal comment\n"
+            "printf '%s\\n' value\n"
+            "~~~\n\n"
+            "## 外側の見出し"
+        )
+        self.assertEqual(expected, body)
+        self.assertEqual(["The heading level of the body was adjusted."], notices)
+
+    def test_opposite_marker_does_not_close_a_fence(self):
+        source = (
+            "```text\n"
+            "~~~\n"
+            "# literal\n"
+            "~~~\n"
+            "```\n\n"
+            "# outside"
+        )
+
+        body, notices = normalize_body(source)
+
+        expected = (
+            "```text\n"
+            "~~~\n"
+            "# literal\n"
+            "~~~\n"
+            "```\n\n"
+            "## outside"
+        )
+        self.assertEqual(expected, body)
+        self.assertEqual(["The heading level of the body was adjusted."], notices)
+
+    def test_removes_a_tilde_fence_wrapping_the_whole_answer(self):
+        body, notices = normalize_body("~~~markdown\n本文です。\n~~~")
+
+        self.assertEqual("本文です。", body)
+        self.assertEqual([], notices)
 
 
 if __name__ == "__main__":

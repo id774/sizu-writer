@@ -368,12 +368,13 @@ def normalize_body(text: str) -> Tuple[str, List[str]]
 
 The rewrites are:
 
-1. Remove one outer code fence only when it wraps the whole body and there is no
-   separate inner fence.
-2. Demote a level-one Markdown heading to level two outside fenced code blocks,
-   adding a notice when that happens.
-3. Collapse three or more consecutive line breaks to a normal paragraph gap and
-   strip surrounding whitespace.
+1. Remove one outer backtick or tilde code fence only when it wraps the whole
+   body and there is no separate inner fence.
+2. Demote a level-one Markdown heading to level two outside backtick and tilde
+   fenced code blocks, adding a notice when that happens.
+3. Collapse three or more consecutive line breaks to a normal paragraph gap
+   outside fenced code blocks, preserving line breaks inside them, and strip
+   surrounding whitespace from the whole body.
 
 After those rewrites the formatter only inspects. It adds a notice when the body
 contains a configured boilerplate phrase or a phrase that looks like an

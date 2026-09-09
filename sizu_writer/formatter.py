@@ -22,6 +22,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-09
+#       Preserve headings and blank lines inside backtick and tilde code fences.
 #  v1.1 2026-08-11
 #       Preserve separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-04
@@ -30,7 +32,7 @@
 ########################################################################
 
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 # The phrases are Japanese because the generated post is: they are the
 # openings and closings the writing policy rules out.
@@ -50,32 +52,103 @@ INSTRUCTION_LEAKS = (
     "ご要望に沿って",
 )
 
-FENCE = re.compile(r"^\s*```")
+FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
+
+
+def _fence(line: str) -> Optional[Tuple[str, int, str]]:
+    """ Return the marker, its length and the text after a fence. """
+    match = FENCE.match(line)
+    if match is None:
+        return None
+    marker = match.group("marker")
+    return marker[0], len(marker), match.group("rest")
+
+
+def _closes_fence(line: str, opening: Tuple[str, int]) -> bool:
+    """ Return whether a line closes the given fenced code block. """
+    fence = _fence(line)
+    if fence is None:
+        return False
+    marker, length, rest = fence
+    return (
+        marker == opening[0]
+        and length >= opening[1]
+        and not rest.strip()
+    )
 
 
 def _strip_outer_fence(text: str) -> str:
     """ Remove a code fence wrapping the whole answer. """
     lines = text.strip().split("\n")
-    inner_has_fence = any(FENCE.match(line) for line in lines[1:-1])
-    if (len(lines) >= 2 and FENCE.match(lines[0])
-            and FENCE.match(lines[-1]) and not inner_has_fence):
-        return "\n".join(lines[1:-1]).strip()
-    return text.strip()
+    if len(lines) < 2:
+        return text.strip()
+
+    opening_fence = _fence(lines[0])
+    if opening_fence is None:
+        return text.strip()
+
+    opening = (opening_fence[0], opening_fence[1])
+    if not _closes_fence(lines[-1], opening):
+        return text.strip()
+
+    inner_has_fence = any(_fence(line) is not None for line in lines[1:-1])
+    if inner_has_fence:
+        return text.strip()
+
+    return "\n".join(lines[1:-1]).strip()
 
 
 def _demote_headings(text: str) -> Tuple[str, bool]:
     """ Turn a level one heading into a level two one. """
     result = []
-    inside_fence = False
+    opening: Optional[Tuple[str, int]] = None
     demoted = False
     for line in text.split("\n"):
-        if FENCE.match(line):
-            inside_fence = not inside_fence
-        elif not inside_fence and re.match(r"^# \S", line):
+        if opening is not None:
+            if _closes_fence(line, opening):
+                opening = None
+            result.append(line)
+            continue
+
+        fence = _fence(line)
+        if fence is not None:
+            opening = (fence[0], fence[1])
+        elif re.match(r"^# \S", line):
             line = "#" + line
             demoted = True
         result.append(line)
     return "\n".join(result), demoted
+
+
+def _collapse_blank_lines(text: str) -> str:
+    """ Collapse runs of blank lines outside fenced code blocks. """
+    opening: Optional[Tuple[str, int]] = None
+    previous_empty = False
+    result: List[str] = []
+
+    for line in text.split("\n"):
+        if opening is not None:
+            result.append(line)
+            if _closes_fence(line, opening):
+                opening = None
+            continue
+
+        fence = _fence(line)
+        if fence is not None:
+            opening = (fence[0], fence[1])
+            result.append(line)
+            previous_empty = False
+            continue
+
+        if line == "":
+            if not previous_empty:
+                result.append(line)
+            previous_empty = True
+        else:
+            result.append(line)
+            previous_empty = False
+
+    return "\n".join(result)
 
 
 def normalize_body(text: str) -> Tuple[str, List[str]]:
@@ -87,7 +160,7 @@ def normalize_body(text: str) -> Tuple[str, List[str]]:
     if demoted:
         notices.append("The heading level of the body was adjusted.")
 
-    body = re.sub(r"\n{3,}", "\n\n", body).strip()
+    body = _collapse_blank_lines(body).strip()
 
     if any(phrase in body for phrase in BOILERPLATE):
         notices.append("The body may contain a formulaic opening or closing.")

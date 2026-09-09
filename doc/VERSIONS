@@ -12,6 +12,8 @@ v1.0.3 (Release Date: TBD)
   empty prompt files before generation.
 - Require generation responses to report a finish reason, correlate failures by
   error id, and keep raw upstream error text out of logs.
+- Preserve blank lines and headings inside backtick and tilde fenced code blocks
+  during Markdown normalization.
 
 v1.0.2 (2026-08-26)
 -------------------
