@@ -408,14 +408,14 @@ The screen shows a message meant for the person and a short reference id. The ca
 | The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
 | Generation took too long and was stopped. | 504 | Over `GENERATION_TIMEOUT` |
-| The result could not be read. | 502 | The answer was not the expected JSON object, or was cut off |
+| The result could not be read. | 502 | The answer was not the expected object, lacked required response metadata such as a usable `finish_reason`, or was cut off |
 | That page does not exist. | 404 | An address the application does not serve |
 | That address does not accept this kind of request. | 405 | The right address, the wrong method |
 | The server failed to handle the request. | 500 | Anything unexpected, including a missing, unreadable or empty prompt file |
 
 A misconfiguration never reaches this table, because the settings are checked before a request is made: the web process refuses to start and `cli.py` exits 1, each naming the setting at fault.
 
-Every failed request also leaves one line naming the status the endpoint answered with. The screen does not distinguish them — writing "your token is invalid" onto a page is reporting the configuration of the server to whoever asked for a draft — but the log does, and the difference decides what to do next:
+Every provider failure leaves one structured log line. When the endpoint returned an HTTP error response, `status` records that code. Connection failures and client-side timeouts have no endpoint HTTP response, so they record `status=-`. The screen does not distinguish a returned status — writing "your token is invalid" onto a page is reporting the configuration of the server to whoever asked for a draft — but the log does, and the difference decides what to do next, for the case where the endpoint did answer with one:
 
 | Status | What to do |
 |---|---|
@@ -429,7 +429,7 @@ Two cases are worth knowing by their log line rather than their screen:
 
 **`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
-**`error=APITimeoutError ... elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
+**`generation failure: reference=- backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
 
 Shortening the memo is not the answer to this one, which is why the screen no longer suggests it. The wait is the answer being written, and a memo of one line asks for the same post as a long one.
 
@@ -439,14 +439,16 @@ Both `cli.py` and `app.py` log in the same format, so a failure reproduced from 
 
 ```
 2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=... elapsed=47.2 timeout=120.0
-2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0: ...
+2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: reference=3f9c1a72 backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
 ```
 
-The token, the memo, the prompts, the generated body and the titles appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
+`reference` is the Web application's 8-hex error-page reference id, shared with the provider failure log for that same request, so a person reporting an error page and an operator reading the log are looking at the same event. `cli.py` has no Web request to attach one to, so its provider failure lines carry `reference=-`. `request_id` is a separate field: it is the id the upstream endpoint itself assigned to the exchange, and it is not a stand-in for the Web reference id.
+
+The token, memo, prompts, generated body, titles, raw upstream exception text and raw upstream response body appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
 
 ## Tests
 
-The suite lives in `tests/` and uses `unittest` from the standard library. Every test stubs the client: no outbound access, no API token and no `.env` are needed. The provider tests go further and stub the `openai` package itself, so they exercise the request that would have been sent without importing the SDK at all.
+The suite lives in `tests/` and uses `unittest` from the standard library: no outbound access, no API token and no `.env` are needed. Tests that exercise the generation path stub the external client; the provider tests go further and stub the `openai` package itself, so they exercise the request that would have been sent without importing the SDK at all.
 
 Run everything at once, from the repository root:
 
@@ -469,14 +471,14 @@ Narrower selections use the same runner:
 | Module | Subject |
 |---|---|
 | `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
-| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer, and the mapping of a timeout, a connection failure and 401/403/429/500, and the elapsed seconds recorded next to the limit on both a success and a timeout |
+| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer including the requirement of a usable `finish_reason` (an unknown non-empty reason is accepted and preserved), the mapping of a timeout, a connection failure and 401/403/429/500, the elapsed seconds recorded next to the limit on both a success and a timeout, and a sanitized failure log that carries the request reference but excludes raw upstream error text |
 | `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request, literal placeholder substitution, and unknown-placeholder preservation |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
 | `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
-| `test_web.py` | the screens, input limits, regeneration of the titles alone, that a failure does not expose its cause, and that a timeout does not blame the memo |
+| `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation and its exact body across both a generation failure and a correctable memo validation error, that a failure does not expose its cause, that a timeout does not blame the memo, and the one request reference shared between a provider failure log and the error page and cleared after the request |
 | `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model` and `--timeout` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model, the exit codes, and the failure named in the log |
 
-`test_web.py` sets the four required settings before importing `app`, because `app.py` validates them while it is imported. They are placeholders and no request is made; `setdefault` leaves a real `.env` alone when one is present.
+`test_web.py` imports `app` inside an environment replaced by `TEST_ENVIRONMENT` with `clear=True`, and disables dotenv loading for that import. The four required generation settings are fixed test placeholders; the host environment and a local `.env` cannot affect the import, and no generation request is made.
 
 A passing suite says nothing about the endpoint being reachable or the writing being good. The first is exercised by an actual `cli.py generate`; the second cannot be decided by a test at all. The acceptance conditions about the quality of the writing — that no instruction leaks into the body, that it is not inflated into an explainer, and that a familiar theme is not presented as freshly discovered (requirements 14.7 to 14.9) — are settled by running a real memo through `cli.py generate` and reading the result.
 
