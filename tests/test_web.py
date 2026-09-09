@@ -21,6 +21,11 @@
 #  by stubs, and app.py is imported with an isolated test configuration so
 #  that settings from the host environment or a real .env cannot affect it.
 #
+#  This suite also checks the contract between the rendered HTML and the
+#  served JavaScript asset through the Flask test client: the markup a
+#  progressive helper hooks onto, and the source of the helper itself. It
+#  does not run a JavaScript engine.
+#
 #  Author: id774 (More info: http://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
 #  License: The GPL version 3, or LGPL version 3 (Dual License).
@@ -54,6 +59,10 @@
 #    - Keep one request reference through a generation failure and clear it afterwards.
 #    - Keep title-only mode and its body when memo validation fails.
 #    - Return to full generation when title-only regeneration has no body.
+#    - Render the input character-count hook and configured limit.
+#    - Limit the result memo and mark the post body for automatic growth.
+#    - Serve progressive submit, character-count and auto-grow helpers.
+#    - Preserve the clicked submit value before disabling generation buttons.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -61,7 +70,8 @@
 #
 #  Version History:
 #  v1.3 2026-09-10
-#       Cover title-only state across correctable memo validation errors.
+#       Cover title-only state across correctable memo validation errors, and
+#       the Web progressive enhancement markup and script contract.
 #  v1.2 2026-09-09
 #       Cover one request reference across generation failure handling.
 #  v1.1 2026-09-07
@@ -335,6 +345,43 @@ class WebTest(unittest.TestCase):
         self.assertIn("(reference deadbeef)", "\n".join(logged.output))
         self.assertIsNone(get_reference_id())
         self.assertNotIn("Traceback", page)
+
+    def test_input_screen_has_the_character_count_contract(self):
+        answer = self.client.get("/")
+
+        self.assertEqual(200, answer.status_code)
+        page = answer.get_data(as_text=True)
+        self.assertIn(
+            'maxlength="{0}"'.format(web.config.max_input_chars), page)
+        self.assertIn('data-character-count-target="input-count"', page)
+        self.assertIn('id="input-count"', page)
+
+    def test_result_screen_has_memo_limit_and_body_auto_growth_hook(self):
+        with mock.patch.object(web, "generate_draft", return_value=draft()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        page = answer.get_data(as_text=True)
+        self.assertIn("data-auto-grow", page)
+        self.assertIn('id="post-body"', page)
+        self.assertIn(
+            'maxlength="{0}"'.format(web.config.max_input_chars), page)
+
+    def test_web_script_contains_progressive_generation_helpers(self):
+        answer = self.client.get("/static/copy.js")
+
+        self.assertEqual(200, answer.status_code)
+        script = answer.get_data(as_text=True)
+        self.assertIn("data-character-count-target", script)
+        self.assertIn("scrollHeight", script)
+        self.assertIn('addEventListener("submit"', script)
+        self.assertIn("event.submitter", script)
+        self.assertIn("data-submitted-button", script)
+        self.assertIn("disabled = true", script)
+        self.assertIn("data-submitting", script)
+        self.assertIn("aria-busy", script)
+        self.assertIn("Generating...", script)
 
 
 if __name__ == "__main__":
