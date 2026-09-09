@@ -405,6 +405,13 @@ The Flask application. Four routes.
   remains title-only. A full-generation failure retries with `mode=full`.
   Neither path is an automatic retry; a new request is made only when the user
   presses the button.
+- A correctable memo validation error (an empty or overlong memo) on a
+  title-only request is rendered on `index.html` the same way: when the
+  submitted body is usable, the exact body and `mode=titles` are preserved so
+  the correction stays a title-only regeneration. When the body is missing or
+  blank, title-only regeneration cannot run regardless of the memo, so the
+  screen falls back to `mode=full`. Neither case triggers `generate_draft()`
+  or `regenerate_titles()` while handling the error.
 - `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
 - An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
 
@@ -514,7 +521,11 @@ click
 
 - A correctable form error (an empty memo, an overlong memo, or title-only
   generation without a settled body) re-renders the input screen with the memo
-  intact and the message on top.
+  intact and the message on top. A viable title-only operation — a usable
+  settled body submitted with the memo — keeps that exact body and
+  `mode=titles`, so the corrected memo still regenerates titles only. Without a
+  usable body the screen falls back to `mode=full`, since there is nothing to
+  regenerate titles for. Neither case retries generation automatically.
 - An error after generation starts renders `error.html` while keeping the last
   input. A title-only failure also keeps the exact body and renders a
   `mode=titles` button labelled "Regenerate the titles only"; a full-generation
