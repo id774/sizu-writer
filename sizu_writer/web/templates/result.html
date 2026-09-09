@@ -28,7 +28,8 @@
 
   <section>
     <h2>Post body</h2>
-    <textarea id="post-body" lang="ja" readonly rows="24">{{ draft.body }}</textarea>
+    <textarea id="post-body" lang="ja" readonly rows="24"
+              data-auto-grow>{{ draft.body }}</textarea>
     <div class="buttons">
       <button type="button" data-copy-target="post-body">Copy the body</button>
     </div>
@@ -47,7 +48,7 @@
 
   <details>
     <summary>Memo</summary>
-    <textarea name="input_text" lang="ja" rows="8">{{ input_text }}</textarea>
+    <textarea name="input_text" lang="ja" rows="8" maxlength="{{ max_input_chars }}">{{ input_text }}</textarea>
   </details>
 
   <p class="meta">Model: {{ draft.model }} / Generated at: {{ draft.generated_at }}

@@ -152,7 +152,7 @@ Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values
 │       │   └── error.html          Error screen
 │       └── static/
 │           ├── style.css
-│           └── copy.js             Clipboard copying and nothing else
+│           └── copy.js             Progressive browser helpers for the Web screens
 ├── prompts/
 │   ├── system.md                   The policy for the body and the titles
 │   ├── body_user.md                The user message carrying the memo
@@ -465,8 +465,21 @@ into the current names.
 - `base.html` carries `index.html`, `result.html` and `error.html`, as in ai-digest.
 - The CSS uses system fonts only and makes no external request. A `max-width` and a single column serve both a phone and a desktop (requirement 10.4). One breakpoint, stacking the buttons on a narrow screen, is enough.
 - The page declares the light color scheme, and every foreground color it relies on is stated beside its background rather than left to a system color. A phone in dark appearance otherwise renders the form controls with its own colors, which is what put white button labels on the near-white button background.
-- The only JavaScript is `copy.js`. Generation and navigation work as plain HTML forms; with JavaScript disabled, nothing degrades except the copy buttons.
-- After the generate button is pressed, it is disabled and a waiting state is shown, to prevent a double submission (with JavaScript only; without it the submission still works).
+- The only JavaScript file is `copy.js`. Generation, regeneration and
+  navigation are plain HTML forms and links, and stay usable with JavaScript
+  disabled. What is JavaScript-only, and therefore lost without it, is the
+  copy buttons, the Clear button, the character count, the submit
+  disable/waiting state and the post body's automatic growth; the browser's
+  own scrolling and resizing of a `textarea` remain available regardless.
+- After a generation submit button is pressed, `copy.js` disables every submit
+  button in that form and shows a "Generating..." waiting state, to prevent a
+  double submission (with JavaScript only; without it the submission still
+  works). Because a disabled button's `name=value` is dropped from a form
+  submission, the clicked button's `mode` value is copied into a hidden field
+  before it is disabled, so the disable/waiting behavior does not change
+  whether a full or a title-only generation was requested. The first submit
+  still reaches the server as a native form submission; only a second submit
+  on the same form, while the first is still in flight, is suppressed.
 
 ### 7.2 Input screen (`/`)
 
@@ -474,7 +487,7 @@ into the current names.
 | --- | --- |
 | Page title | The name of the service and a one line description |
 | Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS` |
-| Character count | The current count and the limit (with JavaScript only; without it the server checks) |
+| Character count | The current memo length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` sets it on page load and on every `input` event, and resets it when Clear empties the field. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The count is a display only — it enforces nothing on its own; validation authority stays with the server. |
 | Generate button | `<button name="mode" value="full">` |
 | Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field; it empties the field and returns the focus |
 
@@ -487,11 +500,15 @@ From top to bottom. **What is posted and what merely supports it are separated v
 3. **Regenerate the titles**: `<button name="mode" value="titles">`, leaving the body as it is.
 4. **The post body**: a heading, then a `readonly` `<textarea>` holding the Markdown as it is.
    - `readonly` for three reasons: line breaks and Markdown are not lost to visual rendering; the text can be selected by hand when a copy button fails (requirement 9.3); and no label or explanation can slip in structurally (requirement 6.3).
-   - It grows with the content, to minimize scrolling.
+   - It grows with the content, to minimize scrolling: `copy.js` sets its
+     height to its `scrollHeight` on page load and recalculates it for every
+     field marked `data-auto-grow` on a viewport resize. JavaScript-only;
+     without it the fixed `rows="24"` and the browser's own scrolling and
+     resizing are the fallback.
 5. **Copy the body**: copies the value of the textarea only.
 6. **Notices**: outside the body area, below it. Empty means hidden.
 7. **Regenerate the whole draft**: `<button name="mode" value="full">`.
-8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input. Editing it and regenerating avoids a trip back to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
+8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
 9. **Supporting information**: the model name and the time of generation, in small type.
 
 What the result form carries for a regeneration:

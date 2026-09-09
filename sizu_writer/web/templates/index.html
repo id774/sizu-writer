@@ -6,7 +6,10 @@
   <input type="hidden" name="body" value="{{ body or '' }}">
   {% endif %}
   <label for="input_text">Memo</label>
-  <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
+  <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}"
+            aria-describedby="input-count"
+            data-character-count-target="input-count">{{ input_text or "" }}</textarea>
+  <p id="input-count" class="meta"></p>
   <div class="buttons">
     {% if mode == "titles" %}
     <button type="submit" name="mode" value="titles">Regenerate the titles only</button>

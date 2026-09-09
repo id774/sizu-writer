@@ -16,6 +16,8 @@ v1.0.3 (Release Date: TBD)
   during Markdown normalization.
 - Preserve title-only regeneration and its settled body when memo validation
   fails before generation.
+- Complete the designed Web character count, submit state, body auto-growth and
+  result memo length limit.
 
 v1.0.2 (2026-08-26)
 -------------------
