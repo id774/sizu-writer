@@ -58,6 +58,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.2 2026-09-10
+#       Refuse non-UTF-8 memo and body files without a traceback.
 #  v1.1 2026-09-06
 #       Refuse a non-finite --timeout and a whitespace-only --model
 #       instead of accepting them.
@@ -202,6 +204,9 @@ def main() -> int:
         # own, so the name alone reached the terminal and said nothing.
         logger.error("%s: %s", type(error).__name__,
                      str(error) or error.user_message)
+        return 1
+    except UnicodeDecodeError:
+        logger.error("Cannot read the input: the file is not valid UTF-8.")
         return 1
     except OSError as error:
         logger.error("Cannot read the input: %s", error)

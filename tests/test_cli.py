@@ -50,12 +50,16 @@
 #    - Require a body for the titles command.
 #    - Run the titles command with a settled body.
 #    - Refuse an empty or whitespace-only body file before a request is spent.
+#    - Refuse a memo file that is not valid UTF-8 without spending a request.
+#    - Refuse a body file that is not valid UTF-8 without spending a request.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-10
+#       Cover non-UTF-8 memo and body file refusal before generation.
 #  v1.2 2026-09-07
 #       Cover title-only body validation and the valid titles command.
 #  v1.1 2026-09-06
@@ -67,7 +71,9 @@
 
 import io
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import cli
@@ -286,6 +292,42 @@ class MainTest(unittest.TestCase):
                 self.assertIn(
                     "There is no post body to regenerate titles for.",
                     "\n".join(recorded.output))
+
+    def test_refuses_a_non_utf8_memo_file_without_spending_a_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "memo.txt")
+            path.write_bytes(b"\xff")
+
+            with self.assertLogs("cli", level="ERROR") as recorded:
+                status, stub = self.run_cli(
+                    "generate", "--input", str(path))
+
+        self.assertEqual(1, status)
+        stub.assert_not_called()
+        line = "\n".join(recorded.output)
+        self.assertIn("not valid UTF-8", line)
+        self.assertNotIn("0xff", line)
+
+    def test_refuses_a_non_utf8_body_file_without_spending_a_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory, "body.md")
+            path.write_bytes(b"\xff")
+
+            titles = mock.Mock(return_value=draft())
+            with mock.patch.dict("os.environ", ENVIRONMENT, clear=True):
+                with mock.patch.object(
+                        sys, "argv",
+                        ["cli.py", "titles", "--text", "a memo",
+                         "--body", str(path)]):
+                    with mock.patch.object(cli, "regenerate_titles", titles):
+                        with self.assertLogs("cli", level="ERROR") as recorded:
+                            status = cli.main()
+
+        self.assertEqual(1, status)
+        titles.assert_not_called()
+        line = "\n".join(recorded.output)
+        self.assertIn("not valid UTF-8", line)
+        self.assertNotIn("0xff", line)
 
 
 class ParserTest(unittest.TestCase):
