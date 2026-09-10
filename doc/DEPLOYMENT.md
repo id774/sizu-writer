@@ -191,9 +191,7 @@ with a sentence before or after the object is refused rather than trimmed.
 Change one compatibility setting at a time and test it with `cli.py generate`.
 Leave `GENERATION_TEMPERATURE` empty when the selected model rejects that parameter.
 Use `prompt-json` when the endpoint or the model rejects `response_format`.
-Keep the timeout order `GENERATION_TIMEOUT` < gunicorn < Apache `ProxyTimeout`,
-and remember that the innermost limit is spent once per attempt:
-`GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`.
+Keep the timeout order `GENERATION_TIMEOUT` < gunicorn < Apache `ProxyTimeout`. With retries enabled, up to `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)` is the timeout budget inside request attempts, not a wall-clock upper bound. Size the outer timeouts for that attempt budget plus SDK-controlled retry backoff or `Retry-After` waits and operational margin.
 
 ### Request budget
 

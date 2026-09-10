@@ -762,15 +762,14 @@ No message quotes a secret.
 | gunicorn `--timeout` | 240s |
 | Apache `ProxyTimeout` | 300s |
 
-With `GENERATION_MAX_RETRIES=0` one API call uses the innermost 120 seconds.
-Raising the retries changes the worst case:
+With `GENERATION_MAX_RETRIES=0` one API call has the innermost 120-second timeout and there is no retry wait. Raising the retries increases the time that can be spent inside request attempts:
 
 ```text
-worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
+request-attempt timeout budget =
+    GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
 ```
 
-The two outer timeouts have to stay outside that number, or a request is cut by
-Apache before Flask can render the error.
+The product counts only the timeout budget of the attempts. The SDK may additionally wait between attempts for retry backoff or an accepted `Retry-After`, so it is not a wall-clock upper bound. The gunicorn and Apache timeouts must cover the possible attempt time, those SDK-controlled retry waits and operational margin. Retry-delay constants are not duplicated here because they belong to the installed SDK version and the upstream response.
 
 ---
 
