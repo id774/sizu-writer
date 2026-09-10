@@ -89,8 +89,10 @@ The provider layer raises `InvalidResponseError` before an upstream answer
 reaches `sizu_writer/generator.py` when:
 
 - there is no choice in the response
+- `finish_reason` is missing, not a string or blank
 - `finish_reason` says the output limit was reached, meaning the body was cut
   off partway
+- the selected choice has no usable string content
 
 `sizu_writer/generator.py` then validates the returned content and raises
 `InvalidResponseError` when:
@@ -98,7 +100,7 @@ reaches `sizu_writer/generator.py` when:
 - the content does not parse as JSON, or parses as something other than an object
 - `body_markdown` is missing, not a string, or blank (checked on `generate` only)
 - `primary_title` is missing, not a string, or blank
-- `alternative_titles` is not a list, or holds a value that is not a string
+- `alternative_titles` is missing, is not a list, or holds a value that is not a string
 
 An empty `alternative_titles` is accepted; the requirement sets a maximum, not
 a minimum. Blank entries, duplicates and repeats of `primary_title` are dropped,
@@ -205,8 +207,8 @@ diff, and two simultaneous changes leave no way to say which one did it.
 while the development server runs takes effect on the next generation with no
 restart. Under gunicorn the same holds, since each request reads the files
 again; there is no cache to invalidate and no `PROMPT_RELOAD` setting to turn
-on. The cost is four small reads per generation, next to an API call that takes
-seconds.
+on. The cost is two small reads per generation operation — the system/user prompt
+pair for the selected mode — next to an API call that takes seconds.
 
 ## The Japanese in these files
 

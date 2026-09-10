@@ -21,10 +21,10 @@
 #  them by identity.
 #
 #  The log cases are part of the contract rather than an extra: a line
-#  records the shape of an exchange and never its content, and the
-#  elapsed seconds appear next to the limit on a success and on a
-#  timeout alike, because only that pair says whether the limit was
-#  reached or the connection died well short of it.
+#  records the shape of an exchange and never its content. The elapsed
+#  seconds appear next to the per-attempt timeout on success and
+#  failure; with retries enabled elapsed can cover several attempts and
+#  retry waits, so the pair is context rather than a cause classifier.
 #
 #  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -47,7 +47,7 @@
 #    - Send no temperature unless it is set, and send it when it is.
 #    - Never stream.
 #    - Normalize a well formed answer, including the usage counters.
-#    - Measure how long the one request took.
+#    - Record operation elapsed next to the per-attempt timeout setting.
 #    - Accept an answer that carries no usage.
 #    - Fall back to the configured model name when the answer names none.
 #    - Refuse an answer without a choice.
@@ -382,9 +382,9 @@ class LogTest(ProviderTest):
         self.assertIn("timeout=120.0", recorded)
 
     def test_records_the_wait_of_a_timeout_next_to_the_limit(self):
-        # Without the elapsed seconds a timeout line cannot say whether
-        # the limit was reached or the connection died well short of it,
-        # and only one of the two is answered by raising the limit.
+        # Keep operation elapsed next to the per-attempt timeout setting.
+        # With the fake SDK there is only one attempt; a real SDK call may
+        # include retries and waits when the configured retry count is nonzero.
         with self.assertLogs("sizu_writer.providers.openai_compatible",
                              level=logging.ERROR) as logged:
             with self.assertRaises(UpstreamTimeoutError):

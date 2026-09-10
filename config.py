@@ -53,9 +53,9 @@
 #      response_format, 'prompt-json' asks in the prompt alone.
 #      Defaults to prompt-json.
 #  - GENERATION_TIMEOUT
-#      Seconds allowed for one request. Defaults to 120, which is the
-#      time a whole post plus its titles takes on a shared endpoint;
-#      the answer is not streamed, so the wait is the generation.
+#      Seconds allowed for each SDK request attempt. Defaults to 120.
+#      SDK retries, when enabled, may add later attempts and waits
+#      between them to one generation operation.
 #  - GENERATION_MAX_RETRIES
 #      Retries left to the SDK. Defaults to 0, so that one operation
 #      spends one request on a plan that counts them.
@@ -76,7 +76,9 @@
 #      falls back to INFO; any other value is refused rather than read
 #      as INFO.
 #  - PORT
-#      Port of the development server and of gunicorn. Defaults to 8090.
+#      Port used by the development server and the Procfile gunicorn
+#      bind. Defaults to 8090; bundled deployment examples use explicit
+#      matching port values.
 #
 #  Version History:
 #  v1.3 2026-09-10
@@ -175,7 +177,7 @@ def _text(name: str, default: str) -> str:
 
 
 def _number(name: str, default: float) -> float:
-    """ Read a numeric setting, keeping the default on a bad value. """
+    """ Read a numeric setting, using the default only when it is blank. """
     raw = _text(name, "")
     if not raw:
         return default

@@ -140,15 +140,17 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. It must be an absolute `https` URL with a host, no embedded whitespace, and a port from 1 to 65535 when one is written explicitly. |
 | `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
 | `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
-| `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the outer timeouts described in [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
-| `GENERATION_MAX_RETRIES` | `0` | Retries the SDK may spend on one request. `0` spends exactly one; see [One action, one request](#one-action-one-request). |
+| `GENERATION_TIMEOUT` | `120` | Seconds allowed for each SDK request attempt. With retries disabled it is the only attempt in the generation operation; with retries enabled the SDK may make later attempts and wait between them. Raising it means revisiting the outer timeouts described in [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
+| `GENERATION_MAX_RETRIES` | `0` | Retry attempts the SDK may make after the initial endpoint request. `0` means one endpoint request per generation operation; see [One action, one request](#one-action-one-request). |
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field, enforced on the server as well as in the browser. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
-| `PORT` | `8090` | Port of the development server and of gunicorn. |
+| `PORT` | `8090` | Port used by `app.py`'s development server and by the `Procfile` gunicorn bind. The bundled systemd and Apache examples use explicit matching port values. |
+
+`PORT` does not rewrite the bundled systemd unit or Apache configuration. Those deployment examples deliberately carry explicit matching port values. When a deployment uses a port other than `8090`, change the gunicorn bind and the Apache upstream to the same chosen port as part of that deployment.
 
 A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. For `GENERATION_BASE_URL`, malformed URL syntax, a missing host, embedded whitespace and an invalid explicit port are refused before the SDK is constructed. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
@@ -431,7 +433,7 @@ Two cases are worth knowing by their log line rather than their screen:
 
 **`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
-**`generation failure: reference=- backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — the endpoint was still writing when the limit fired. Every line carries the seconds the request actually took next to the limit it was given, on a successful answer as well as a failed one, and the two together say what to do. Elapsed at the limit means the endpoint is slower than the time allowed: raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts, or pick a faster model. Elapsed well short of it means the connection died on the way, and raising the limit changes nothing. Successful lines are the early warning — an answer that took 110 of 120 seconds is the same event as the timeout that follows it, one run earlier.
+**`generation failure: reference=- backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — with the shipped `GENERATION_MAX_RETRIES=0`, `elapsed` is the wall-clock time around the one SDK request attempt and `timeout` is that attempt's configured limit. A successful run repeatedly approaching the limit is evidence that the configured margin is becoming small. When SDK retries are enabled, however, `elapsed` covers the whole SDK call and may include multiple request attempts and waits between them, while `timeout` remains the per-attempt setting. In that case the pair alone does not identify which attempt timed out or how much time was spent waiting between attempts.
 
 Shortening the memo is not the answer to this one, which is why the screen no longer suggests it. The wait is the answer being written, and a memo of one line asks for the same post as a long one.
 
@@ -524,7 +526,7 @@ The guide covers installation, TLS, reader restrictions, API compatibility and o
 │       │   └── error.html          error screen
 │       └── static/
 │           ├── style.css
-│           └── copy.js             clipboard copying and nothing else
+│           └── copy.js             progressive browser helpers for the Web screens
 ├── prompts/
 │   ├── system.md                   the policy for the body and the titles
 │   ├── body_user.md                the user message carrying the memo
@@ -582,11 +584,9 @@ Everything else — comments, log messages, screen text, error messages, prompt 
 
 Possible future extensions that are not part of the current implementation:
 
-- the space inserted between full width characters and ASCII (`BODY_ASCII_SPACING`)
 - the `json_schema` response format mode, for endpoints supporting Structured Outputs; `json-object` and `prompt-json` are the two modes that exist
 - a second backend in `providers/`; `openai-compatible` is the only one sizu-writer speaks
 - the `Origin` check on POST (`REQUIRE_SAME_ORIGIN`)
-- `LOG_PAYLOAD`, which would record the memo and the answer at DEBUG for prompt work
 - persistence of the generated drafts (requirement 11, a future extension)
 
 `PROMPT_RELOAD` is not a setting because no prompt cache exists. The prompts are read on every generation, so there is no cache behavior for such a setting to control.

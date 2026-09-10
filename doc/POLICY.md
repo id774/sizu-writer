@@ -118,7 +118,7 @@ The settings decide where a memo is sent, so they are read strictly.
   nothing to a run, lower that logger rather than raising the global level.
 - The screen shows `user_message` only. The cause, the endpoint, the model and
   the traceback stay in the log, next to the reference id shown to the user.
-- Do not log the memo or the generated text at the default level.
+- Do not log the memo, the prompts or the generated text at any level.
 
 ### 1.5 Control Flow Rules
 - Reserve `sys.exit` for the process entry point. Commands and helpers return
@@ -250,9 +250,10 @@ finally intended, and merges as if it had been written that way.
   back to, because a post written by a fallback prompt would be
   indistinguishable from one written by the intended prompt.
 - Post processing is mechanical and changes no meaning: an outer code fence, a
-  heading level, an excess of blank lines, the spacing between full width
-  characters and ASCII. A problem with how the post reads is solved in the
-  prompts.
+  heading level and an excess of blank lines. The required spacing between a
+  full width character and adjacent ASCII alphanumerics belongs to the prompt
+  policy; the formatter does not insert it. A problem with how the post reads
+  is solved in the prompts.
 - An inspection that finds a forbidden formula, or a phrase that reads as a
   remark about the work, reports it and rewrites nothing. Handing the finding
   to the person is closer to what this system is for than breaking a sentence

@@ -291,15 +291,17 @@ by it.
 | `GENERATION_BASE_URL` | yes | none | Base URL. Required so that no endpoint is implied |
 | `GENERATION_MODEL` | yes | none | Model name as the endpoint spells it |
 | `GENERATION_RESPONSE_MODE` | no | `prompt-json` | `json-object` or `prompt-json` |
-| `GENERATION_TIMEOUT` | no | `120` | Seconds for one request, which is the whole generation |
-| `GENERATION_MAX_RETRIES` | no | `0` | Retries left to the SDK |
+| `GENERATION_TIMEOUT` | no | `120` | Seconds for each SDK request attempt |
+| `GENERATION_MAX_RETRIES` | no | `0` | Retry attempts the SDK may make after the initial request |
 | `GENERATION_TEMPERATURE` | no | not sent | Sent only when set |
 | `MAX_OUTPUT_TOKENS` | no | `6000` | Upper bound of one answer |
 | `MAX_INPUT_CHARS` | no | `4000` | Upper bound of the input field |
 | `MAX_ALT_TITLES` | no | `4` | Alternative titles kept |
 | `PROMPT_DIR` | no | `prompts` | Where the prompts live |
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
-| `PORT` | no | `8090` | Port of the development server and of gunicorn |
+| `PORT` | no | `8090` | Development-server and Procfile gunicorn port; bundled deployment examples use explicit matching values |
+
+`PORT` does not interpolate into `deploy/sizu-writer.service` or `deploy/sizu-writer.conf`. Those examples use explicit matching ports by design; an operator choosing another deployment port changes both examples consistently.
 
 ### 8.2 Sakura AI Engine
 
@@ -672,23 +674,28 @@ request_id=... model=... finish_reason=... prompt_tokens=... completion_tokens=.
 total_tokens=... elapsed=... timeout=...
 ```
 
-`elapsed` is the seconds one request took, measured on this side around the
-create() call and rounded to a tenth. It is recorded on a successful answer as
-well, because an answer that arrived in almost the whole of `GENERATION_TIMEOUT`
-is the timeout of the next run, seen one run earlier.
+`elapsed` is the wall-clock time measured on this side around the SDK
+`create()` call and rounded to a tenth. With `GENERATION_MAX_RETRIES=0` it
+covers the single request attempt. With retries enabled it may include several
+request attempts and SDK-controlled waits between them. `GENERATION_TIMEOUT`
+remains the timeout setting for each attempt, so the two fields are not the
+same kind of bound when retries are enabled.
 
 Never recorded, at any level: the API token, the memo, the generated body, the
 titles, the prompts, the `Authorization` header and the answer itself.
 
 ### 13.2 ERROR
 
-One line per failed request, carrying the request reference, the backend, the
-endpoint host, the model, the SDK exception type, the HTTP status, the
-endpoint's request id, the seconds the request took and the timeout it was
-given. The last two decide what to do with a timeout: elapsed at the limit is
-an endpoint slower than the time allowed, elapsed well short of it is a
-connection lost on the way, and only the first is answered by raising the
-limit.
+One line per failed provider operation, carrying the request reference, the
+backend, the endpoint host, the model, the SDK exception type, the HTTP status,
+the endpoint's request id, the elapsed seconds around the SDK call and the
+per-attempt timeout setting.
+
+With the shipped zero-retry default, elapsed close to the timeout is useful
+evidence that the single attempt had little margin. With retries enabled,
+elapsed may also contain earlier attempts and retry waits, so the pair alone
+does not identify the failing attempt or distinguish endpoint slowness from a
+connection failure.
 
 The request reference comes from `sizu_writer/diagnostics.py`. For a request
 made through the Web application it is the same id `app.py` shows on the
@@ -776,9 +783,11 @@ The product counts only the timeout budget of the attempts. The SDK may addition
 ## 16. Security
 
 - `.env` holds the token, is mode `600`, and is not in Git.
-- `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and `GENERATION_MODEL` appear in
-  no HTML, JavaScript, hidden input, cookie, response header, error page or
-  copyable area.
+- `GENERATION_API_TOKEN` and `GENERATION_BASE_URL` appear in no HTML,
+  JavaScript, hidden input, cookie, response header, error page or copyable
+  area. The model name is not a credential: `Draft.model` is shown on the
+  result page as supporting information, while error pages still do not expose
+  it.
 - The endpoint comes from the server environment only. No form field names a
   URL, so there is no path by which someone could have the server relay a
   request to a service of their choosing.
