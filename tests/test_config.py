@@ -52,6 +52,10 @@
 #    - Refuse a missing, plain http or relative base URL.
 #    - Refuse a base URL carrying user information or a query.
 #    - Refuse a base URL that already holds the resource path.
+#    - Refuse malformed base URL syntax as a ConfigError.
+#    - Refuse a base URL without a host or with embedded whitespace.
+#    - Refuse an empty, zero, non-numeric or out-of-range explicit base URL port.
+#    - Accept valid explicit ports and IPv6 endpoint hosts.
 #    - Refuse a missing model.
 #    - Keep the token out of every refusal message.
 #    - Accept a documented LOG_LEVEL, and normalize its case.
@@ -64,6 +68,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-10
+#       Cover malformed base URL syntax, hosts, ports and whitespace.
 #  v1.2 2026-09-06
 #       Cover the accepted LOG_LEVEL values and the refusal of an unknown one.
 #  v1.1 2026-08-19
@@ -299,6 +305,48 @@ class ValidateGenerationConfigTest(unittest.TestCase):
             generation_base_url="https://api.ai.sakura.ad.jp/v1/chat/completions")
 
         self.assertIn("/chat/completions", message)
+
+    def test_refuses_malformed_base_url_syntax_as_config_error(self):
+        message = self.refuse(generation_base_url="https://[2001:db8::1/v1")
+
+        self.assertIn("GENERATION_BASE_URL", message)
+        self.assertIn("malformed", message)
+
+    def test_refuses_a_base_url_without_a_host(self):
+        message = self.refuse(generation_base_url="https://:443/v1")
+
+        self.assertIn("GENERATION_BASE_URL", message)
+        self.assertIn("valid host", message)
+
+    def test_refuses_a_base_url_with_embedded_whitespace(self):
+        for value in ("https://api example.net/v1",
+                      "https://api.example.net/v1\nextra"):
+            with self.subTest(value=value):
+                message = self.refuse(generation_base_url=value)
+
+                self.assertIn("embedded whitespace", message)
+
+    def test_refuses_an_invalid_base_url_port(self):
+        for value in ("https://api.example.net:/v1",
+                      "https://api.example.net:0/v1",
+                      "https://api.example.net:abc/v1",
+                      "https://api.example.net:70000/v1"):
+            with self.subTest(value=value):
+                message = self.refuse(generation_base_url=value)
+
+                self.assertIn("GENERATION_BASE_URL", message)
+                self.assertIn("port from 1 to 65535", message)
+
+    def test_accepts_valid_base_url_hosts_and_ports(self):
+        for value in ("https://api.example.net:443/v1",
+                      "https://api.example.net:8443/v1",
+                      "https://192.0.2.10:8443/v1",
+                      "https://[2001:db8::1]/v1",
+                      "https://[2001:db8::1]:8443/v1"):
+            with self.subTest(value=value):
+                self.assertIsNone(
+                    config.validate_generation_config(
+                        self.config(generation_base_url=value)))
 
     def test_refuses_a_missing_model(self):
         self.assertIn("GENERATION_MODEL", self.refuse(generation_model=""))

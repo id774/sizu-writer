@@ -43,8 +43,8 @@
 #      Engine issues it as '<UUID>:<secret>'.
 #  - GENERATION_BASE_URL
 #      Base URL of the endpoint, including the version path and without
-#      the resource name. Required, and https only, so that no request
-#      ever leaves for an endpoint nobody named.
+#      the resource name. Required: an absolute https URL with a host,
+#      no embedded whitespace, and a port from 1 to 65535 when given.
 #  - GENERATION_MODEL
 #      Model used for generation. Required; no default is shipped,
 #      because the available models differ per endpoint.
@@ -79,6 +79,8 @@
 #      Port of the development server and of gunicorn. Defaults to 8090.
 #
 #  Version History:
+#  v1.3 2026-09-10
+#       Refuse malformed generation base URLs before they reach the client.
 #  v1.2 2026-09-06
 #       Refuse an unsupported LOG_LEVEL instead of falling back to INFO.
 #  v1.1 2026-08-19
@@ -283,7 +285,15 @@ def _validate_base_url(url: str) -> None:
     if not url:
         raise ConfigError("GENERATION_BASE_URL is required.")
 
-    parts = urlsplit(url)
+    if any(character.isspace() for character in url):
+        raise ConfigError(
+            "GENERATION_BASE_URL must not contain embedded whitespace.")
+
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        raise ConfigError("GENERATION_BASE_URL is malformed.")
+
     if parts.scheme == "http":
         raise ConfigError("GENERATION_BASE_URL must use https.")
     if parts.scheme != "https" or not parts.netloc:
@@ -296,6 +306,20 @@ def _validate_base_url(url: str) -> None:
     if parts.query or parts.fragment:
         raise ConfigError(
             "GENERATION_BASE_URL must not carry a query or a fragment.")
+
+    try:
+        hostname = parts.hostname
+        port = parts.port
+    except ValueError:
+        raise ConfigError(
+            "GENERATION_BASE_URL must have a valid host and a port from "
+            "1 to 65535 when a port is given.")
+
+    if not hostname or parts.netloc.endswith(":") or port == 0:
+        raise ConfigError(
+            "GENERATION_BASE_URL must have a valid host and a port from "
+            "1 to 65535 when a port is given.")
+
     if parts.path.rstrip("/").endswith(RESOURCE_SUFFIX):
         raise ConfigError(
             "GENERATION_BASE_URL must not end with {0}; the SDK appends "
