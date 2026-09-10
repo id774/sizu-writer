@@ -12,7 +12,7 @@
 #  error page shown for the same request carry the same id without
 #  either layer importing the other.
 #
-#  Author: id774 (More info: http://id774.net)
+#  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
 #  License: The GPL version 3, or LGPL version 3 (Dual License).
 #  Contact: idnanashi@gmail.com

@@ -20,7 +20,7 @@
 #  it — or the answer is refused. An endpoint that explains itself first
 #  is misconfigured, and reading past the explanation would hide that.
 #
-#  Author: id774 (More info: http://id774.net)
+#  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
 #  License: The GPL version 3, or LGPL version 3 (Dual License).
 #  Contact: idnanashi@gmail.com

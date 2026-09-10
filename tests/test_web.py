@@ -26,7 +26,7 @@
 #  progressive helper hooks onto, and the source of the helper itself. It
 #  does not run a JavaScript engine.
 #
-#  Author: id774 (More info: http://id774.net)
+#  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
 #  License: The GPL version 3, or LGPL version 3 (Dual License).
 #  Contact: idnanashi@gmail.com
