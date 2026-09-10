@@ -24,7 +24,7 @@
 #      /generate    generate a body and titles, or titles only
 #      /healthz     liveness probe; it calls no API
 #
-#  Author: id774 (More info: http://id774.net)
+#  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
 #  License: The GPL version 3, or LGPL version 3 (Dual License).
 #  Contact: idnanashi@gmail.com
