@@ -223,7 +223,7 @@ Neither mode digs an object out of surrounding prose. An answer with a sentence 
 | One SDK retry | 1 more |
 | A resubmission in the browser | 1 each |
 
-Raising the retries is a deliberate choice, and it also multiplies the worst case wait; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other).
+Raising the retries is a deliberate choice. Each retry adds another `GENERATION_TIMEOUT` attempt budget, and the SDK may also wait between attempts; see [Timeouts that agree with each other](#timeouts-that-agree-with-each-other).
 
 Local counts are an estimate, not a ledger. A connection dropped at the wrong moment leaves it unknowable on this side whether the service accepted the request, and no monthly counter is written to disk, because the server holds no state. The endpoint's own control panel is the record.
 
@@ -237,16 +237,18 @@ The request path has nested timeouts, and they widen outwards:
 | gunicorn `--timeout` | 240s | the systemd unit, or the `Procfile` |
 | Apache `ProxyTimeout` | 300s | the virtual host |
 
-Raising `GENERATION_TIMEOUT` means raising the gunicorn and Apache timeouts. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. Keep the order intact and the innermost timeout is always the one that fires.
+Raising `GENERATION_TIMEOUT` means raising the gunicorn and Apache timeouts. A request cut off by Apache never reaches the error handling of Flask: the person sees a bare 504 from the proxy instead of the message the application would have shown, and the log carries no reference id to look up. With zero retries, the shipped `120 < 240 < 300` ordering lets the generation timeout fire before either outer layer. When retries are enabled, the outer timeouts must also cover the later attempts and the SDK's waits between them.
 
-Retries widen the same window, because the SDK spends the timeout again on each one:
+Retries widen the same window because the SDK may spend the timeout again on each attempt. The timeout budget inside request attempts is:
 
 ```text
-worst case wait = GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
+request-attempt timeout budget =
+    GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
 ```
 
-At the default of zero retries that is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes it 360, which is already outside the gunicorn
-and Apache limits, so those limits move with it.
+That product is not a wall-clock upper bound. The SDK may also wait between attempts for retry backoff or an accepted `Retry-After`, so total elapsed time can be longer. The exact retry delay is owned by the installed SDK version and by the upstream response, and is not duplicated here as a fixed constant.
+
+At the default of zero retries there is no retry wait, so the attempt budget is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes the attempt budget alone 360 seconds, already outside both shipped outer limits before any retry wait is counted. Raise the outer timeouts further to cover retry waits and operational margin as well.
 
 **Why the innermost one is 120 and not 60.** The request is not streamed: the client waits until the last character of the answer exists, so `GENERATION_TIMEOUT` is not a limit on the network but on the writing. What decides that wait is the length of the answer and the speed of the endpoint — a whole post of a few paragraphs plus five titles, from a model that may be sharing its hardware with everyone else on a free plan. The memo is a few dozen tokens of a prompt of a few thousand, so a one line memo and a four thousand character one ask for almost the same work. At 60 seconds that put ordinary generations on the wrong side of the limit and reported them as the person's fault. If your endpoint answers faster, lowering it again is a change to `.env` alone.
 

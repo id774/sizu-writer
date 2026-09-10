@@ -118,7 +118,7 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 | gunicorn | `--timeout` | 240s | Room above the default single client request; raising retries requires revisiting this value |
 | Apache | `ProxyTimeout` | 300s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values, because the worst case wait is `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)`. The default is 0 retries, so 120 seconds sits comfortably inside gunicorn's 240. The README states this dependency in its deployment section.
+Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values. Up to `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)` seconds may be spent inside the request attempts themselves, and the SDK may additionally wait between attempts for retry backoff or an accepted `Retry-After`. The product is therefore the request-attempt timeout budget, not a wall-clock upper bound. With the default of 0 retries there is no retry wait, so 120 seconds sits comfortably inside gunicorn's 240. The exact SDK retry-delay constants are dependency-owned behavior and are not duplicated in this design.
 
 ---
 
