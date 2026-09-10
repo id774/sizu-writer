@@ -18,6 +18,7 @@ v1.0.3 (Release Date: TBD)
   fails before generation.
 - Complete the designed Web character count, submit state, body auto-growth and
   result memo length limit.
+- Refuse generation responses that omit the required alternative_titles field.
 
 v1.0.2 (2026-08-26)
 -------------------
