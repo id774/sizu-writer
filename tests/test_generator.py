@@ -7,7 +7,7 @@
 #  Description:
 #  This test suite covers the generation core: building a Draft from a
 #  CompletionResult, applying the title limit, and refusing an answer
-#  that does not carry a body and a leading title.
+#  that does not carry the required body and title fields.
 #
 #  It also pins what each response mode accepts. json-object trusts the
 #  API to have enforced the shape and reads the whole answer, while
@@ -39,6 +39,8 @@
 #    - Refuse an answer that is JSON but not an object.
 #    - Refuse an answer without a body.
 #    - Refuse an answer without a leading title.
+#    - Refuse an answer without alternative_titles.
+#    - Accept an explicitly empty alternative_titles list.
 #    - Read a raw object in both response modes.
 #    - Unwrap a single fenced block under prompt-json, with or without an info string.
 #    - Refuse a fenced block under json-object, where a fence means the API did not comply.
@@ -47,6 +49,7 @@
 #    - Extract no JSON fragment out of a larger answer.
 #    - Keep the body it was given when only the titles are regenerated.
 #    - Refuse title regeneration without a settled body before building messages.
+#    - Refuse title regeneration when the answer omits alternative_titles.
 #    - Keep the exact settled body while regenerating titles.
 #    - Read a fenced answer under prompt-json when regenerating titles.
 #    - Spend exactly one request through the configured provider.
@@ -56,6 +59,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-10
+#       Cover the required alternative_titles field in both generation modes.
 #  v1.1 2026-09-07
 #       Cover blank-body refusal and exact body preservation for title regeneration.
 #  v1.0 2026-08-05
@@ -140,6 +145,21 @@ class GenerateDraftTest(unittest.TestCase):
     def test_refuses_an_answer_without_a_primary_title(self):
         with self.assertRaises(InvalidResponseError):
             self.generate(answer(dict(BODY, primary_title="")))
+
+    def test_refuses_an_answer_without_alternative_titles(self):
+        payload = dict(BODY)
+        del payload["alternative_titles"]
+
+        with self.assertLogs("sizu_writer.generator", level="ERROR") as recorded:
+            with self.assertRaises(InvalidResponseError):
+                self.generate(answer(payload))
+
+        self.assertIn("alternative_titles", "\n".join(recorded.output))
+
+    def test_accepts_an_empty_alternative_titles_list(self):
+        draft = self.generate(answer(dict(BODY, alternative_titles=[])))
+
+        self.assertEqual([], draft.alternative_titles)
 
 
 class ResponseModeTest(unittest.TestCase):
@@ -227,6 +247,16 @@ class RegenerateTitlesTest(unittest.TestCase):
 
                 messages.assert_not_called()
                 complete.assert_not_called()
+
+    def test_refuses_an_answer_without_alternative_titles(self):
+        result = answer({"primary_title": "A new leading title"})
+
+        with mock.patch.object(generator, "build_titles_messages",
+                               return_value=[]):
+            with mock.patch.object(generator, "_complete", return_value=result):
+                with self.assertRaises(InvalidResponseError):
+                    generator.regenerate_titles(
+                        "a memo", "The settled body", settings())
 
     def test_reads_a_fenced_answer_under_prompt_json(self):
         result = answer('```json\n{"primary_title": "A new leading title", '

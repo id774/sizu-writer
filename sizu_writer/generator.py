@@ -30,6 +30,8 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v1.2 2026-09-10
+#       Require alternative_titles to be present in generation responses.
 #  v1.1 2026-09-07
 #       Refuse title regeneration without a settled body before a request.
 #  v1.0 2026-08-05
@@ -115,7 +117,11 @@ def _titles(payload: Dict[str, Any], config: Config) -> List[str]:
         logger.error("The answer has no usable primary_title")
         raise InvalidResponseError()
 
-    others = payload.get("alternative_titles", [])
+    if "alternative_titles" not in payload:
+        logger.error("The answer has no alternative_titles")
+        raise InvalidResponseError()
+
+    others = payload["alternative_titles"]
     if not isinstance(others, list):
         logger.error("alternative_titles is not a list")
         raise InvalidResponseError()
