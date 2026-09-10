@@ -33,12 +33,16 @@
 #    - Replace template-origin {{input}} and {{body}} without rescanning
 #      either value, keeping an unknown placeholder literal.
 #    - Refuse a blank prompt before generation reaches the provider.
+#    - Refuse a prompt file that is not valid UTF-8.
+#    - Refuse a non-UTF-8 prompt before generation reaches the provider.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.1 2026-09-10
+#       Cover non-UTF-8 prompt refusal before generation.
 #  v1.0 2026-09-08
 #       Initial release.
 #
@@ -115,6 +119,22 @@ class LoadPromptTest(unittest.TestCase):
         self.assertIn(path, line)
         self.assertIn("empty or blank", line)
 
+    def test_refuses_a_prompt_that_is_not_valid_utf8(self):
+        with tempfile.TemporaryDirectory() as prompt_dir:
+            path = str(Path(prompt_dir, "system.md"))
+            Path(path).write_bytes(b"\xff")
+
+            with self.assertLogs(
+                    "sizu_writer.prompts", level="ERROR") as recorded:
+                with self.assertRaises(InternalError) as refused:
+                    prompts.load_prompt("system.md", prompt_dir)
+
+        line = "\n".join(recorded.output)
+        self.assertIn(path, line)
+        self.assertIn("not valid UTF-8", line)
+        self.assertNotIn("0xff", line)
+        self.assertIn("not valid UTF-8", str(refused.exception))
+
 
 class BodyMessagesTest(unittest.TestCase):
 
@@ -183,6 +203,19 @@ class GenerationBoundaryTest(unittest.TestCase):
                             generator.generate_draft("a memo", config)
 
                 complete.assert_not_called()
+
+    def test_refuses_a_non_utf8_prompt_before_the_request_boundary(self):
+        with tempfile.TemporaryDirectory() as prompt_dir:
+            Path(prompt_dir, "system.md").write_bytes(b"\xff")
+            Path(prompt_dir, "body_user.md").write_text(
+                "{{input}}", encoding="utf-8")
+            config = Config(prompt_dir=prompt_dir)
+
+            with mock.patch.object(generator, "_complete") as complete:
+                with self.assertRaises(InternalError):
+                    generator.generate_draft("a memo", config)
+
+        complete.assert_not_called()
 
 
 if __name__ == "__main__":

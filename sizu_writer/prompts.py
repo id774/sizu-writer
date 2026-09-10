@@ -25,6 +25,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-10
+#       Refuse prompt files that cannot be decoded as UTF-8.
 #  v1.1 2026-09-08
 #       Refuse blank prompt files and preserve replacement text literally.
 #  v1.0 2026-08-04
@@ -48,6 +50,10 @@ def load_prompt(name: str, prompt_dir: str) -> str:
     try:
         with open(path, encoding="utf-8") as handle:
             text = handle.read().strip()
+    except UnicodeDecodeError:
+        logger.error("The prompt file is not valid UTF-8: %s", path)
+        raise InternalError(
+            "prompt file is not valid UTF-8: {0}".format(path))
     except OSError as error:
         logger.error("Cannot read the prompt file %s: %s", path, error)
         raise InternalError("prompt file missing: {0}".format(path))
