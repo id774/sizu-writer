@@ -407,9 +407,13 @@ subclass of `ValueError`.
 | `GENERATION_BASE_URL` | present, and a usable base URL |
 | `GENERATION_MODEL` | present |
 
-A base URL is refused when it uses `http`, is not absolute, carries user
-information, carries a query or a fragment, or ends with `/chat/completions` —
-the SDK appends the resource path itself.
+A base URL is refused when it is empty, contains embedded whitespace, cannot be
+parsed as a URL, uses `http`, is not an absolute `https` URL, has no host,
+carries user information, carries a query or a fragment, has an empty, zero,
+non-numeric or out-of-range explicit port, or ends with `/chat/completions` —
+the SDK appends the resource path itself. URL parsing and host/port parsing
+failures are converted to `ConfigError`; a raw parser `ValueError` does not
+escape configuration validation.
 
 `LOG_LEVEL` is matched case-insensitively against `CRITICAL`, `FATAL`,
 `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG` and `NOTSET`. An unset, empty or

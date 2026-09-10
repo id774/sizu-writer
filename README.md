@@ -137,7 +137,7 @@ All settings are read from environment variables, optionally through `.env`, and
 |---|---|---|
 | `GENERATION_BACKEND` | **required** | Wire protocol of the endpoint. `openai-compatible` is the only value this version accepts; an unknown one is refused rather than read as the default. |
 | `GENERATION_API_TOKEN` | **required** | API key or Bearer token of the endpoint. A missing token is reported to the log and to the operator, never to the screen. |
-| `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. `https` only. |
+| `GENERATION_BASE_URL` | **required** | Base URL of the endpoint, including the version path and stopping before the resource name. It must be an absolute `https` URL with a host, no embedded whitespace, and a port from 1 to 65535 when one is written explicitly. |
 | `GENERATION_MODEL` | **required** | Model used for generation. No default is shipped: the available models differ per endpoint and change over time. |
 | `GENERATION_RESPONSE_MODE` | `prompt-json` | How a structured answer is asked for: `json-object` or `prompt-json`. See [Asking for JSON](#asking-for-json). |
 | `GENERATION_TIMEOUT` | `120` | Seconds allowed for one request, which is the whole generation: nothing is streamed. Raising it means revisiting the outer timeouts described in [Timeouts that agree with each other](#timeouts-that-agree-with-each-other). |
@@ -150,13 +150,13 @@ All settings are read from environment variables, optionally through `.env`, and
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
 | `PORT` | `8090` | Port of the development server and of gunicorn. |
 
-A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
+A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. For `GENERATION_BASE_URL`, malformed URL syntax, a missing host, embedded whitespace and an invalid explicit port are refused before the SDK is constructed. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
 `GENERATION_API_TOKEN` deliberately has no command line option: a command line is readable by every user of the host, through `ps`. The token stays in the environment or in `.env`. `GENERATION_BASE_URL` has none either, for a different reason — the endpoint is a decision of the deployment, not of an invocation.
 
 ### Choosing an endpoint
 
-Any service speaking the OpenAI compatible Chat Completions API works. The base URL includes the version path and stops before `/chat/completions`, which the SDK appends itself; a URL that already carries it is refused at startup.
+Any service speaking the OpenAI compatible Chat Completions API works. The base URL includes the version path and stops before `/chat/completions`, which the SDK appends itself; a URL that already carries it is refused at startup. The URL must also have a valid host and, when a port is written explicitly, a port from 1 to 65535.
 
 **Sakura AI Engine.** The token is the account token issued in the control panel, shaped `<UUID>:<secret>`; paste the whole string, colon included.
 
