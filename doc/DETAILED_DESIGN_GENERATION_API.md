@@ -586,10 +586,10 @@ check and is kept as itself on the `CompletionResult`.
 
 1. Assemble the messages for a body or for titles.
 2. Call `GenerationProvider.complete()` once.
-3. Read the JSON object out of the answer.
-4. Validate the fields and their types.
-5. Normalize the body mechanically.
-6. Return a `Draft`.
+3. Read the whole answer as the JSON object allowed by the configured response mode.
+4. For body generation, validate the raw `body_markdown`, normalize it mechanically, and refuse it if normalization leaves no usable body.
+5. Validate the title fields, including the required `alternative_titles` list, then drop blank and duplicate candidates and keep at most `MAX_ALT_TITLES`.
+6. Return a `Draft`; title regeneration keeps the already settled body unchanged.
 
 It handles no HTTP client, no authentication, no base URL and no SDK exception.
 
@@ -660,10 +660,13 @@ Body generation asks for:
 
 Title regeneration asks for the same object without `body_markdown`.
 
-The existing validation is unchanged: a non-empty body, a non-empty primary
-title, a list of strings for the alternatives, duplicates and blanks dropped,
-`MAX_ALT_TITLES` of the rest kept, and the body left exactly as it was when
-only the titles are regenerated.
+Body generation first requires raw `body_markdown` to be a non-empty string,
+then runs the mechanical body normalization and refuses the answer again if
+nothing usable remains. Both generation modes require a non-empty
+`primary_title` and the `alternative_titles` field itself; that field must be a
+list containing strings only. Blank alternatives, duplicates and repeats of the
+primary title are dropped, and at most `MAX_ALT_TITLES` are kept. Title
+regeneration does not normalize or rewrite the already settled body.
 
 ---
 
