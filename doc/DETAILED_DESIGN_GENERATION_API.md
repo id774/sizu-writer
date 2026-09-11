@@ -601,6 +601,11 @@ def _payload(content: str, response_mode: str) -> Dict[str, Any]
 
 Under `json-object`, `json.loads()` is applied to the whole answer.
 
+Both modes use standard JSON syntax. Python's decoder extensions `NaN`,
+`Infinity` and `-Infinity` are refused through `parse_constant`; accepting
+them merely because the standard-library decoder recognizes them would widen
+the endpoint contract beyond JSON.
+
 Under `prompt-json`, one of two shapes is accepted:
 
 1. the whole answer is the object, or

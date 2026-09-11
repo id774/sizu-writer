@@ -31,7 +31,7 @@
 #
 #  Version History:
 #  v1.3 2026-09-11
-#       Refuse generated bodies that become empty during normalization.
+#       Refuse non-standard JSON constants and bodies emptied by normalization.
 #  v1.2 2026-09-10
 #       Require alternative_titles to be present in generation responses.
 #  v1.1 2026-09-07
@@ -94,6 +94,11 @@ def _unwrap_fence(content: str) -> str:
     return inner.strip()
 
 
+def _reject_non_json_constant(_value: str) -> None:
+    """ Refuse a numeric token that is not part of standard JSON. """
+    raise ValueError("non-standard JSON constant")
+
+
 def _payload(content: str, response_mode: str) -> Dict[str, Any]:
     """ Read the JSON object carried by the answer. """
     text = content.strip()
@@ -101,7 +106,10 @@ def _payload(content: str, response_mode: str) -> Dict[str, Any]:
         text = _unwrap_fence(text)
 
     try:
-        payload = json.loads(text)
+        payload = json.loads(
+            text,
+            parse_constant=_reject_non_json_constant,
+        )
     except ValueError as error:
         logger.error("The answer is not readable as JSON: %s", error)
         raise InvalidResponseError()
