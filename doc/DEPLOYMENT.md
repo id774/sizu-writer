@@ -49,7 +49,7 @@ Set `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and
 None of them has a default, and the service refuses to start without them.
 The shipped example is filled in for Sakura AI Engine except for the token and
 the model; the README lists worked examples for other endpoints.
-Keep `PORT=8090` unless both deployment examples are changed to the same port.
+`PORT` configures the development server and the `Procfile`; it does not rewrite the bundled systemd or Apache examples. Those two deployment files deliberately use explicit matching `8090` values. Keep `PORT=8090` when using them as shipped, or change the gunicorn bind and Apache upstream to the same chosen port before enabling the deployment.
 
 The legacy `OPENAI_*` variables are refused. Check that none survives in the
 unit's `EnvironmentFile`, in the service account's shell profile or in the
@@ -69,7 +69,9 @@ endpoint together. A `Draft` is the success condition, not an HTTP 200.
 ## Start the application
 
 Review `deploy/sizu-writer.service` before copying it.
-Its user, paths, port and timeouts must match the installation and `.env`.
+Its user and paths must match the installation. Its explicit gunicorn bind port
+must match the Apache upstream and the deployment's intended `PORT`; the
+bundled examples use `8090` on both sides.
 
 ```sh
 sudo cp deploy/sizu-writer.service /etc/systemd/system/

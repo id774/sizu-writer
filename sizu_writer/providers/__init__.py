@@ -54,12 +54,15 @@ class CompletionResult:
     """
     One answer, normalized away from the client that produced it.
 
-    Only content is required. A compatible endpoint may report no usage
+    A successful result from the shipped provider carries usable content
+    and a usable finish reason. A compatible endpoint may report no usage
     and no request id, and a draft is still usable without them, so a
     missing count is carried as None rather than treated as a failure.
 
-    elapsed_seconds is measured on this side rather than read from the
-    answer, so it is present whatever the endpoint reports.
+    elapsed_seconds is measured on this side around the provider's SDK
+    call rather than read from the answer. When SDK retries are enabled
+    it may therefore include multiple request attempts and waits between
+    them.
     """
 
     content: str
@@ -76,11 +79,13 @@ class GenerationProvider(Protocol):
     """
     The interface generator.py depends on.
 
-    A provider turns a message list into a CompletionResult, spending
-    exactly one request, and raises the Upstream* errors of
-    sizu_writer.errors for a failure the user may be told about. It
-    never inspects the JSON inside the answer: what a body and its
-    titles have to look like is not a property of the wire protocol.
+    A provider turns a message list into a CompletionResult through one
+    provider operation and raises the Upstream* errors of
+    sizu_writer.errors for a failure the user may be told about. A
+    provider may delegate configured retries to its client, so one
+    complete() call is not promised to equal one HTTP request. It never
+    inspects the JSON inside the answer: what a body and its titles have
+    to look like is not a property of the wire protocol.
     """
 
     def complete(self, messages: List[Dict[str, str]],
@@ -129,11 +134,11 @@ def log_response(config: Config, result: CompletionResult) -> None:
     the log at every level. What is left is what an operator needs to
     match a run against the usage counted by the provider.
 
-    The elapsed seconds are part of that shape. A run that succeeded in
-    almost the whole of GENERATION_TIMEOUT is the same event as the
-    timeout that follows it, seen one moment earlier, and only a log
-    that records the successful ones can show that the margin was
-    already gone.
+    The elapsed seconds are part of that shape. They measure the whole
+    provider SDK call. With retries disabled they can be compared directly
+    with the per-attempt GENERATION_TIMEOUT as an operational margin; with
+    retries enabled they may include several attempts and retry waits, so
+    the pair alone does not describe one attempt.
     """
     logger.info(
         "generation response: backend=%s endpoint_host=%s request_id=%s "

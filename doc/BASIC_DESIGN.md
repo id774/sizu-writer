@@ -399,7 +399,7 @@ The Flask application. Four routes.
   Missing or unrecognized `mode` keeps the existing full-generation behavior,
   while a missing or blank title body is refused by the generation core.
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
-- `SizuWriterError` is caught by an `errorhandler` and drawn on `error.html` (or in the error area of the result screen) as `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- `SizuWriterError` is caught by an `errorhandler`. A correctable 400 response is rendered on `index.html`; other known application errors are rendered on `error.html`, each with `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
 - A generation error preserves the recognized operation. A title-only failure
   passes `mode=titles` and the exact body to `error.html`, so the user's retry
   remains title-only. A full-generation failure retries with `mode=full`.
@@ -455,6 +455,8 @@ endpoint first.
 
 Legacy `OPENAI_*` settings are refused by `config.py`; they are not translated
 into the current names.
+
+`PORT` configures the development server and the `Procfile` gunicorn bind. The bundled systemd unit and Apache configuration deliberately carry explicit matching port values instead of interpolating this setting. A deployment that chooses another port changes both explicit deployment values to the same port; this is deployment configuration, not runtime rewriting by `config.py`.
 
 ---
 

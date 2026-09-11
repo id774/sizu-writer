@@ -13,11 +13,10 @@
 #  by leaving a setting empty. Sakura AI Engine, OpenAI and any other
 #  service speaking this protocol are the same case here.
 #
-#  One complete() call performs exactly one create() call. There is no
-#  retry loop of our own and no second attempt with different
-#  parameters: retries belong to the SDK, where GENERATION_MAX_RETRIES
-#  bounds them, so that an operation costs a predictable number of
-#  requests on a plan that counts them.
+#  One complete() call invokes create() once in application code. There
+#  is no retry loop of our own and no second call with different
+#  parameters. Configured retries belong to the SDK, which may issue
+#  additional HTTP attempts within that one create() invocation.
 #
 #  The answer is normalized into a CompletionResult and nothing else is
 #  read from it. Metadata a compatible endpoint may omit — the usage
@@ -71,12 +70,10 @@ class OpenAICompatibleProvider:
         client = self._client(config)
         request = self._request(messages, config)
 
-        # The clock starts at the call and not at the top of the method,
-        # so that what is reported is the wait on the endpoint alone.
-        # Nothing here is streamed: the whole answer arrives at the end,
-        # which makes this figure the generation time as the person
-        # waiting experienced it, and the one to compare against
-        # GENERATION_TIMEOUT when deciding whether to raise it.
+        # Start the clock immediately around the SDK call. The elapsed value
+        # is the wait experienced by this provider operation. With SDK retries
+        # enabled it includes later attempts and the waits between them, while
+        # GENERATION_TIMEOUT remains the timeout configured for each attempt.
         started = time.monotonic()
         response = self._create(client, request, config, started)
         result = self._result(response, config)
@@ -153,11 +150,12 @@ class OpenAICompatibleProvider:
         not cover the model, 429 a rate limit or an exhausted monthly
         allowance, and only the log can say which happened.
 
-        The elapsed seconds sit next to the limit for the same reason. A
-        timeout that fired at the limit is an endpoint slower than the
-        time allowed, which raising GENERATION_TIMEOUT addresses; one
-        that fired well short of it is a connection lost on the way, and
-        raising the limit would change nothing.
+        The elapsed seconds sit next to the configured timeout as operational
+        context. GENERATION_TIMEOUT is a per-attempt setting, while elapsed
+        covers the whole SDK call. With retries disabled their comparison can
+        show how much margin one attempt had; with retries enabled elapsed may
+        also contain earlier attempts and retry waits, so the pair alone does
+        not identify the failing attempt or its cause.
         """
         logger.error(
             "generation failure: reference=%s backend=%s endpoint_host=%s "
