@@ -41,6 +41,9 @@
 #    - Show the input screen.
 #    - Answer the liveness probe without calling the API.
 #    - Keep the input on the page when the memo is too long.
+#    - Count supplementary Unicode characters like the browser textarea.
+#    - Count textarea CRLF as one normalized newline.
+#    - Count surrounding whitespace toward MAX_INPUT_CHARS.
 #    - Refuse an empty input.
 #    - Refuse a request larger than the server limit with status 413.
 #    - Show the body and the titles of a generated draft.
@@ -69,6 +72,8 @@
 #  - Flask
 #
 #  Version History:
+#  v1.4 2026-09-11
+#       Cover browser-equivalent MAX_INPUT_CHARS validation on the server.
 #  v1.3 2026-09-10
 #       Cover title-only state across correctable memo validation errors, and
 #       the Web progressive enhancement markup and script contract.
@@ -141,6 +146,44 @@ class WebTest(unittest.TestCase):
         self.assertEqual(400, answer.status_code)
         self.assertIn("The memo is too long", answer.get_data(as_text=True))
         self.assertIn(text, answer.get_data(as_text=True))
+
+    def test_counts_supplementary_unicode_like_the_browser_limit(self):
+        with mock.patch.object(web.config, "max_input_chars", 1):
+            with mock.patch.object(
+                    web, "generate_draft", return_value=draft()) as generate:
+                answer = self.client.post("/generate", data={
+                    "input_text": "😀",
+                    "mode": "full",
+                })
+
+        self.assertEqual(400, answer.status_code)
+        self.assertIn("The memo is too long", answer.get_data(as_text=True))
+        generate.assert_not_called()
+
+    def test_counts_crlf_as_one_textarea_newline(self):
+        with mock.patch.object(web.config, "max_input_chars", 3):
+            with mock.patch.object(
+                    web, "generate_draft", return_value=draft()) as generate:
+                answer = self.client.post("/generate", data={
+                    "input_text": "a\r\nb",
+                    "mode": "full",
+                })
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once_with("a\r\nb", web.config)
+
+    def test_counts_surrounding_whitespace_toward_the_input_limit(self):
+        with mock.patch.object(web.config, "max_input_chars", 1):
+            with mock.patch.object(
+                    web, "generate_draft", return_value=draft()) as generate:
+                answer = self.client.post("/generate", data={
+                    "input_text": " a ",
+                    "mode": "full",
+                })
+
+        self.assertEqual(400, answer.status_code)
+        self.assertIn("The memo is too long", answer.get_data(as_text=True))
+        generate.assert_not_called()
 
     def test_refuses_an_empty_input(self):
         answer = self.client.post("/generate", data={"input_text": "  ", "mode": "full"})

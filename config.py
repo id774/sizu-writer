@@ -64,7 +64,8 @@
 #  - MAX_OUTPUT_TOKENS
 #      Upper bound of one response. Defaults to 6000.
 #  - MAX_INPUT_CHARS
-#      Upper bound of the input field. Defaults to 4000.
+#      Upper bound of the memo field using browser textarea length:
+#      UTF-16 code units after newline normalization. Defaults to 4000.
 #  - MAX_ALT_TITLES
 #      Number of alternative titles kept. Defaults to 4.
 #  - PROMPT_DIR

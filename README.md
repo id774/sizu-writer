@@ -144,7 +144,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_MAX_RETRIES` | `0` | Retry attempts the SDK may make after the initial endpoint request. `0` means one endpoint request per generation operation; see [One action, one request](#one-action-one-request). |
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
-| `MAX_INPUT_CHARS` | `4000` | Upper bound of the input field, enforced on the server as well as in the browser. |
+| `MAX_INPUT_CHARS` | `4000` | Upper bound of the memo field using the browser textarea length: UTF-16 code units after textarea newline normalization. The server applies the same limit. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
