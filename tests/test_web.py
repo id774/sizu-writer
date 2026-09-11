@@ -9,8 +9,9 @@
 #  It covers the input screen, the liveness probe, the two generation
 #  modes, and the refusals the screen has to make on its own: an empty
 #  memo, a memo longer than MAX_INPUT_CHARS, and a request larger than
-#  the server limit, with the input kept on the page so that nothing
-#  typed is lost.
+#  the server limit. Correctable memo validation errors keep the input
+#  on the page; an oversized request is handled without reparsing its
+#  form.
 #
 #  It also pins the error handling. Each failure is answered with its
 #  own status, 404 for an unknown address and 405 for a method the
@@ -360,9 +361,9 @@ class WebTest(unittest.TestCase):
         self.assertNotIn("boom", page)
 
     def test_does_not_blame_the_memo_for_a_timeout(self):
-        # The wait is the answer being written, not the memo being read.
-        # A one line memo asks for the same post as a long one, so advice
-        # to shorten it sends the person editing while nothing changes.
+        # GENERATION_TIMEOUT is a per-attempt SDK timeout. Its occurrence
+        # does not establish that memo length caused the failure, so the
+        # user message must not advise shortening the memo.
         with mock.patch.object(web, "generate_draft", side_effect=UpstreamTimeoutError()):
             answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
 
