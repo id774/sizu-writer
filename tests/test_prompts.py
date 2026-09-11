@@ -41,6 +41,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-11
+#       Cover distinct diagnostics for missing and unreadable prompt files.
 #  v1.1 2026-09-10
 #       Cover non-UTF-8 prompt refusal before generation.
 #  v1.0 2026-09-08
@@ -74,10 +76,12 @@ class LoadPromptTest(unittest.TestCase):
             path = str(Path(prompt_dir, "system.md"))
 
             with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
-                with self.assertRaises(InternalError):
+                with self.assertRaises(InternalError) as refused:
                     prompts.load_prompt("system.md", prompt_dir)
 
         self.assertIn(path, "\n".join(recorded.output))
+        self.assertIn("prompt file missing", str(refused.exception))
+        self.assertNotIn("cannot read prompt file", str(refused.exception))
 
     def test_refuses_an_unreadable_prompt(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
@@ -86,12 +90,14 @@ class LoadPromptTest(unittest.TestCase):
 
             with mock.patch("builtins.open", side_effect=PermissionError("denied")):
                 with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
-                    with self.assertRaises(InternalError):
+                    with self.assertRaises(InternalError) as refused:
                         prompts.load_prompt("system.md", prompt_dir)
 
         line = "\n".join(recorded.output)
         self.assertIn(path, line)
         self.assertIn("Cannot read the prompt file", line)
+        self.assertIn("cannot read prompt file", str(refused.exception))
+        self.assertNotIn("missing", str(refused.exception))
 
     def test_refuses_an_empty_prompt(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
