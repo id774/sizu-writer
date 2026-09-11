@@ -192,6 +192,31 @@ GENERATION_RESPONSE_MODE=json-object
 
 OpenAI is one explicit endpoint among several here, not a privileged default. Nothing happens differently because that URL is the one configured.
 
+**Kimi K3.** Kimi is not a special provider type in this application; it is
+configured as one more OpenAI compatible endpoint, and no Kimi-specific
+source code or backend is added for it.
+
+```env
+GENERATION_BACKEND=openai-compatible
+GENERATION_API_TOKEN=<Kimi API key>
+GENERATION_BASE_URL=https://api.moonshot.ai/v1
+GENERATION_MODEL=kimi-k3
+GENERATION_RESPONSE_MODE=prompt-json
+GENERATION_TEMPERATURE=
+```
+
+The SDK appends `/chat/completions` itself, so the base URL stops at
+`/v1`, matching the rule above. `GENERATION_RESPONSE_MODE=prompt-json` is
+used, so `response_format` is not required on this endpoint.
+`GENERATION_TEMPERATURE` is left empty, so the application sends no
+temperature. Kimi K3 uses thinking by default and its response may
+include a `reasoning_content` field; no Kimi-specific reasoning setting,
+display, storage, or logging is added here — as with every endpoint in
+this section, a failure on this one does not fall back to another. Kimi
+model catalogue, plan, and rate limit are service-owned information and
+are not duplicated here; consult the official Moonshot AI / Kimi
+documentation for their current values.
+
 **Anything else.** Set `GENERATION_BACKEND`, `GENERATION_API_TOKEN`,
 `GENERATION_BASE_URL`, and `GENERATION_MODEL` for that endpoint. Speaking the same API does not mean behaving the same way: when an endpoint refuses `temperature`, leave `GENERATION_TEMPERATURE` empty and nothing is sent; when it refuses `response_format`, use `prompt-json`; when it answers slowly, raise `GENERATION_TIMEOUT` together with the gunicorn and Apache timeouts. Change one setting per run, so that the run which succeeds says which setting did it.
 
