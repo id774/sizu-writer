@@ -5,7 +5,7 @@
 # sizu_writer/generator.py: Generation core of sizu-writer
 #
 #  Description:
-#  This module assembles the messages, spends one request through the
+#  This module assembles the messages, runs one operation through the
 #  configured provider, reads the JSON object out of the answer,
 #  validates it and returns a Draft. It knows nothing about HTTP, the
 #  SDK, the token or the base URL: that all lives in
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 def _complete(messages: List[Dict[str, str]],
               config: Config) -> CompletionResult:
-    """ Spend one request through the configured provider. """
+    """ Run one operation through the configured provider. """
     return build_provider(config).complete(messages, config)
 
 

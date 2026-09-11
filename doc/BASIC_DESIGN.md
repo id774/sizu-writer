@@ -114,7 +114,7 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 
 | Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
-| Generation client | `GENERATION_TIMEOUT` | 120s | The limit of one generation. The answer is not streamed, so this is the writing itself, not the network. Beyond it, the user is told it timed out |
+| Generation client | `GENERATION_TIMEOUT` | 120s | Timeout applied to each SDK request attempt. With zero retries it is the only attempt; retries add later attempts under the same per-attempt limit |
 | gunicorn | `--timeout` | 240s | Room above the default single client request; raising retries requires revisiting this value |
 | Apache | `ProxyTimeout` | 300s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
@@ -215,7 +215,7 @@ class SizuWriterError(Exception):
 | `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
 | `EmptyBodyError` | Title-only generation without a non-blank settled body | There is no post body to regenerate titles for. Generate the whole draft first. | 400 | INFO |
 | `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
-| `UpstreamTimeoutError` | Beyond `GENERATION_TIMEOUT` | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
+| `UpstreamTimeoutError` | SDK request attempt times out | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
 | `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
 | `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
 | `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
