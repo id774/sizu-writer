@@ -43,6 +43,7 @@
 #    - Refuse an answer without alternative_titles.
 #    - Accept an explicitly empty alternative_titles list.
 #    - Read a raw object in both response modes.
+#    - Accept an outer-fenced prompt-json answer whose body contains a fenced code block.
 #    - Refuse Python's non-standard NaN and Infinity JSON constants.
 #    - Unwrap a single fenced block under prompt-json, with or without an info string.
 #    - Refuse a fenced block under json-object, where a fence means the API did not comply.
@@ -62,7 +63,8 @@
 #
 #  Version History:
 #  v1.3 2026-09-11
-#       Cover non-standard JSON constants and bodies emptied by normalization.
+#       Cover non-standard JSON constants and bodies emptied by normalization,
+#       and outer-fenced prompt-json responses whose body holds a code fence.
 #  v1.2 2026-09-10
 #       Cover the required alternative_titles field in both generation modes.
 #  v1.1 2026-09-07
@@ -173,6 +175,25 @@ class GenerateDraftTest(unittest.TestCase):
         draft = self.generate(answer(dict(BODY, alternative_titles=[])))
 
         self.assertEqual([], draft.alternative_titles)
+
+    def test_accepts_outer_fenced_prompt_json_when_body_contains_code_fence(self):
+        payload = dict(
+            BODY,
+            body_markdown=(
+                "Before.\n\n"
+                "```python\n"
+                "print('x')\n"
+                "```\n\n"
+                "After."
+            ),
+        )
+        content = "```json\n{0}\n```".format(
+            json.dumps(payload, ensure_ascii=False)
+        )
+
+        draft = self.generate(answer(content))
+
+        self.assertEqual(payload["body_markdown"], draft.body)
 
 
 class ResponseModeTest(unittest.TestCase):

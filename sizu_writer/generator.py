@@ -31,7 +31,8 @@
 #
 #  Version History:
 #  v1.3 2026-09-11
-#       Refuse non-standard JSON constants and bodies emptied by normalization.
+#       Refuse non-standard JSON constants and bodies emptied by normalization,
+#       and accept outer-fenced prompt-json responses with code-fenced bodies.
 #  v1.2 2026-09-10
 #       Require alternative_titles to be present in generation responses.
 #  v1.1 2026-09-07
@@ -67,14 +68,14 @@ def _complete(messages: List[Dict[str, str]],
 
 def _unwrap_fence(content: str) -> str:
     """
-    Return the inside of an answer that is one fenced block, or the
-    answer unchanged.
+    Return the inside of an answer that is one outer fenced block, or
+    the answer unchanged.
 
-    Only a whole answer wrapped in a single fence is unwrapped. A fence
-    with prose around it, or an answer holding more than one fence, is
-    left as it is and fails to parse a moment later, which is the
-    intended outcome: the model was asked for an object and returned
-    something else.
+    Only the wrapper at the boundary of the whole answer is considered.
+    Fence marker text inside the wrapped payload is left to JSON parsing,
+    so body_markdown may contain Markdown fenced code blocks. Prose or a
+    second top-level payload inside the wrapper still fails when the
+    complete inner text is parsed as JSON.
     """
     text = content.strip()
     if not text.startswith("```") or not text.endswith("```"):
@@ -88,10 +89,7 @@ def _unwrap_fence(content: str) -> str:
     if "`" in lines[0].strip()[3:]:
         return text
 
-    inner = "\n".join(lines[1:-1])
-    if "```" in inner:
-        return text
-    return inner.strip()
+    return "\n".join(lines[1:-1]).strip()
 
 
 def _reject_non_json_constant(_value: str) -> None:

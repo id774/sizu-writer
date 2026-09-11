@@ -218,11 +218,11 @@ class SizuWriterError(Exception):
 | `UpstreamTimeoutError` | SDK request attempt times out | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
 | `UpstreamStatusError` | 4xx / 5xx, auth failure, rate limit | The generation service answered with an error. Try again in a while. | 502 | ERROR |
 | `InvalidResponseError` | Bad JSON, missing field, empty body, truncated output | The result could not be read. Generate it once more. | 502 | ERROR |
-| `InternalError` | Any other unexpected failure | The server failed to handle the request. | 500 | ERROR |
+| `InternalError` | A prompt file is missing, unreadable, not valid UTF-8, empty or blank, or another unexpected internal failure occurs | The server failed to handle the request. | 500 | ERROR |
 
 These properties matter.
 
-- **Only `user_message` reaches the screen.** The `str()` of the exception, the traceback, the URL, the model name and any fragment of the key stay in the server log.
+- **Only `user_message` reaches the screen.** Internal causes, tracebacks, prompt paths, the endpoint host and the model name may remain in the server log for diagnosis. The API token, the memo, the prompts and the generated text never appear in the log.
 - Each error answer carries an eight digit **reference id** (random per request), which also goes to the log. The user only has to quote "error id: 3f9c1a72" for the operator to find the entry.
 - An authentication failure (401 / 403) and a rate limit (429) are not distinguished for the user. Writing a misconfiguration onto the screen is leaking internal information. The log does distinguish them.
 - The provider logs an upstream status where it is known; `UpstreamStatusError` itself does not carry the status code.
