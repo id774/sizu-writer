@@ -42,6 +42,8 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.4 2026-09-11
+#       Match server input length validation to the browser textarea.
 #  v1.3 2026-09-10
 #       Preserve title-only state across correctable memo validation errors.
 #  v1.2 2026-09-09
@@ -119,12 +121,22 @@ def end_request_diagnostics(_error):
         g._sizu_reference_token = None
 
 
+def _input_length(text: str) -> int:
+    """ Return the browser textarea length of the submitted text. """
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return sum(
+        2 if ord(character) > 0xffff else 1
+        for character in normalized
+    )
+
+
 def _input_text() -> str:
     """ Read the submitted memo and refuse an unusable one. """
-    text = request.form.get("input_text", "").strip()
+    raw = request.form.get("input_text", "")
+    text = raw.strip()
     if not text:
         raise EmptyInputError()
-    if len(text) > config.max_input_chars:
+    if _input_length(raw) > config.max_input_chars:
         raise InputTooLongError(config.max_input_chars)
     return text
 

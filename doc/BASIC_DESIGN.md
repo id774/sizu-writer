@@ -488,8 +488,8 @@ into the current names.
 | Element | Specification |
 | --- | --- |
 | Page title | The name of the service and a one line description |
-| Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS` |
-| Character count | The current memo length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` sets it on page load and on every `input` event, and resets it when Clear empties the field. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The count is a display only — it enforces nothing on its own; validation authority stays with the server. |
+| Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS`. The limit follows the textarea value length: UTF-16 code units after newline normalization. |
+| Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the field. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
 | Generate button | `<button name="mode" value="full">` |
 | Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field; it empties the field and returns the focus |
 
@@ -510,7 +510,7 @@ From top to bottom. **What is posted and what merely supports it are separated v
 5. **Copy the body**: copies the value of the textarea only.
 6. **Notices**: outside the body area, below it. Empty means hidden.
 7. **Regenerate the whole draft**: `<button name="mode" value="full">`.
-8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
+8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. The same browser/server length definition applies here. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
 9. **Supporting information**: the model name and the time of generation, in small type.
 
 What the result form carries for a regeneration:
