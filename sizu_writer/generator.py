@@ -30,6 +30,8 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v1.3 2026-09-11
+#       Refuse generated bodies that become empty during normalization.
 #  v1.2 2026-09-10
 #       Require alternative_titles to be present in generation responses.
 #  v1.1 2026-09-07
@@ -154,6 +156,10 @@ def generate_draft(input_text: str, config: Config) -> Draft:
         raise InvalidResponseError()
 
     body, notices = normalize_body(raw_body)
+    if not body:
+        logger.error("The answer has no usable body_markdown after normalization")
+        raise InvalidResponseError()
+
     titles = _titles(payload, config)
 
     return Draft(

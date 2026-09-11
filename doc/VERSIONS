@@ -21,6 +21,7 @@ v1.0.3 (Release Date: TBD)
 - Refuse generation responses that omit the required alternative_titles field.
 - Refuse malformed GENERATION_BASE_URL hosts, ports and whitespace at startup.
 - Refuse non-UTF-8 memo, body and prompt files without a traceback.
+- Refuse generated bodies that become empty during Markdown normalization.
 
 v1.0.2 (2026-08-26)
 -------------------

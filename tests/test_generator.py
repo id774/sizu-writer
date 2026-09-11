@@ -38,6 +38,7 @@
 #    - Refuse an answer that is not JSON.
 #    - Refuse an answer that is JSON but not an object.
 #    - Refuse an answer without a body.
+#    - Refuse a body that becomes empty during Markdown normalization.
 #    - Refuse an answer without a leading title.
 #    - Refuse an answer without alternative_titles.
 #    - Accept an explicitly empty alternative_titles list.
@@ -59,6 +60,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-11
+#       Cover rejection of bodies emptied by Markdown normalization.
 #  v1.2 2026-09-10
 #       Cover the required alternative_titles field in both generation modes.
 #  v1.1 2026-09-07
@@ -141,6 +144,15 @@ class GenerateDraftTest(unittest.TestCase):
     def test_refuses_an_answer_without_a_body(self):
         with self.assertRaises(InvalidResponseError):
             self.generate(answer(dict(BODY, body_markdown="  ")))
+
+    def test_refuses_a_body_that_becomes_empty_after_normalization(self):
+        payload = dict(BODY, body_markdown="```markdown\n   \n```")
+
+        with self.assertLogs("sizu_writer.generator", level="ERROR") as recorded:
+            with self.assertRaises(InvalidResponseError):
+                self.generate(answer(payload))
+
+        self.assertIn("after normalization", "\n".join(recorded.output))
 
     def test_refuses_an_answer_without_a_primary_title(self):
         with self.assertRaises(InvalidResponseError):
