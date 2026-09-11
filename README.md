@@ -252,7 +252,7 @@ That product is not a wall-clock upper bound. The SDK may also wait between atte
 
 At the default of zero retries there is no retry wait, so the attempt budget is 120 seconds, comfortably inside gunicorn's 240. Raising the retries to 2 makes the attempt budget alone 360 seconds, already outside both shipped outer limits before any retry wait is counted. Raise the outer timeouts further to cover retry waits and operational margin as well.
 
-**Why the innermost one is 120 and not 60.** The request is not streamed: the client waits until the last character of the answer exists, so `GENERATION_TIMEOUT` is not a limit on the network but on the writing. What decides that wait is the length of the answer and the speed of the endpoint — a whole post of a few paragraphs plus five titles, from a model that may be sharing its hardware with everyone else on a free plan. The memo is a few dozen tokens of a prompt of a few thousand, so a one line memo and a four thousand character one ask for almost the same work. At 60 seconds that put ordinary generations on the wrong side of the limit and reported them as the person's fault. If your endpoint answers faster, lowering it again is a change to `.env` alone.
+**Why the innermost one is 120 and not 60.** `GENERATION_TIMEOUT` is applied to each SDK request attempt. The response is not streamed, so a successful attempt remains open until the complete answer arrives and ordinary generation latency can consume most of that limit. It is not a dedicated timer for model writing alone: connection and other SDK request time belong to the attempt as well. The expected answer is a whole post of a few paragraphs plus five titles, while the memo is only part of the prompt, so shortening the memo is not a general cure for a slow endpoint. At 60 seconds ordinary generations crossed the configured limit too often. If your endpoint answers faster, lowering it again is a change to `.env` alone.
 
 ### Coming from an earlier checkout
 
@@ -411,7 +411,7 @@ The screen shows a message meant for the person and a short reference id. The ca
 | The memo is too long. | 400 | Over `MAX_INPUT_CHARS` |
 | The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
-| Generation took too long and was stopped. | 504 | Over `GENERATION_TIMEOUT` |
+| Generation took too long and was stopped. | 504 | The SDK reported a request-attempt timeout |
 | The result could not be read. | 502 | The answer was not the expected object, lacked required response metadata such as a usable `finish_reason`, or was cut off |
 | That page does not exist. | 404 | An address the application does not serve |
 | That address does not accept this kind of request. | 405 | The right address, the wrong method |
@@ -435,7 +435,7 @@ Two cases are worth knowing by their log line rather than their screen:
 
 **`generation failure: reference=- backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — with the shipped `GENERATION_MAX_RETRIES=0`, `elapsed` is the wall-clock time around the one SDK request attempt and `timeout` is that attempt's configured limit. A successful run repeatedly approaching the limit is evidence that the configured margin is becoming small. When SDK retries are enabled, however, `elapsed` covers the whole SDK call and may include multiple request attempts and waits between them, while `timeout` remains the per-attempt setting. In that case the pair alone does not identify which attempt timed out or how much time was spent waiting between attempts.
 
-Shortening the memo is not the answer to this one, which is why the screen no longer suggests it. The wait is the answer being written, and a memo of one line asks for the same post as a long one.
+Shortening the memo is not the general answer to this one, which is why the screen no longer suggests it. The timeout applies to the SDK request attempt, and the operator should read the exception type together with the elapsed and retry context rather than infer the cause from memo length.
 
 **`The answer is not readable as JSON`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
 

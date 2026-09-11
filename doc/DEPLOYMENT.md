@@ -205,16 +205,18 @@ consult the
 and the control panel for their current values.
 
 sizu-writer keeps no counter. The endpoint's own control panel is the record,
-and the application log gives the matching per-request lines:
+and the application log gives the matching per-provider-operation lines:
 
 ```sh
 sudo journalctl -u sizu-writer --since today | grep 'generation response'
 ```
 
 Those lines carry the backend, the endpoint host, the request id, the model, the
-finish reason, the token counts and the seconds the request took against the
-limit it was given. They carry no token, no memo and no
-generated text, at any log level.
+finish reason, the token counts, the elapsed seconds around the whole SDK call
+and the per-attempt timeout setting. With retries enabled, elapsed may include
+multiple request attempts and SDK-controlled waits, so the two values do not
+describe one request attempt. They carry no token, no memo and no generated
+text, at any log level.
 
 ### Calling sizu-writer from another system
 

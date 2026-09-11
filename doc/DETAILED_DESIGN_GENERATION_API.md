@@ -735,7 +735,7 @@ the cause.
 | Exception | Condition | HTTP |
 | --- | --- | ---: |
 | `UpstreamConnectionError` | DNS, TLS or connection failure | 502 |
-| `UpstreamTimeoutError` | over `GENERATION_TIMEOUT` | 504 |
+| `UpstreamTimeoutError` | an SDK request attempt times out | 504 |
 | `UpstreamStatusError` | a 4xx or 5xx answer | 502 |
 | `InvalidResponseError` | bad JSON, a missing field, a truncated answer | 502 |
 | `InternalError` | a configuration or implementation failure | 500 |
