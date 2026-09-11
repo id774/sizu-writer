@@ -19,7 +19,7 @@ This document takes the requirements down to units that can be implemented. Deta
 **`sizu-writer`** is recommended, for three reasons.
 
 - It carries over the name used in the requirements document (`20260804_sizu_writer_requirements.md`).
-- The Python package `sizu_writer`, the systemd unit `sizu-writer.service` and the Apache location `/sizu/` all follow mechanically.
+- The Python package `sizu_writer` and the systemd unit `sizu-writer.service` follow mechanically.
 - Like `ai-digest`, it is "purpose plus action" in two words, so it does not stand out among the id774 repositories.
 
 The rest of this document assumes the repository `sizu-writer` and the Python package `sizu_writer`. Changing the name means replacing those two and the file names under `deploy/`.
