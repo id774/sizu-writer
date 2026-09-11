@@ -66,7 +66,7 @@ class OpenAICompatibleProvider:
 
     def complete(self, messages: List[Dict[str, str]],
                  config: Config) -> CompletionResult:
-        """ Send one chat completion request and normalize its answer. """
+        """ Run one Chat Completions SDK operation and normalize its answer. """
         client = self._client(config)
         request = self._request(messages, config)
 
@@ -124,7 +124,7 @@ class OpenAICompatibleProvider:
 
     def _create(self, client: Any, request: Dict[str, Any],
                 config: Config, started: float) -> Any:
-        """ Perform the one API call and map its failures. """
+        """ Perform the SDK create() invocation and map its failures. """
         import openai
 
         try:
@@ -143,7 +143,7 @@ class OpenAICompatibleProvider:
     def _log_failure(self, config: Config, error: Exception,
                      status_code: Optional[int], started: float) -> None:
         """
-        Record a failed request without its input or its token.
+        Record a failed provider operation without its input or its token.
 
         The status is worth its own line even though the user is never
         told it apart: 401 is a token to replace, 403 a plan that does

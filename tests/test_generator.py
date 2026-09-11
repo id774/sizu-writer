@@ -53,7 +53,7 @@
 #    - Refuse title regeneration when the answer omits alternative_titles.
 #    - Keep the exact settled body while regenerating titles.
 #    - Read a fenced answer under prompt-json when regenerating titles.
-#    - Spend exactly one request through the configured provider.
+#    - Call the configured provider once per generation operation.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -284,7 +284,7 @@ class RegenerateTitlesTest(unittest.TestCase):
 
 class CompleteTest(unittest.TestCase):
 
-    def test_spends_one_request_through_the_configured_provider(self):
+    def test_calls_the_configured_provider_once(self):
         provider = mock.Mock()
         provider.complete.return_value = answer(BODY)
         config = settings()

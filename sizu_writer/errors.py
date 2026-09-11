@@ -75,14 +75,13 @@ class UpstreamConnectionError(SizuWriterError):
 
 class UpstreamTimeoutError(SizuWriterError):
     """
-    Raised when one request exceeds GENERATION_TIMEOUT.
+    Raised when the SDK reports a request-attempt timeout.
 
-    The message asks for another attempt and nothing else. Shortening
-    the memo was the earlier advice and it does not hold: the wait is
-    the time the endpoint spends writing the answer, and a one line memo
-    asks for the same post as a long one. Advice that cannot work sends
-    the person editing their memo while the server waits on a setting
-    only the operator can change.
+    The message asks for another attempt and nothing else. Shortening the
+    memo was the earlier advice and it does not address a provider timeout.
+    GENERATION_TIMEOUT is configured per SDK request attempt; retry and
+    operation timing details stay in the operator diagnostics rather than
+    being turned into advice about the memo.
     """
 
     user_message = "Generation took too long and was stopped. Generate it once more, or try again in a while."
