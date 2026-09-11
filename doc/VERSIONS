@@ -24,6 +24,7 @@ v1.0.3 (Release Date: TBD)
 - Refuse generated bodies that become empty during Markdown normalization.
 - Make server-side MAX_INPUT_CHARS counting match the browser textarea limit.
 - Refuse non-standard NaN, Infinity and -Infinity constants in generation JSON.
+- Distinguish missing prompt files from other prompt read failures.
 
 v1.0.2 (2026-08-26)
 -------------------
