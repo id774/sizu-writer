@@ -43,6 +43,7 @@
 #    - Refuse an answer without alternative_titles.
 #    - Accept an explicitly empty alternative_titles list.
 #    - Read a raw object in both response modes.
+#    - Refuse Python's non-standard NaN and Infinity JSON constants.
 #    - Unwrap a single fenced block under prompt-json, with or without an info string.
 #    - Refuse a fenced block under json-object, where a fence means the API did not comply.
 #    - Refuse prose before or after a fenced block.
@@ -61,7 +62,7 @@
 #
 #  Version History:
 #  v1.3 2026-09-11
-#       Cover rejection of bodies emptied by Markdown normalization.
+#       Cover non-standard JSON constants and bodies emptied by normalization.
 #  v1.2 2026-09-10
 #       Cover the required alternative_titles field in both generation modes.
 #  v1.1 2026-09-07
@@ -190,6 +191,16 @@ class ResponseModeTest(unittest.TestCase):
     def test_reads_a_raw_object_in_both_modes(self):
         for mode in ("json-object", "prompt-json"):
             self.assertEqual({"a": 1}, self.payload('{"a": 1}', mode))
+
+    def test_refuses_non_standard_json_constants_in_both_modes(self):
+        for mode in ("json-object", "prompt-json"):
+            for constant in ("NaN", "Infinity", "-Infinity"):
+                with self.subTest(mode=mode, constant=constant):
+                    with self.assertRaises(InvalidResponseError):
+                        self.payload(
+                            '{"value": ' + constant + '}',
+                            mode,
+                        )
 
     def test_unwraps_a_single_fenced_block_under_prompt_json(self):
         content = '```json\n{"a": 1}\n```'
