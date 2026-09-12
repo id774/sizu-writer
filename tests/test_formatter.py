@@ -34,12 +34,17 @@
 #    - Preserve headings inside tilde fenced code blocks.
 #    - Keep opposite fence markers from closing the current block.
 #    - Remove a tilde fence wrapping the whole answer.
+#    - Demote a level-one ATX heading with leading spaces, a tab separator or
+#      an empty heading.
+#    - Keep a four-space indented hash line, which is indented code, untouched.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-12
+#       Cover level-one ATX heading indentation and separator boundaries.
 #  v1.2 2026-09-09
 #       Cover literal content inside backtick and tilde code fences.
 #  v1.1 2026-08-11
@@ -171,6 +176,31 @@ class NormalizeBodyTest(unittest.TestCase):
         body, notices = normalize_body("~~~markdown\n本文です。\n~~~")
 
         self.assertEqual("本文です。", body)
+        self.assertEqual([], notices)
+
+    def test_demotes_level_one_atx_heading_forms(self):
+        cases = [
+            ("   # 見出し", "   ## 見出し"),
+            ("#\t見出し", "##\t見出し"),
+            ("#", "##"),
+        ]
+        for heading, demoted_heading in cases:
+            with self.subTest(heading=repr(heading)):
+                source = "前置きです。\n" + heading
+                expected = "前置きです。\n" + demoted_heading
+
+                body, notices = normalize_body(source)
+
+                self.assertEqual(expected, body)
+                self.assertEqual(
+                    ["The heading level of the body was adjusted."], notices)
+
+    def test_does_not_demote_a_four_space_indented_hash_line(self):
+        source = "前置きです。\n    # literal"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
         self.assertEqual([], notices)
 
 

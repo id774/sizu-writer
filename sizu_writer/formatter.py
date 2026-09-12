@@ -22,6 +22,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-12
+#       Demote valid level-one ATX headings with Markdown indentation and separators.
 #  v1.2 2026-09-09
 #       Preserve headings and blank lines inside backtick and tilde code fences.
 #  v1.1 2026-08-11
@@ -53,6 +55,8 @@ INSTRUCTION_LEAKS = (
 )
 
 FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
+
+ATX_H1 = re.compile(r"^(?P<indent> {0,3})#(?=$|[ \t])")
 
 
 def _fence(line: str) -> Optional[Tuple[str, int, str]]:
@@ -113,9 +117,12 @@ def _demote_headings(text: str) -> Tuple[str, bool]:
         fence = _fence(line)
         if fence is not None:
             opening = (fence[0], fence[1])
-        elif re.match(r"^# \S", line):
-            line = "#" + line
-            demoted = True
+        else:
+            heading = ATX_H1.match(line)
+            if heading is not None:
+                indent = heading.group("indent")
+                line = "{0}#{1}".format(indent, line[len(indent):])
+                demoted = True
         result.append(line)
     return "\n".join(result), demoted
 

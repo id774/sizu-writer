@@ -27,6 +27,11 @@ v1.0.3 (Release Date: TBD)
 - Distinguish missing prompt files from other prompt read failures.
 - Accept outer-fenced prompt-json responses when generated body text contains
   a Markdown fenced code block.
+- Demote valid level-one Markdown ATX headings with supported indentation and
+  separators during body normalization.
+- Refuse blank --prompt-dir CLI overrides and trim usable values before applying
+  them.
+- Keep the full-generation title prompt aligned with the title-only title policy.
 
 v1.0.2 (2026-08-26)
 -------------------

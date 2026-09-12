@@ -175,10 +175,14 @@ are service-owned information and are not duplicated here. Consult the
 [official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
 and the control panel for their current values.
 
-This repository intentionally ships no default model. Model names are taken
-from the control panel's current list when configuring a deployment, so a
-service-side model addition, rename, withdrawal, or plan change does not
-require a documentation edit here.
+This repository intentionally ships no active default model: `.env.example`
+keeps `GENERATION_MODEL=` blank. A worked example above or elsewhere in this
+document may name a concrete model, such as `kimi-k3` in the Kimi K3 example
+below, but a name in a worked example is an example, not a shipped default.
+Read the model to actually use off the control panel's current list when
+configuring a deployment; if the endpoint's catalogue changes later, it is
+the worked example itself, not the shipped configuration, that may need a
+documentation update.
 
 **OpenAI.**
 
