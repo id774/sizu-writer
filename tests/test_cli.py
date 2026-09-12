@@ -40,6 +40,8 @@
 #    - Refuse a non-finite --timeout without spending a request.
 #    - Refuse a whitespace-only --model without spending a request.
 #    - Apply a --model override trimmed of surrounding whitespace.
+#    - Refuse a whitespace-only --prompt-dir without spending a request.
+#    - Apply a --prompt-dir override trimmed of surrounding whitespace.
 #    - Refuse an empty memo without spending a request.
 #    - Report a generation failure as a failed run.
 #    - Name the failure class and its user message in the log.
@@ -58,6 +60,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.4 2026-09-12
+#       Cover blank and trimmed --prompt-dir overrides.
 #  v1.3 2026-09-10
 #       Cover non-UTF-8 memo and body file refusal before generation.
 #  v1.2 2026-09-07
@@ -215,6 +219,20 @@ class MainTest(unittest.TestCase):
 
         self.assertEqual(0, status)
         self.assertEqual("another-model", stub.call_args[0][1].generation_model)
+
+    def test_refuses_a_whitespace_only_prompt_dir(self):
+        status, stub = self.run_cli("generate", "--text", "a memo",
+                                    "--prompt-dir", "   ")
+
+        self.assertEqual(1, status)
+        stub.assert_not_called()
+
+    def test_trims_surrounding_whitespace_from_the_prompt_dir_override(self):
+        status, stub = self.run_cli("generate", "--text", "a memo",
+                                    "--prompt-dir", "  other-prompts  ")
+
+        self.assertEqual(0, status)
+        self.assertEqual("other-prompts", stub.call_args[0][1].prompt_dir)
 
     def test_refuses_an_empty_memo_without_spending_a_request(self):
         status, stub = self.run_cli("generate", "--text", "")

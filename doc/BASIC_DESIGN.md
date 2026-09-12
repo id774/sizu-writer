@@ -136,6 +136,7 @@ Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values
 ├── .gitignore
 ├── sizu_writer/
 │   ├── __init__.py                 The Draft dataclass, __version__, shared helpers
+│   ├── diagnostics.py              Request-scoped diagnostic reference
 │   ├── errors.py                   The exception hierarchy and the messages shown to the user
 │   ├── prompts.py                  Reading prompts/ and assembling the messages
 │   ├── generator.py                The messages, the answer and the validation of a draft
@@ -349,6 +350,16 @@ generation modes, `primary_title` must be a non-empty string and
 `alternative_titles` must be a list containing strings only. A violation raises
 `InvalidResponseError` and is not turned into a partial draft.
 
+Body validation runs in this order:
+
+1. The raw `body_markdown` field is checked to be present, a string, and
+   non-blank.
+2. `normalize_body()` applies mechanical Markdown normalization (section 5.5).
+3. If the body is empty or blank after that normalization, `InvalidResponseError`
+   is raised: a raw answer that only looked non-blank because of an outer fence
+   or headings never reaches the user as an empty draft.
+4. Only a usable, normalized body proceeds to title validation.
+
 #### 5.4.4 Retries
 
 Retries belong to the SDK through `GENERATION_MAX_RETRIES`; there is no retry
@@ -425,6 +436,25 @@ python cli.py generate --text "a short thought"  # pass it directly
 python cli.py generate --input memo.txt --json   # print the Draft as JSON (tests, pipes)
 python cli.py titles --input memo.txt --body draft.md   # regenerate the titles only
 ```
+
+### 5.8 `sizu_writer/diagnostics.py`
+
+Holds the one diagnostic reference id of the current request in a standard-library
+`ContextVar`, so that a reference id can be read by the generation core and the
+provider without either being handed a Flask object.
+
+```python
+set_reference_id(reference_id: str) -> Token
+get_reference_id() -> Optional[str]
+reset_reference_id(token: Token) -> None
+```
+
+`app.py` sets the reference id at the start of a request and resets it to the
+prior context on request teardown. Provider failure logging reads the same id
+through `get_reference_id()`, so a provider log line and the error page shown
+for the same request carry the same reference. The module keeps only the
+reference id: it holds no API token, memo, prompt or generated text, and it
+imports neither Flask nor a provider SDK.
 
 As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
 
@@ -563,7 +593,11 @@ click
 - gunicorn listens on `127.0.0.1` only.
 - `MAX_CONTENT_LENGTH` and `MAX_INPUT_CHARS` bound the input.
 - The body is shown as the value of a `textarea`, so with Jinja2 autoescaping no HTML from the model is ever executed. **Rendering model output with `|safe` is forbidden by design.**
-- Rate limiting is not implemented in the application: it cannot count across gunicorn workers and would not hold. Use Apache (`mod_ratelimit`, `mod_qos`) or authentication. The README states this decision.
+- Rate limiting is not implemented in the application: it cannot count across
+  gunicorn workers and would not hold. Use Apache request controls such as
+  `mod_qos`, another shared request limiter, or access control such as
+  authentication. `mod_ratelimit` limits response transfer rate and is not a
+  generation-request counter.
 - No internal information on an error page (section 5.2).
 
 ### 8.2 Availability

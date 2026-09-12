@@ -7,9 +7,10 @@
 #  Description:
 #  Every failure the user is allowed to see is represented here as an
 #  exception carrying a message and an HTTP status code. The screen
-#  shows user_message only: the exception text, the traceback, the
-#  endpoint URL and the model name stay in the server log, so that an
-#  error page cannot leak internal information.
+#  shows user_message only. Internal diagnostic causes, tracebacks,
+#  prompt paths, the endpoint host and the model name may stay in the
+#  server log for diagnosis. The API token, the memo, the prompts and
+#  the generated text do not.
 #
 #  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -103,7 +104,7 @@ class InvalidResponseError(SizuWriterError):
 
 
 class InternalError(SizuWriterError):
-    """ Raised for every unexpected failure inside the server. """
+    """ Raised for prompt-file prerequisite failures and unexpected server failures. """
 
     user_message = "The server failed to handle the request."
     status_code = 500

@@ -198,15 +198,27 @@ success counts are an estimate; the control panel is the record.
 
 ### 5.3 Model names
 
-No default model is shipped, and no preview name is written into this
-repository. Models are added, renamed and withdrawn, and a name frozen into a
-document is wrong soon afterwards.
+No active default model is shipped. `.env.example` ships `GENERATION_MODEL=`
+blank, and `Config.generation_model` defaults to empty; the setting stays
+required at runtime.
 
-Read the name off the endpoint's own current list of available models and put it
-in `GENERATION_MODEL`. For Sakura AI Engine, verify the model and its plan
-availability in the current control panel and the
-[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
-rather than relying on a copied model or plan list in this repository.
+Concrete model names may appear in comments and worked examples when it is
+clear that they are examples rather than active defaults. `.env.example`
+keeps a commented worked example next to the blank active setting, and this
+document and README carry worked examples of their own (for instance the
+Kimi K3 endpoint example, `GENERATION_MODEL=kimi-k3`). An example names one
+endpoint configuration at the time it was written, not an endpoint's full
+catalogue; when the endpoint changes the models it offers, the example itself
+may need a documentation update, but that is separate from shipping an active
+default.
+
+Models are added, renamed and withdrawn on the endpoint's own schedule. Read
+the name to actually use off the endpoint's current list of available models
+and put it in `GENERATION_MODEL`. For Sakura AI Engine, verify the model and
+its plan availability in the current control panel and the
+[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html);
+this repository does not maintain an exhaustive copy of a model or plan
+catalogue.
 
 ---
 

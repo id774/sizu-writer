@@ -35,12 +35,15 @@
 #    - Refuse a blank prompt before generation reaches the provider.
 #    - Refuse a prompt file that is not valid UTF-8.
 #    - Refuse a non-UTF-8 prompt before generation reaches the provider.
+#    - Keep the required title policy shared by the full and title-only prompts.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-12
+#       Keep the required title policy shared by full and title-only prompts.
 #  v1.2 2026-09-11
 #       Cover distinct diagnostics for missing and unreadable prompt files.
 #  v1.1 2026-09-10
@@ -222,6 +225,25 @@ class GenerationBoundaryTest(unittest.TestCase):
                     generator.generate_draft("a memo", config)
 
         complete.assert_not_called()
+
+
+class SharedTitlePolicyTest(unittest.TestCase):
+    """ Keep the full and title-only prompts from drifting apart. """
+
+    def test_full_and_title_only_prompts_share_the_required_title_policy(self):
+        repository_root = Path(__file__).resolve().parent.parent
+        required_phrases = (
+            "the point that was sorted out again",
+            "When the matter is unsettled, an observed fact or the point "
+            "where the thinking started makes a fine title.",
+        )
+
+        for prompt_name in ("system.md", "titles_system.md"):
+            text = Path(repository_root, "prompts", prompt_name).read_text(
+                encoding="utf-8")
+            for phrase in required_phrases:
+                with self.subTest(prompt=prompt_name, phrase=phrase):
+                    self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":

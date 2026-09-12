@@ -34,12 +34,13 @@
 #  - --model NAME / --prompt-dir DIR / --timeout SECONDS
 #      Override the matching setting for this invocation. --timeout is
 #      held to the same rule GENERATION_TIMEOUT is read under: a finite
-#      number greater than zero. --model is trimmed of surrounding
-#      whitespace, and an explicit value that is blank once trimmed is
-#      refused rather than silently left as no override. The API token
-#      and the base URL have no option on purpose: a command line is
-#      readable by every user of the host through ps, and the token is a
-#      secret while the endpoint is a decision of the deployment.
+#      number greater than zero. --model and --prompt-dir are each
+#      trimmed of surrounding whitespace, and an explicit value that is
+#      blank once trimmed is refused rather than silently left as no
+#      override. The API token and the base URL have no option on
+#      purpose: a command line is readable by every user of the host
+#      through ps, and the token is a secret while the endpoint is a
+#      decision of the deployment.
 #  - --json
 #      Print the draft as JSON instead of as text.
 #
@@ -58,6 +59,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.3 2026-09-12
+#       Refuse a blank --prompt-dir override and trim a usable one.
 #  v1.2 2026-09-10
 #       Refuse non-UTF-8 memo and body files without a traceback.
 #  v1.1 2026-09-06
@@ -169,8 +172,15 @@ def main() -> int:
             logger.error("--model is blank; expected a model name.")
             return 1
         config.generation_model = model
-    if arguments.prompt_dir:
-        config.prompt_dir = arguments.prompt_dir
+    # Same rule as --model: an explicit blank or whitespace-only value is a
+    # usable override that was made unusable, not the option going unused,
+    # so it is refused rather than silently falling back to PROMPT_DIR.
+    if arguments.prompt_dir is not None:
+        prompt_dir = arguments.prompt_dir.strip()
+        if not prompt_dir:
+            logger.error("--prompt-dir is blank; expected a directory.")
+            return 1
+        config.prompt_dir = prompt_dir
 
     # Repeat the check load_config() performs on GENERATION_TIMEOUT. The
     # override lands after it has run, so a value refused there would

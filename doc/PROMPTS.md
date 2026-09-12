@@ -99,6 +99,8 @@ reaches `sizu_writer/generator.py` when:
 
 - the content does not parse as JSON, or parses as something other than an object
 - `body_markdown` is missing, not a string, or blank (checked on `generate` only)
+- `body_markdown` becomes empty after mechanical Markdown normalization
+  (checked on `generate` only, after the raw-field check above)
 - `primary_title` is missing, not a string, or blank
 - `alternative_titles` is missing, is not a list, or holds a value that is not a string
 
