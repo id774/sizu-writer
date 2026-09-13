@@ -17,7 +17,8 @@
 13. [The Japanese that stays](#the-japanese-that-stays)
 14. [Not implemented yet](#not-implemented-yet)
 15. [Contribution](#contribution)
-16. [License](#license)
+16. [Primary Branch](#primary-branch)
+17. [License](#license)
 
 ## Overview
 
@@ -37,10 +38,6 @@ The repository is written in English — the code, the comments, the screens, th
 - Implementation policy: [doc/POLICY.md](doc/POLICY.md)
 
 > **The `OPENAI_*` variables are refused.** Provider neutral `GENERATION_*` ones replaced them, and a process that still finds an `OPENAI_*` variable refuses to start. See [Coming from an earlier checkout](#coming-from-an-earlier-checkout).
-
-This repository uses `master` as its primary branch name.
-
-The name is used solely as a technical identifier, following the long-standing convention historically used by Git. It does not express or imply any association with racism, slavery, discrimination, or any political or social ideology.
 
 ## Features
 
@@ -633,6 +630,12 @@ Contributions are welcome. You can help by:
 - Reporting bugs or feature requests
 
 Please follow the style used in this repository: module level header comments describing purpose, requirements and version history, English comments, and documentation updated together with the code. [doc/POLICY.md](doc/POLICY.md) states the rules, including the invariants a change must not cross — above all, that nothing in this system posts to the site or holds a credential for it.
+
+## Primary Branch
+
+This repository uses `master` as its primary branch name.
+
+The name is used solely as a technical identifier, following the long-standing convention historically used by Git. It does not express or imply any association with racism, slavery, discrimination, or any political or social ideology.
 
 ## License
 
