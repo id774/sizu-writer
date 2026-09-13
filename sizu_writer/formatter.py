@@ -22,10 +22,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.3 2026-09-12
-#       Demote valid level-one ATX headings with Markdown indentation and separators.
-#  v1.2 2026-09-09
-#       Preserve headings and blank lines inside backtick and tilde code fences.
+#  v1.2 2026-09-12
+#       Preserve fenced-code contents and demote valid level-one ATX headings
+#       with supported Markdown indentation and separators.
 #  v1.1 2026-08-11
 #       Preserve separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-04

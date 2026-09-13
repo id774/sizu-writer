@@ -43,10 +43,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.3 2026-09-12
-#       Cover level-one ATX heading indentation and separator boundaries.
-#  v1.2 2026-09-09
-#       Cover literal content inside backtick and tilde code fences.
+#  v1.2 2026-09-12
+#       Cover fenced-code preservation and level-one ATX heading
+#       indentation and separator boundaries.
 #  v1.1 2026-08-11
 #       Cover separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-05
