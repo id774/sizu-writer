@@ -80,7 +80,7 @@ def _closes_fence(line: str, opening: Tuple[str, int]) -> bool:
     )
 
 
-def _strip_outer_fence(text: str) -> str:
+def _strip_outer_body_fence(text: str) -> str:
     """ Remove a code fence wrapping the whole answer. """
     lines = text.strip().split("\n")
     if len(lines) < 2:
@@ -161,7 +161,7 @@ def normalize_body(text: str) -> Tuple[str, List[str]]:
     """ Clean the body and report what deserves a human look. """
     notices: List[str] = []
 
-    body = _strip_outer_fence(text)
+    body = _strip_outer_body_fence(text)
     body, demoted = _demote_headings(body)
     if demoted:
         notices.append("The heading level of the body was adjusted.")
