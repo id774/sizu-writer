@@ -112,6 +112,13 @@ The settings decide where a memo is sent, so they are read strictly.
 - Map severity to levels: `INFO` for normal progress, `WARNING` for a degraded
   but recoverable condition, and `ERROR` for a failure that ends the current
   command or request.
+- A normal no-op, guard, or branch that is inapplicable by design may be silent
+  and is not `WARNING` merely because no work was performed. Emit a normal
+  progress line only when it is useful, and reserve `WARNING` for a degraded
+  but recoverable condition the operator should know about.
+- Do not emit duplicate diagnostics at multiple layers merely to prove that a
+  failure was observed. The layer responsible for presenting or logging the
+  failure owns the message unless another interface explicitly requires one.
 - Keep the log low-noise. One generation must not leave a trail of per-step
   lines at the default level.
 - When a third-party logger, such as the HTTP client the SDK carries, adds
@@ -149,6 +156,10 @@ The settings decide where a memo is sent, so they are read strictly.
   subcommand means.
 
 ### 1.7 Error Handling and Exit Codes
+- Treat the operation result, whether processing may continue, and whether a
+  message is emitted as separate decisions. A prerequisite or failure that
+  makes correct generation impossible stops the affected request or command;
+  it is not downgraded to a warning merely to continue.
 - Detect an unmet prerequisite early. A misconfiguration is refused before a
   request is spent, not after.
 - Log the reason and the affected target when an error occurs.
