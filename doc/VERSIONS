@@ -32,6 +32,8 @@ v1.0.3 (Release Date: TBD)
 - Refuse blank --prompt-dir CLI overrides and trim usable values before applying
   them.
 - Keep the full-generation title prompt aligned with the title-only title policy.
+- Give the generation and regeneration submit buttons a primary, mobile-sized
+  visual style, distinct from the secondary Copy and Clear buttons.
 
 v1.0.2 (2026-08-26)
 -------------------

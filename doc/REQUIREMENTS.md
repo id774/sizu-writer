@@ -358,6 +358,8 @@ At a minimum:
 - From result to post, copying and pasting the body and a title is all that is needed.
 - Separate the strings meant for posting from the supporting information.
 - Assume both a phone and a desktop.
+- Make the generate/regenerate action easy to identify and easy to press on a
+  phone, visually distinct from the Copy and Clear actions beside it.
 
 ## 11. Persistence
 

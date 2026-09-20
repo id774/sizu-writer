@@ -497,6 +497,7 @@ into the current names.
 - `base.html` carries `index.html`, `result.html` and `error.html`, as in ai-digest.
 - The CSS uses system fonts only and makes no external request. A `max-width` and a single column serve both a phone and a desktop (requirement 10.4). One breakpoint, stacking the buttons on a narrow screen, is enough.
 - The page declares the light color scheme, and every foreground color it relies on is stated beside its background rather than left to a system color. A phone in dark appearance otherwise renders the form controls with its own colors, which is what put white button labels on the near-white button background.
+- The generation / regeneration submit button (`button[type="submit"]`, carrying `name="mode"`) is styled as the primary action on every screen it appears on: a filled color pair, a larger touch target than the generic button, and no reliance on hover to be found. Copy and Clear stay the generic secondary button. This is a CSS-only distinction; the submit-state and `mode`-handling behavior below is unchanged by it.
 - The only JavaScript file is `copy.js`. Generation, regeneration and
   navigation are plain HTML forms and links, and stay usable with JavaScript
   disabled. What is JavaScript-only, and therefore lost without it, is the

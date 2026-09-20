@@ -47,6 +47,23 @@ button {
 
 button:hover { background: #eaeaea; }
 
+/* The generation / regeneration action is the primary control on each
+   screen: Copy and Clear stay the generic button above. The color pair
+   is reply-writer's existing primary submit pair, applied here to the
+   same kind of action; the size and radius stay this layout's own. */
+button[type="submit"] {
+  background: #1c4f7c;
+  border-color: #1c4f7c;
+  color: #fff;
+  flex: 1 1 12rem;
+  font-size: 1rem;
+  /* Large enough to be pressed with a thumb. */
+  min-height: 2.75rem;
+  padding: 0.5rem 1.1rem;
+}
+
+button[type="submit"]:hover { background: #163f63; }
+
 .titles { list-style: none; padding: 0; }
 .titles li { align-items: center; display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
 .title-row { align-items: center; display: flex; gap: 0.5rem; }
