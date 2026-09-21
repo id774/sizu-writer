@@ -11,9 +11,12 @@
 #  reads those files and assembles the message list handed to the API.
 #  It performs no API call.
 #
-#  Placeholders are {{input}} and {{body}} only. Substitution scans the
-#  prompt template once, so text inserted from a memo or a settled body
-#  is carried literally and is never interpreted as another placeholder.
+#  Placeholders are {{input}}, {{body}} and {{direction}}. Substitution
+#  scans the prompt template once, so text inserted from a memo, a
+#  settled body or a Direction is carried literally and is never
+#  interpreted as another placeholder. A custom PROMPT_DIR that carries
+#  no {{direction}} placeholder keeps working unchanged: nothing here
+#  requires a prompt file to use every known placeholder.
 #
 #  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -25,6 +28,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Add the optional {{direction}} placeholder to body and title messages.
 #  v1.3 2026-09-11
 #       Distinguish missing prompt files from other read failures.
 #  v1.2 2026-09-10
@@ -89,18 +94,20 @@ def _substitute(template: str,
         lambda match: replacements[match.group(0)], template)
 
 
-def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]]:
+def build_body_messages(input_text: str, prompt_dir: str,
+                        direction: str = "") -> List[Dict[str, str]]:
     """ Build the messages that ask for a body and its titles. """
     system = load_prompt("system.md", prompt_dir)
     user = load_prompt("body_user.md", prompt_dir)
     return [
         {"role": "system", "content": system},
         {"role": "user", "content": _substitute(
-            user, {"{{input}}": input_text})},
+            user, {"{{input}}": input_text, "{{direction}}": direction})},
     ]
 
 
-def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[Dict[str, str]]:
+def build_titles_messages(input_text: str, body: str, prompt_dir: str,
+                          direction: str = "") -> List[Dict[str, str]]:
     """ Build the messages that ask for titles of an existing body. """
     system = load_prompt("titles_system.md", prompt_dir)
     user = load_prompt("titles_user.md", prompt_dir)
@@ -109,6 +116,7 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[D
         {
             "{{input}}": input_text,
             "{{body}}": body,
+            "{{direction}}": direction,
         },
     )
     return [

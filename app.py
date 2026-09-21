@@ -42,6 +42,9 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Add an optional per-request Direction field, validated and preserved
+#       across regeneration and retries the same way as the memo.
 #  v1.4 2026-09-11
 #       Match server input length validation to the browser textarea.
 #  v1.3 2026-09-10
@@ -66,8 +69,9 @@ from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from config import load_config, validate_generation_config
 from sizu_writer.diagnostics import reset_reference_id, set_reference_id
-from sizu_writer.errors import (EmptyInputError, InputTooLongError,
-                                InternalError, SizuWriterError)
+from sizu_writer.errors import (DirectionTooLongError, EmptyInputError,
+                                InputTooLongError, InternalError,
+                                SizuWriterError)
 from sizu_writer.generator import generate_draft, regenerate_titles
 from sizu_writer.web import STATIC_DIR, TEMPLATE_DIR
 
@@ -121,7 +125,7 @@ def end_request_diagnostics(_error):
         g._sizu_reference_token = None
 
 
-def _input_length(text: str) -> int:
+def _textarea_length(text: str) -> int:
     """ Return the browser textarea length of the submitted text. """
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     return sum(
@@ -136,31 +140,43 @@ def _input_text() -> str:
     text = raw.strip()
     if not text:
         raise EmptyInputError()
-    if _input_length(raw) > config.max_input_chars:
+    if _textarea_length(raw) > config.max_input_chars:
         raise InputTooLongError(config.max_input_chars)
     return text
+
+
+def _direction_text() -> str:
+    """ Read the optional Direction, blank meaning no additional instruction. """
+    raw = request.form.get("direction", "")
+    if _textarea_length(raw) > config.max_policy_chars:
+        raise DirectionTooLongError(config.max_policy_chars)
+    return raw.strip()
 
 
 @app.route("/")
 def index():
     """ Render the input screen. """
-    return render_template("index.html", max_input_chars=config.max_input_chars)
+    return render_template("index.html", max_input_chars=config.max_input_chars,
+                           max_policy_chars=config.max_policy_chars)
 
 
 @app.route("/generate", methods=["POST"])
 def generate():
     """ Generate a whole draft, or only the titles of an existing body. """
     text = _input_text()
+    direction = _direction_text()
     body = request.form.get("body", "")
 
     mode = request.form.get("mode")
     if mode == "titles":
-        draft = regenerate_titles(text, body, config)
+        draft = regenerate_titles(text, body, config, direction)
     else:
-        draft = generate_draft(text, config)
+        draft = generate_draft(text, config, direction)
 
     return render_template("result.html", draft=draft, input_text=text,
-                           max_input_chars=config.max_input_chars)
+                           direction=direction,
+                           max_input_chars=config.max_input_chars,
+                           max_policy_chars=config.max_policy_chars)
 
 
 @app.route("/healthz")
@@ -191,8 +207,10 @@ def handle_known_error(error: SizuWriterError):
         reference_id=reference_id,
         input_text=request.form.get("input_text", ""),
         body=body,
+        direction=request.form.get("direction", ""),
         mode=mode,
         max_input_chars=config.max_input_chars,
+        max_policy_chars=config.max_policy_chars,
     )
     return page, error.status_code
 
@@ -207,6 +225,7 @@ def handle_request_too_large(error: RequestEntityTooLarge):
         error="The request is too large. Reduce its contents and try again.",
         reference_id=reference_id,
         max_input_chars=config.max_input_chars,
+        max_policy_chars=config.max_policy_chars,
     )
     return page, error.code
 
@@ -234,6 +253,7 @@ def handle_http_error(error: HTTPException):
         error=HTTP_MESSAGES.get(error.code, "The request could not be completed."),
         reference_id=reference_id,
         max_input_chars=config.max_input_chars,
+        max_policy_chars=config.max_policy_chars,
     )
     return page, error.code
 

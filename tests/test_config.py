@@ -30,6 +30,9 @@
 #
 #  Test Cases:
 #    - Load the documented defaults for every setting that has one.
+#    - Load a valid MAX_POLICY_CHARS override.
+#    - Refuse a zero, negative or non-integer MAX_POLICY_CHARS.
+#    - Treat a blank MAX_POLICY_CHARS as unset.
 #    - Spend one request unless GENERATION_MAX_RETRIES says otherwise.
 #    - Treat a blank or whitespace-only value as unset.
 #    - Send no temperature unless GENERATION_TEMPERATURE is set.
@@ -68,6 +71,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Cover the MAX_POLICY_CHARS default, override and invalid-value refusal.
 #  v1.3 2026-09-10
 #       Cover malformed base URL syntax, hosts, ports and whitespace.
 #  v1.2 2026-09-06
@@ -114,9 +119,25 @@ class LoadConfigTest(unittest.TestCase):
         self.assertEqual(120.0, loaded.generation_timeout)
         self.assertEqual(6000, loaded.max_output_tokens)
         self.assertEqual(4000, loaded.max_input_chars)
+        self.assertEqual(2000, loaded.max_policy_chars)
         self.assertEqual(4, loaded.max_alt_titles)
         self.assertEqual("prompts", loaded.prompt_dir)
         self.assertEqual(8090, loaded.port)
+
+    def test_loads_a_valid_max_policy_chars_override(self):
+        self.assertEqual(
+            500, self.load({"MAX_POLICY_CHARS": "500"}).max_policy_chars)
+
+    def test_refuses_an_unusable_max_policy_chars(self):
+        for value in ("0", "-1", "soon"):
+            with self.subTest(value=value):
+                message = self.refuse({"MAX_POLICY_CHARS": value})
+
+                self.assertIn("MAX_POLICY_CHARS", message)
+
+    def test_treats_a_blank_max_policy_chars_as_unset(self):
+        self.assertEqual(
+            2000, self.load({"MAX_POLICY_CHARS": "   "}).max_policy_chars)
 
     def test_spends_one_request_unless_told_otherwise(self):
         self.assertEqual(0, self.load({}).generation_max_retries)

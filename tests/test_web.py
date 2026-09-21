@@ -67,12 +67,27 @@
 #    - Limit the result memo and mark the post body for automatic growth.
 #    - Serve progressive submit, character-count and auto-grow helpers.
 #    - Preserve the clicked submit value before disabling generation buttons.
+#    - Render the optional direction field with its own character-count hook.
+#    - Generate normally when the direction is blank.
+#    - Pass a nonblank direction to full generation.
+#    - Pass a nonblank direction to title-only regeneration.
+#    - Refuse an overlong direction with 400 before calling generation.
+#    - Preserve the direction across a correctable memo validation error.
+#    - Preserve the direction across full regeneration from the result screen.
+#    - Preserve the direction across title-only regeneration.
+#    - Preserve the direction on a title-only retry after a generation failure.
+#    - Preserve the direction on a full-generation retry after a failure.
+#    - Keep the direction out of the application log.
+#    - Start a new input screen with a blank direction.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Flask
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Cover the optional Direction field: validation, prompt propagation and
+#       state preservation across regeneration and retries.
 #  v1.4 2026-09-11
 #       Cover browser-equivalent MAX_INPUT_CHARS validation on the server.
 #  v1.3 2026-09-10
@@ -171,7 +186,7 @@ class WebTest(unittest.TestCase):
                 })
 
         self.assertEqual(200, answer.status_code)
-        generate.assert_called_once_with("a\r\nb", web.config)
+        generate.assert_called_once_with("a\r\nb", web.config, "")
 
     def test_counts_surrounding_whitespace_toward_the_input_limit(self):
         with mock.patch.object(web.config, "max_input_chars", 1):
@@ -216,7 +231,7 @@ class WebTest(unittest.TestCase):
                 answer = self.client.post("/generate", data={
                     "input_text": "a memo", "body": "The settled body", "mode": "titles"})
 
-        titles.assert_called_once_with("a memo", "The settled body", web.config)
+        titles.assert_called_once_with("a memo", "The settled body", web.config, "")
         generate.assert_not_called()
         self.assertIn("The settled body", answer.get_data(as_text=True))
 
@@ -241,7 +256,7 @@ class WebTest(unittest.TestCase):
                 self.assertIn(">Generate<", page)
                 self.assertNotIn("Regenerate the titles only", page)
                 self.assertNotIn('name="body"', page)
-                titles.assert_called_once_with("a memo", body, web.config)
+                titles.assert_called_once_with("a memo", body, web.config, "")
                 generate.assert_not_called()
 
     def test_keeps_title_only_state_when_the_memo_is_invalid(self):
@@ -287,7 +302,7 @@ class WebTest(unittest.TestCase):
         self.assertIn('name="mode" value="titles"', page)
         self.assertIn("Regenerate the titles only", page)
         self.assertNotIn("Generate once more", page)
-        titles.assert_called_once_with("a memo", body, web.config)
+        titles.assert_called_once_with("a memo", body, web.config, "")
         generate.assert_not_called()
 
     def test_keeps_full_generation_as_the_retry_mode(self):
@@ -399,6 +414,130 @@ class WebTest(unittest.TestCase):
             'maxlength="{0}"'.format(web.config.max_input_chars), page)
         self.assertIn('data-character-count-target="input-count"', page)
         self.assertIn('id="input-count"', page)
+
+    def test_input_screen_has_the_direction_field_and_count_hook(self):
+        answer = self.client.get("/")
+
+        self.assertEqual(200, answer.status_code)
+        page = answer.get_data(as_text=True)
+        self.assertIn('name="direction"', page)
+        self.assertIn("Direction (optional)", page)
+        self.assertIn(
+            'maxlength="{0}"'.format(web.config.max_policy_chars), page)
+        self.assertIn('data-character-count-target="direction-count"', page)
+        self.assertIn('id="direction-count"', page)
+
+    def test_generates_normally_with_a_blank_direction(self):
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "direction": "  ", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once_with("a memo", web.config, "")
+
+    def test_passes_a_nonblank_direction_to_full_generation(self):
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "direction": "Keep it short.", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once_with("a memo", web.config, "Keep it short.")
+
+    def test_passes_a_nonblank_direction_to_title_only_regeneration(self):
+        with mock.patch.object(
+                web, "regenerate_titles", return_value=draft("The settled body")) as titles:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "body": "The settled body",
+                "direction": "Prefer a plain title.",
+                "mode": "titles",
+            })
+
+        self.assertEqual(200, answer.status_code)
+        titles.assert_called_once_with(
+            "a memo", "The settled body", web.config, "Prefer a plain title.")
+
+    def test_refuses_an_overlong_direction_before_generation(self):
+        direction = "a" * (web.config.max_policy_chars + 1)
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "direction": direction, "mode": "full"})
+
+        self.assertEqual(400, answer.status_code)
+        self.assertIn("The direction is too long", answer.get_data(as_text=True))
+        generate.assert_not_called()
+
+    def test_preserves_the_direction_across_a_correctable_memo_error(self):
+        answer = self.client.post("/generate", data={
+            "input_text": "  ", "direction": "Keep it short.", "mode": "full"})
+
+        self.assertEqual(400, answer.status_code)
+        page = answer.get_data(as_text=True)
+        self.assertIn("Enter a memo first", page)
+        self.assertIn("Keep it short.", page)
+
+    def test_preserves_the_direction_across_full_regeneration(self):
+        with mock.patch.object(web, "generate_draft", return_value=draft()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "direction": "Keep it short.", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        self.assertIn("Keep it short.", answer.get_data(as_text=True))
+
+    def test_preserves_the_direction_across_title_only_regeneration(self):
+        with mock.patch.object(
+                web, "regenerate_titles", return_value=draft("The settled body")):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "body": "The settled body",
+                "direction": "Prefer a plain title.",
+                "mode": "titles",
+            })
+
+        self.assertEqual(200, answer.status_code)
+        self.assertIn("Prefer a plain title.", answer.get_data(as_text=True))
+
+    def test_preserves_the_direction_on_a_title_only_retry(self):
+        with mock.patch.object(
+                web, "regenerate_titles", side_effect=UpstreamTimeoutError()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "body": "The settled body",
+                "direction": "Prefer a plain title.",
+                "mode": "titles",
+            })
+
+        self.assertEqual(504, answer.status_code)
+        self.assertIn("Prefer a plain title.", answer.get_data(as_text=True))
+
+    def test_preserves_the_direction_on_a_full_generation_retry(self):
+        with mock.patch.object(
+                web, "generate_draft", side_effect=UpstreamTimeoutError()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "direction": "Keep it short.", "mode": "full"})
+
+        self.assertEqual(504, answer.status_code)
+        self.assertIn("Keep it short.", answer.get_data(as_text=True))
+
+    def test_keeps_the_direction_out_of_the_log(self):
+        with mock.patch.object(web, "generate_draft", side_effect=UpstreamTimeoutError()):
+            with self.assertLogs("app", level=logging.ERROR) as logged:
+                answer = self.client.post("/generate", data={
+                    "input_text": "a memo",
+                    "direction": "a very particular secret direction",
+                    "mode": "full",
+                })
+
+        self.assertEqual(504, answer.status_code)
+        self.assertNotIn(
+            "a very particular secret direction", "\n".join(logged.output))
+
+    def test_starts_a_new_input_screen_with_a_blank_direction(self):
+        answer = self.client.get("/")
+
+        page = answer.get_data(as_text=True)
+        self.assertIn('name="direction"', page)
+        self.assertNotIn("Keep it short.", page)
 
     def test_result_screen_has_memo_limit_and_body_auto_growth_hook(self):
         with mock.patch.object(web, "generate_draft", return_value=draft()):

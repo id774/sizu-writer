@@ -66,6 +66,9 @@
 #  - MAX_INPUT_CHARS
 #      Upper bound of the memo field using browser textarea length:
 #      UTF-16 code units after newline normalization. Defaults to 4000.
+#  - MAX_POLICY_CHARS
+#      Upper bound of the optional Web Direction field, using the same
+#      browser textarea length as MAX_INPUT_CHARS. Defaults to 2000.
 #  - MAX_ALT_TITLES
 #      Number of alternative titles kept. Defaults to 4.
 #  - PROMPT_DIR
@@ -82,6 +85,8 @@
 #      matching port values.
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Add MAX_POLICY_CHARS, the upper bound of the optional Web Direction field.
 #  v1.3 2026-09-10
 #       Refuse malformed generation base URLs before they reach the client.
 #  v1.2 2026-09-06
@@ -159,6 +164,7 @@ class Config:
     generation_temperature: Optional[float] = None
     max_output_tokens: int = 6000
     max_input_chars: int = 4000
+    max_policy_chars: int = 2000
     max_alt_titles: int = 4
     prompt_dir: str = "prompts"
     log_level: str = "INFO"
@@ -276,6 +282,7 @@ def load_config() -> Config:
         generation_temperature=temperature,
         max_output_tokens=_whole("MAX_OUTPUT_TOKENS", 6000, 1),
         max_input_chars=_whole("MAX_INPUT_CHARS", 4000, 1),
+        max_policy_chars=_whole("MAX_POLICY_CHARS", 2000, 1),
         max_alt_titles=_whole("MAX_ALT_TITLES", 4, 0),
         prompt_dir=_text("PROMPT_DIR", "prompts"),
         log_level=log_level,

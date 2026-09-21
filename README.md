@@ -42,6 +42,7 @@ The repository is written in English — the code, the comments, the screens, th
 ## Features
 
 - **One memo in, a postable draft out**: the whole body and the title candidates from a single generation
+- **An optional Direction for this generation only**: a field below the memo for a focus, a length, a tone or a title preference that applies to one run and is never saved
 - **Any OpenAI compatible endpoint, named out loud**: Sakura AI Engine, OpenAI or another service, chosen by setting `GENERATION_BASE_URL`; there is no default endpoint and no fallback to one
 - **Structured answer**: the endpoint is asked for a JSON object, so the body and the titles arrive as separate fields rather than being cut out of prose by heuristic
 - **One action, one request**: retries default to zero, so a screen click or a CLI run costs exactly one request on a plan that counts them
@@ -146,6 +147,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `GENERATION_TEMPERATURE` | not sent | Sent only when set, so that a model refusing the parameter still runs. |
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the memo field using the browser textarea length: UTF-16 code units after textarea newline normalization. The server applies the same limit. |
+| `MAX_POLICY_CHARS` | `2000` | Upper bound of the optional Web Direction field, using the same browser textarea length as `MAX_INPUT_CHARS`. The server applies the same limit. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
@@ -377,6 +379,20 @@ being turned into a full generation.
 
 Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback.
 
+Below the memo field, an optional **Direction (optional)** field takes extra
+instructions for this generation only: a focus, a length, a tone, something to
+leave out, a title preference. It is blank by default, which means the usual
+generation with no additional instruction. A nonblank Direction is sent to the
+configured endpoint together with the memo, for full generation and for
+title-only regeneration alike, and is kept across regeneration and a
+correctable retry the same way the memo is. It carries no new fact of its own —
+new material still belongs in the memo — is over `MAX_POLICY_CHARS` refused
+with status 400 before a request is made, and is never written to disk, a
+session, a cookie or the application log. Starting a new one from the input
+screen clears it. A custom `PROMPT_DIR` that does not use the `{{direction}}`
+placeholder keeps working exactly as before; see
+[doc/PROMPTS.md](doc/PROMPTS.md).
+
 The copy buttons use the clipboard API when the page is served over HTTPS, and fall back to selecting the text so that it can be copied by hand when it is not. A failure to copy leaves the text selected rather than silently doing nothing.
 
 ### The workflow end to end
@@ -410,13 +426,13 @@ They are read on every generation, so a prompt edited while the server runs take
 
 A prompt file that is missing, unreadable, empty or whitespace-only stops the
 generation before any API request is made; there is no built-in fallback
-prompt. Placeholder substitution treats the memo and settled body literally,
-so text such as `{{body}}` typed in a memo is data rather than another round of
-template syntax.
+prompt. Placeholder substitution treats the memo, the settled body and the
+optional Direction literally, so text such as `{{body}}` typed in a memo is
+data rather than another round of template syntax.
 
-The policy they encode comes from the requirements: keep the concrete scene and the writer's own wording, invent no experience or causal link to tidy the text, do not present a familiar theme as freshly discovered, add nothing to reach a length, and do not manufacture a conclusion where the thinking has not reached one.
+The policy they encode comes from the requirements: keep the concrete scene and the writer's own wording, invent no experience or causal link to tidy the text, do not present a familiar theme as freshly discovered, add nothing to reach a length, and do not manufacture a conclusion where the thinking has not reached one. The shipped prompts place the optional Direction of `{{direction}}` above the memo, as an instruction for this request alone rather than a second memo; it never overrides the policy above it or the JSON output format.
 
-[doc/PROMPTS.md](doc/PROMPTS.md) describes each file, the two placeholders, the JSON contract they must keep with `generator.py`, and how to iterate on a prompt without guessing which change did what.
+[doc/PROMPTS.md](doc/PROMPTS.md) describes each file, the placeholders, the JSON contract they must keep with `generator.py`, and how to iterate on a prompt without guessing which change did what.
 
 ## Notices
 
@@ -439,6 +455,7 @@ The screen shows a message meant for the person and a short reference id. The ca
 | Enter a memo first. | 400 | The input was empty or blank |
 | There is no post body to regenerate titles for. Generate the whole draft first. | 400 | A title-only request did not carry a settled body |
 | The memo is too long. | 400 | Over `MAX_INPUT_CHARS` |
+| The direction is too long. | 400 | Over `MAX_POLICY_CHARS` |
 | The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
 | Generation took too long and was stopped. | 504 | The SDK reported a request-attempt timeout |

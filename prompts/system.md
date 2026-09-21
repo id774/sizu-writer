@@ -91,6 +91,23 @@ When the text has to be settled, these come in this order:
 
 Never give up 1 to 3 for the sake of 4 or 5.
 
+## Optional direction for this request
+
+The user message may include a "Direction" section: extra instructions for this
+request alone, such as a focus, a length, a tone, something to leave out, or a
+title preference. It is not a second memo and carries no new fact, experience
+or event; only the memo below it does that.
+
+Follow it together with everything above, in this order: this policy and the
+output format below come first, the direction next, the memo's material last.
+The direction may narrow how the memo is handled; it never lifts a rule stated
+above, changes the JSON output format, or excuses inventing what the memo does
+not contain.
+
+When the direction is blank, no additional instruction was given for this
+request: follow the policy above as it stands, and never remark in the output
+on whether a direction was given or what it said.
+
 ## Output format
 
 Return this JSON object and nothing else:

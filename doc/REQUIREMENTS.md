@@ -90,6 +90,8 @@ The grain of the material decides the length. What one line on a microblog would
 The input screen carries:
 
 - a field for the memo
+- an optional field, below the memo, for a Direction that applies to this
+  generation only
 - a generate button
 - a button that clears the field
 
@@ -103,15 +105,29 @@ The input may be:
 - an existing short text
 - a memo of several paragraphs
 
+The optional Direction is not a second memo. It carries no new fact,
+experience or event; the memo alone does that. It states, for this generation
+only, something such as a focus, a length, a tone, something to leave out or a
+title preference. Leaving it blank is the ordinary case and means no
+additional instruction; the system never remarks in the generated text on
+whether a Direction was given. The Direction never overrides the requirements
+on the writing (section 7), the titles (section 8) or any other requirement in
+this document; it can only narrow how the memo already given is handled. An
+overlong Direction is refused before a generation request is made, the same
+way an overlong memo is (section 6.6). The Direction is not persisted, is
+never written to a log, and is carried across a regeneration and a correctable
+retry the same way the memo is (section 6.5), until the person returns to a
+fresh input screen.
+
 ### 6.2 Generation
 
-From the input, the system produces:
+From the input and the optional Direction, the system produces:
 
 - the whole post body
 - the leading title
 - other title candidates
 
-The body and the titles belong to the same result and must agree with each other.
+The body and the titles belong to the same result and must agree with each other. A title-only regeneration applies the Direction to the titles alone and never changes the already settled body, whether or not the Direction asks for a change to the body.
 
 ### 6.3 Showing the body
 
@@ -139,11 +155,16 @@ The result may miss the intent, so it must be possible to generate again. At a m
 
 Letting the AI revise a part of the body is not required in the initial implementation.
 
+A regeneration, and a correctable retry after an error, reuse the same
+Direction the person entered until they return to a fresh input screen; the
+Direction is not lost or reset by a regeneration or a retry.
+
 ### 6.6 Errors
 
 Report these in a form the person understands:
 
 - the input is empty
+- the optional Direction is longer than its configured limit
 - the configured generation endpoint could not be reached
 - the configured generation endpoint returned an error
 - the answer had an unexpected shape
@@ -302,6 +323,7 @@ At a minimum:
 
 - the page title
 - the memo field
+- the optional Direction field, below the memo
 - the generate button
 - the button that clears the field
 
@@ -336,6 +358,9 @@ At a minimum:
 - Restrict the users with Basic authentication, IP restriction or a VPN as needed.
 - If the input and the answers are logged, state the purpose and the retention period.
 - Do not expose internal information on an error page.
+- Hold the optional Direction to the same boundary as the memo: no server-side
+  persistence, no log entry, sent only to the configured generation endpoint
+  when a request is made.
 
 ### 10.2 Availability
 

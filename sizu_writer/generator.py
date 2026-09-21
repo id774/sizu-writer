@@ -30,6 +30,8 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Accept an optional per-request direction and pass it to prompt assembly.
 #  v1.3 2026-09-11
 #       Refuse non-standard JSON constants and bodies emptied by normalization,
 #       and accept outer-fenced prompt-json responses with code-fenced bodies.
@@ -151,9 +153,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def generate_draft(input_text: str, config: Config) -> Draft:
+def generate_draft(input_text: str, config: Config, direction: str = "") -> Draft:
     """ Generate a post body and its title candidates. """
-    result = _complete(build_body_messages(input_text, config.prompt_dir), config)
+    result = _complete(
+        build_body_messages(input_text, config.prompt_dir, direction), config)
     payload = _payload(result.content, config.generation_response_mode)
 
     raw_body = payload.get("body_markdown")
@@ -178,12 +181,13 @@ def generate_draft(input_text: str, config: Config) -> Draft:
     )
 
 
-def regenerate_titles(input_text: str, body: str, config: Config) -> Draft:
+def regenerate_titles(input_text: str, body: str, config: Config,
+                      direction: str = "") -> Draft:
     """ Generate title candidates for a body that is already settled. """
     if not isinstance(body, str) or not body.strip():
         raise EmptyBodyError()
 
-    messages = build_titles_messages(input_text, body, config.prompt_dir)
+    messages = build_titles_messages(input_text, body, config.prompt_dir, direction)
     result = _complete(messages, config)
     titles = _titles(_payload(result.content, config.generation_response_mode),
                      config)
