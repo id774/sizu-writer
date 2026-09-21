@@ -258,6 +258,32 @@ from `sizu_writer/diagnostics.py`. The memo, the prompt and the completion
 data never pass through that module, and the generator and provider
 interfaces are unchanged by it.
 
+Before any of this diagram runs, a `POST /generate` passes through a
+same-origin guard:
+
+```text
+request reference
+-> if REQUIRE_SAME_ORIGIN is enabled:
+     require one http/https Origin
+     parse and validate it
+     compare Origin netloc case-insensitively with request.host
+     reject 400 on missing / invalid / foreign
+-> parse form
+-> validate memo / Direction
+-> generate
+```
+
+Scheme equality is deliberately not a requirement: Apache terminates TLS in
+front of gunicorn, so the backend request is plain HTTP even when the
+browser's Origin is `https`. A refused request never reaches
+`sizu_writer/generator.py`, so it spends zero calls to
+`sizu_writer/providers/` and zero requests to `GENERATION_BASE_URL`. This
+check is Web-only: `cli.py` calls `sizu_writer/generator.py` directly and
+never passes through `app.py` or this guard. With `REQUIRE_SAME_ORIGIN=off`
+this diagram is reached exactly as it was before this guard existed, and the
+request payload sent to the endpoint, the response mode, the retry count and
+the timeouts are all unaffected by it either way.
+
 ---
 
 ## 7. Layout
@@ -311,6 +337,7 @@ interfaces are unchanged by it.
 | `MAX_OUTPUT_TOKENS` | no | `6000` | Upper bound of one answer |
 | `MAX_INPUT_CHARS` | no | `4000` | Upper bound of the input field |
 | `MAX_POLICY_CHARS` | no | `2000` | Upper bound of the optional Web Direction field |
+| `REQUIRE_SAME_ORIGIN` | no | `on` | Require the Web generation form Origin authority to match the request Host |
 | `MAX_ALT_TITLES` | no | `4` | Alternative titles kept |
 | `PROMPT_DIR` | no | `prompts` | Where the prompts live |
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
@@ -384,6 +411,7 @@ class Config:
     max_output_tokens: int = 6000
     max_input_chars: int = 4000
     max_policy_chars: int = 2000
+    require_same_origin: bool = True
     max_alt_titles: int = 4
     prompt_dir: str = "prompts"
     log_level: str = "INFO"
@@ -417,6 +445,7 @@ subclass of `ValueError`.
 | `MAX_ALT_TITLES` | a whole number, zero or more |
 | `PORT` | a whole number from 1 to 65535 |
 | `LOG_LEVEL` | unset, empty or whitespace-only, or one of the accepted levels |
+| `REQUIRE_SAME_ORIGIN` | blank/default, or `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off` case-insensitively |
 
 | Checked by `validate_generation_config()` | Condition |
 | --- | --- |
@@ -842,6 +871,19 @@ The product counts only the timeout budget of the attempts. The SDK may addition
 - The optional Web Direction is held to the same boundary as the memo: no
   server-side persistence, no session, no log entry at any level, sent only to
   the configured generation endpoint when a request is made.
+- Web `POST /generate` is protected by a default-on Origin authority check.
+- The check is performed before form parsing and before generation.
+- The accepted authority is exact `host[:port]` equality with `request.host`,
+  case-insensitively. Scheme is deliberately not compared because TLS
+  terminates at Apache.
+- The bundled Apache configuration already preserves Host with
+  `ProxyPreserveHost On`.
+- Missing, null, malformed, user-info-bearing, path/query/fragment-bearing and
+  foreign Origins are refused.
+- The refusal records only one fixed reason and the request reference; raw
+  Origin, Host and form content are not logged.
+- `REQUIRE_SAME_ORIGIN=off` is an explicit controlled-client escape hatch, not
+  an API, authentication or CORS feature.
 
 ---
 
@@ -900,8 +942,12 @@ model, an unknown response mode, a negative retry count, a non-positive
 timeout, the accepted `LOG_LEVEL` values and their case-insensitive
 normalization, the refusal of an unknown `LOG_LEVEL`, the legacy variables,
 the absence of secrets from every message, the `MAX_POLICY_CHARS` default,
-override and invalid-value refusal, and the static `Procfile` contract that it
-falls back to the documented default port of 8090 when `PORT` is unset.
+override and invalid-value refusal, the static `Procfile` contract that it
+falls back to the documented default port of 8090 when `PORT` is unset, and
+`REQUIRE_SAME_ORIGIN`'s strict boolean parsing: the enabled-by-default value,
+the accepted `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off` forms
+case-insensitively, a blank value read as the enabled default, and the
+refusal of an unknown one.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -926,6 +972,22 @@ unexpected exception alike. An unexpected exception's log record carries its
 class name and `traceback.format_tb()` stack frames and never `str(error)`,
 `repr(error)` or a value passed through the exception, and the rendered page
 never carries that raw message either.
+
+`tests/test_web.py` also covers the default-on same-origin Origin guard: a
+`POST /generate` whose Origin authority matches `request.host` is accepted
+and reaches `generate_draft()`/`regenerate_titles()`, including an `https://`
+Origin against a same-host request pinning that the scheme is validated but
+never compared to `request.scheme`; a request with no Origin, a malformed one
+(`null`, a non-`http(s)` scheme, one carrying userinfo, a path, a query, a
+fragment or embedded whitespace), a foreign host or a foreign explicit port
+is refused with status 400 before either generation function is called; the
+rejection page and its one `app` INFO log record carry none of the submitted
+form values and none of the raw Origin header; `REQUIRE_SAME_ORIGIN=False`
+restores the pre-guard behavior for both a same-origin and a foreign
+request; a non-`/generate` route such as `POST /healthz` keeps its own
+status (405) rather than being intercepted by the guard; and a foreign
+Origin is refused before an oversized form is parsed, while a same-origin
+oversized request still answers 413.
 
 `tests/test_generator.py` covers building a `Draft` from a `CompletionResult`,
 both response modes, a fenced answer, the refusal of prose around the object,

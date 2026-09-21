@@ -73,6 +73,15 @@ These lines are not crossed by a setting or by an extension.
   into the generated body. The screen separates the body from every other
   piece of information, structurally and not only visually.
 - Do not render model output with `|safe`.
+- Web `POST /generate` is same-origin by default. When
+  `REQUIRE_SAME_ORIGIN` is enabled, a missing, malformed or foreign `Origin`
+  is refused before form parsing and before generation.
+- The guard compares only the parsed Origin authority with `request.host`;
+  schemes are not compared because TLS terminates at Apache.
+- The refusal logs only a fixed classification and the existing request
+  reference. Raw `Origin`, raw `Host` and submitted form content are not logged.
+- Do not implement this boundary with session state, cookies, a CSRF token,
+  Referer fallback, CORS or a new dependency.
 
 ### 1.3 The generation endpoint
 The settings decide where a memo is sent, so they are read strictly.

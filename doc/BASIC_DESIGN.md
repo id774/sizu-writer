@@ -440,6 +440,11 @@ The Flask application. Four routes.
 | GET | `/healthz` | Liveness; no API call |
 | GET | `/static/<file>` | CSS and JS |
 
+- Before the form is read, the application checks Origin when
+  `REQUIRE_SAME_ORIGIN` is true. Missing, malformed and foreign origins
+  return 400 with a non-retryable error page. The guard executes after the
+  request reference has been established and before memo/Direction parsing
+  or generation.
 - Generation and regeneration share one endpoint, so the form always posts to
   the same place. `mode=titles` always means title-only regeneration; the
   presence of `body` does not turn that operation into a full generation.
@@ -544,11 +549,16 @@ The endpoint identity is explicit: `GENERATION_BACKEND`,
 before a generation request can be made and have no implicit endpoint fallback.
 `GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and
 `GENERATION_TEMPERATURE` shape the request. `MAX_OUTPUT_TOKENS`,
-`MAX_INPUT_CHARS`, `MAX_POLICY_CHARS`, `MAX_ALT_TITLES`, `PROMPT_DIR`,
-`LOG_LEVEL` and `PORT` shape the application around it. `MAX_POLICY_CHARS`
-bounds the optional Web Direction field the same way `MAX_INPUT_CHARS` bounds
-the memo: a positive integer, default `2000`, using the same browser-textarea
-length definition, checked before a generation request is made.
+`MAX_INPUT_CHARS`, `MAX_POLICY_CHARS`, `REQUIRE_SAME_ORIGIN`, `MAX_ALT_TITLES`,
+`PROMPT_DIR`, `LOG_LEVEL` and `PORT` shape the application around it.
+`MAX_POLICY_CHARS` bounds the optional Web Direction field the same way
+`MAX_INPUT_CHARS` bounds the memo: a positive integer, default `2000`, using
+the same browser-textarea length definition, checked before a generation
+request is made. `REQUIRE_SAME_ORIGIN` is a strict boolean, default true.
+`load_config()` accepts `1`/`0`, `true`/`false`, `yes`/`no` and `on`/`off`
+case-insensitively; blank means the default and any other value is refused.
+It controls only the Web `POST /generate` Origin guard and is not part of
+`validate_generation_config()`.
 
 `load_config()` parses and validates values that are meaningful on their own.
 `validate_generation_config()` refuses a configuration that cannot address the
@@ -667,6 +677,9 @@ click
   field, no hidden body, no "Generate once more" or "Regenerate the titles
   only" button, only a link back to `/`. There is no generation attempt to
   retry, so the page does not offer to retry one.
+- A same-origin refusal is not a generation error. It renders `error.html` with
+  status 400 and `retryable=false`, reflects none of the submitted form
+  fields, and logs one fixed refusal reason next to the request reference.
 - Only `user_message` and the reference id are shown. The server log carries
   the matching diagnostic once, next to the same reference id (section 5.6).
 
@@ -687,6 +700,15 @@ click
   authentication. `mod_ratelimit` limits response transfer rate and is not a
   generation-request counter.
 - No internal information on an error page (section 5.2).
+- Web `POST /generate` is same-origin by default. The application compares the
+  parsed Origin authority with `request.host` and rejects missing, malformed or
+  foreign origins before form parsing. It does not compare schemes because
+  HTTPS terminates at Apache while gunicorn receives HTTP.
+- `ProxyPreserveHost On` is therefore part of the deployment contract for this
+  guard. No `X-Forwarded-Proto`, `ProxyFix`, `Referer` fallback, session,
+  cookie or CSRF token is introduced.
+- The guard logs only the fixed reason `missing Origin`, `invalid Origin` or
+  `foreign Origin`; raw Origin and Host values are not logged.
 
 ### 8.2 Availability
 

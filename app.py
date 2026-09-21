@@ -43,8 +43,8 @@
 #
 #  Version History:
 #  v1.5 2026-09-21
-#       Add per-request Direction, preserve title-only body notices, and keep
-#       failure logging sanitized with retry controls only on generation errors.
+#       Add per-request Direction and default-on same-origin POST protection;
+#       preserve title-only notices and sanitized failure/retry handling.
 #  v1.4 2026-09-11
 #       Match server input length validation to the browser textarea.
 #  v1.3 2026-09-10
@@ -64,6 +64,7 @@
 import logging
 import secrets
 import traceback
+from urllib.parse import urlsplit
 
 from flask import Flask, g, render_template, request
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
@@ -115,6 +116,66 @@ def _request_reference_id() -> str:
 def begin_request_diagnostics():
     """ Establish the request reference before application processing. """
     _request_reference_id()
+
+
+def _same_origin_failure() -> str:
+    """ Return why this generation POST fails the Origin check, or blank. """
+    origin = request.headers.get("Origin", "").strip()
+    if not origin:
+        return "missing Origin"
+    if any(character.isspace() for character in origin):
+        return "invalid Origin"
+
+    try:
+        parts = urlsplit(origin)
+        parts.port
+    except ValueError:
+        return "invalid Origin"
+
+    if (
+            parts.scheme.lower() not in ("http", "https")
+            or not parts.netloc
+            or parts.username is not None
+            or parts.password is not None
+            or parts.path
+            or parts.query
+            or parts.fragment):
+        return "invalid Origin"
+
+    if parts.netloc.casefold() != request.host.casefold():
+        return "foreign Origin"
+
+    return ""
+
+
+@app.before_request
+def enforce_same_origin_generation():
+    """ Refuse a generation POST that did not come from this Web origin. """
+    if (
+            not config.require_same_origin
+            or request.method != "POST"
+            or request.endpoint != "generate"):
+        return None
+
+    reason = _same_origin_failure()
+    if not reason:
+        return None
+
+    reference_id = _request_reference_id()
+    logger.info(
+        "Same-origin generation request refused (reference %s): %s",
+        reference_id,
+        reason,
+    )
+    page = render_template(
+        "error.html",
+        error="This request must be submitted from this site.",
+        reference_id=reference_id,
+        retryable=False,
+        max_input_chars=config.max_input_chars,
+        max_policy_chars=config.max_policy_chars,
+    )
+    return page, 400
 
 
 @app.teardown_request

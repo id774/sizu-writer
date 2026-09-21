@@ -374,6 +374,16 @@ At a minimum:
 - Hold the optional Direction to the same boundary as the memo: no server-side
   persistence, no log entry, sent only to the configured generation endpoint
   when a request is made.
+- Require Web `POST /generate` requests to come from the same request authority
+  by default: the `Origin` host and port must match the request `Host`.
+- Reject a missing, malformed or foreign `Origin` before form parsing and before
+  any generation request is made.
+- Allow the check to be disabled only by the explicit server-side
+  `REQUIRE_SAME_ORIGIN` setting for a controlled non-browser form client.
+- Do not reflect submitted form data or raw `Origin` / `Host` values when the
+  same-origin check refuses a request.
+- Treat same-origin checking as an additional request boundary, not as a
+  replacement for authentication, authorization or rate limiting.
 
 ### 10.2 Availability
 

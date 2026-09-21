@@ -119,6 +119,12 @@ Add an HTTP virtual host if port 80 should redirect to HTTPS:
 Enable `mod_alias` if the redirect directive is unavailable.
 Run `apache2ctl configtest` before every Apache reload.
 
+The same-origin guard compares the browser Origin authority with the Host
+seen by Flask, so Apache must preserve the public Host. The bundled
+virtual-host example already sets `ProxyPreserveHost On`; do not remove it.
+TLS still terminates at Apache, so the application does not compare the
+Origin scheme with the backend request scheme.
+
 ## Restrict access
 
 Do not publish an unrestricted instance.
@@ -139,6 +145,10 @@ Use `htpasswd` without `-c` when adding another user.
 
 Application-level rate limiting is not implemented.
 Authentication, a VPN, `mod_qos`, or another shared limiter must enforce it.
+
+Keep `REQUIRE_SAME_ORIGIN=on` for browser deployments. This is an additional
+request boundary, not a replacement for Basic authentication, IP restriction,
+a VPN or request limiting.
 
 ## Verify the complete path
 
@@ -232,6 +242,11 @@ sudo -u sizu .venv/bin/python cli.py generate --input memo.txt --json
 A network API needs a separate design for authentication, request and error schemas,
 rate limiting, cross-origin policy and contract tests.
 Do not treat the current form endpoint as that API.
+
+A controlled non-browser client that intentionally posts the existing HTML form
+endpoint must explicitly set `REQUIRE_SAME_ORIGIN=off`. Prefer the CLI JSON output
+for local integration. Disabling the Origin guard does not make `/generate` a
+supported network API.
 
 ## Routine operations
 
