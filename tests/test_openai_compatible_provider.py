@@ -60,15 +60,17 @@
 #    - Map 401, 403, 429 and 500 onto one user facing error.
 #    - Record the shape of an answer without its content or the token.
 #    - Record the wait next to the limit on an answer and on a timeout.
-#    - Keep the token out of a failure line.
-#    - Record the request reference on a failed generation.
-#    - Keep raw upstream error text out of a failure line.
+#    - Keep the token out of a failure diagnostic.
+#    - Do not log a provider failure; the entry point logs it once instead.
+#    - Keep raw upstream error text out of a failure diagnostic.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only (the openai package is stubbed, never imported)
 #
 #  Version History:
+#  v1.2 2026-09-21
+#       Cover sanitized provider diagnostics without provider-side failure logging.
 #  v1.1 2026-09-09
 #       Cover required finish reasons, sanitized failure logs and request references.
 #  v1.0 2026-08-05
@@ -83,9 +85,9 @@ from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 from config import Config
-from sizu_writer.diagnostics import reset_reference_id, set_reference_id
 from sizu_writer.errors import (InvalidResponseError, UpstreamConnectionError,
                                 UpstreamStatusError, UpstreamTimeoutError)
+from sizu_writer.providers import openai_compatible
 from sizu_writer.providers.openai_compatible import OpenAICompatibleProvider
 
 TOKEN = "00000000-0000-0000-0000-000000000000:secret-value"
@@ -381,61 +383,49 @@ class LogTest(ProviderTest):
         self.assertIn("elapsed=", recorded)
         self.assertIn("timeout=120.0", recorded)
 
+    def test_does_not_log_a_provider_failure(self):
+        # The entry point logs the failure once; a provider-level log of
+        # the same failure would duplicate that diagnostic.
+        with mock.patch.object(openai_compatible.logger, "error") as error_log:
+            with self.assertRaises(UpstreamTimeoutError):
+                self.raise_from_sdk(FakeTimeoutError("too slow"))
+
+        error_log.assert_not_called()
+
     def test_records_the_wait_of_a_timeout_next_to_the_limit(self):
         # Keep operation elapsed next to the per-attempt timeout setting.
         # With the fake SDK there is only one attempt; a real SDK call may
         # include retries and waits when the configured retry count is nonzero.
-        with self.assertLogs("sizu_writer.providers.openai_compatible",
-                             level=logging.ERROR) as logged:
-            with self.assertRaises(UpstreamTimeoutError):
-                self.raise_from_sdk(FakeTimeoutError("too slow"))
+        with self.assertRaises(UpstreamTimeoutError) as refused:
+            self.raise_from_sdk(FakeTimeoutError("too slow"))
 
-        recorded = "\n".join(logged.output)
-        self.assertIn("elapsed=", recorded)
-        self.assertIn("timeout=120.0", recorded)
+        diagnostic = refused.exception.diagnostic
+        self.assertIn("elapsed=", diagnostic)
+        self.assertIn("timeout=120.0", diagnostic)
 
-    def test_keeps_the_token_out_of_a_failure_line(self):
-        with self.assertLogs("sizu_writer.providers.openai_compatible",
-                             level=logging.ERROR) as logged:
-            with self.assertRaises(UpstreamStatusError):
-                self.raise_from_sdk(FakeStatusError(401))
+    def test_keeps_the_token_out_of_a_failure_diagnostic(self):
+        with self.assertRaises(UpstreamStatusError) as refused:
+            self.raise_from_sdk(FakeStatusError(401))
 
-        recorded = "\n".join(logged.output)
-        self.assertIn("status=401", recorded)
-        self.assertNotIn(TOKEN, recorded)
+        diagnostic = refused.exception.diagnostic
+        self.assertIn("status=401", diagnostic)
+        self.assertNotIn(TOKEN, diagnostic)
 
-    def test_keeps_raw_upstream_error_text_out_of_a_failure_line(self):
-        with self.assertLogs("sizu_writer.providers.openai_compatible",
-                             level=logging.ERROR) as logged:
-            with self.assertRaises(UpstreamStatusError):
-                self.raise_from_sdk(
-                    FakeStatusError(500, "SENSITIVE_UPSTREAM_RESPONSE_TEXT"))
+    def test_keeps_raw_upstream_error_text_out_of_a_failure_diagnostic(self):
+        with self.assertRaises(UpstreamStatusError) as refused:
+            self.raise_from_sdk(
+                FakeStatusError(500, "SENSITIVE_UPSTREAM_RESPONSE_TEXT"))
 
-        recorded = "\n".join(logged.output)
-        self.assertIn("error=FakeStatusError", recorded)
-        self.assertIn("status=500", recorded)
-        self.assertIn("request_id=req_1", recorded)
-        self.assertIn("endpoint_host=api.ai.sakura.ad.jp", recorded)
-        self.assertIn("model=a-model", recorded)
-        self.assertIn("elapsed=", recorded)
-        self.assertIn("timeout=120.0", recorded)
-        self.assertNotIn("SENSITIVE_UPSTREAM_RESPONSE_TEXT", recorded)
-        self.assertNotIn(TOKEN, recorded)
-
-    def test_records_the_request_reference_on_a_failed_generation(self):
-        token = set_reference_id("deadbeef")
-        try:
-            with self.assertLogs("sizu_writer.providers.openai_compatible",
-                                 level=logging.ERROR) as logged:
-                with self.assertRaises(UpstreamStatusError):
-                    self.raise_from_sdk(FakeStatusError(500))
-        finally:
-            reset_reference_id(token)
-
-        recorded = "\n".join(logged.output)
-        self.assertIn("reference=deadbeef", recorded)
-        self.assertIn("status=500", recorded)
-        self.assertIn("request_id=req_1", recorded)
+        diagnostic = refused.exception.diagnostic
+        self.assertIn("error=FakeStatusError", diagnostic)
+        self.assertIn("status=500", diagnostic)
+        self.assertIn("request_id=req_1", diagnostic)
+        self.assertIn("endpoint_host=api.ai.sakura.ad.jp", diagnostic)
+        self.assertIn("model=a-model", diagnostic)
+        self.assertIn("elapsed=", diagnostic)
+        self.assertIn("timeout=120.0", diagnostic)
+        self.assertNotIn("SENSITIVE_UPSTREAM_RESPONSE_TEXT", diagnostic)
+        self.assertNotIn(TOKEN, diagnostic)
 
 
 if __name__ == "__main__":

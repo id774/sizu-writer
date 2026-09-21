@@ -160,6 +160,11 @@ A regeneration, and a correctable retry after an error, reuse the same
 Direction the person entered until they return to a fresh input screen; the
 Direction is not lost or reset by a regeneration or a retry.
 
+Regenerating the titles only keeps whatever notice already applies to the
+settled body, including after a failed title-only regeneration or a
+correctable retry; regenerating the whole text computes new notices for the
+new body and does not carry the old ones forward.
+
 ### 6.6 Errors
 
 Report these in a form the person understands:
@@ -173,6 +178,13 @@ Report these in a form the person understands:
 - the server failed internally
 
 Never show the API key, an internal path or a traceback on the screen.
+
+Offer a way to try the same operation again only for an error that happened
+while generating: the person can press the same generate or regenerate
+action once more. An error that is not a generation error — an address the
+system does not serve, or a request rejected for being too large — offers
+only a way back to the input screen, not a generation retry, because there
+is no generation attempt to repeat.
 
 ## 7. Requirements on the writing
 

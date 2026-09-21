@@ -28,6 +28,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Carry prompt-file diagnostics through InternalError without duplicate logs.
 #  v1.4 2026-09-21
 #       Add the optional {{direction}} placeholder to body and title messages.
 #  v1.3 2026-09-11
@@ -58,18 +60,14 @@ def load_prompt(name: str, prompt_dir: str) -> str:
         with open(path, encoding="utf-8") as handle:
             text = handle.read().strip()
     except UnicodeDecodeError:
-        logger.error("The prompt file is not valid UTF-8: %s", path)
         raise InternalError(
             "prompt file is not valid UTF-8: {0}".format(path))
-    except FileNotFoundError as error:
-        logger.error("Cannot read the prompt file %s: %s", path, error)
+    except FileNotFoundError:
         raise InternalError("prompt file missing: {0}".format(path))
-    except OSError as error:
-        logger.error("Cannot read the prompt file %s: %s", path, error)
+    except OSError:
         raise InternalError("cannot read prompt file: {0}".format(path))
 
     if not text:
-        logger.error("The prompt file is empty or blank: %s", path)
         raise InternalError(
             "prompt file empty or blank: {0}".format(path))
 

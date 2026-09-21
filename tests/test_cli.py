@@ -44,7 +44,7 @@
 #    - Apply a --prompt-dir override trimmed of surrounding whitespace.
 #    - Refuse an empty memo without spending a request.
 #    - Report a generation failure as a failed run.
-#    - Name the failure class and its user message in the log.
+#    - Name the failure class and its user message in a single log record.
 #    - Refuse a configuration that cannot address an endpoint.
 #    - Require a subcommand, which argparse rejects with exit status 2.
 #    - Refuse --text and --input given at once.
@@ -60,6 +60,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Cover one sanitized CLI error log without duplicate library diagnostics.
 #  v1.4 2026-09-12
 #       Cover blank and trimmed --prompt-dir overrides.
 #  v1.3 2026-09-10
@@ -251,7 +253,10 @@ class MainTest(unittest.TestCase):
             self.run_cli("generate", "--text", "a memo",
                          failure=UpstreamTimeoutError())
 
-        line = "\n".join(recorded.output)
+        # Exactly one record: the entry point owns the diagnostic and a
+        # library module raising the same failure does not log it again.
+        self.assertEqual(1, len(recorded.output))
+        line = recorded.output[0]
         self.assertIn("UpstreamTimeoutError", line)
         # These errors carry no text of their own, so without the fallback
         # to user_message the line said the name and nothing more.

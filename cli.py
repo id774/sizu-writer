@@ -59,6 +59,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Report one sanitized diagnostic for each SizuWriterError failure.
 #  v1.3 2026-09-12
 #       Refuse a blank --prompt-dir override and trim a usable one.
 #  v1.2 2026-09-10
@@ -210,10 +212,10 @@ def main() -> int:
         else:
             draft = generate_draft(source, config)
     except SizuWriterError as error:
-        # Fall back to user_message. Most of these carry no text of their
-        # own, so the name alone reached the terminal and said nothing.
-        logger.error("%s: %s", type(error).__name__,
-                     str(error) or error.user_message)
+        # Fall back to user_message when a failure carries no diagnostic
+        # of its own, so the name alone never reaches the terminal.
+        detail = error.diagnostic or error.user_message
+        logger.error("%s: %s", type(error).__name__, detail)
         return 1
     except UnicodeDecodeError:
         logger.error("Cannot read the input: the file is not valid UTF-8.")

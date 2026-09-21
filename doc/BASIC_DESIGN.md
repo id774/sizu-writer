@@ -291,8 +291,18 @@ Validates the answer and returns a `Draft`.
 
 ```python
 def generate_draft(input_text: str, config: Config, direction: str = "") -> Draft
-def regenerate_titles(input_text: str, body: str, config: Config, direction: str = "") -> Draft
+def regenerate_titles(input_text: str, body: str, config: Config, direction: str = "",
+                      notices: Optional[List[str]] = None) -> Draft
 ```
+
+`generate_draft()` always computes fresh notices from the body `normalize_body()`
+returns; it never receives a `notices` argument. `regenerate_titles()` does not
+touch the body, so it cannot recompute the notices `normalize_body()` found for
+it earlier — an already-demoted heading, for instance, cannot be rediscovered
+from the settled body. It therefore accepts the caller's existing `notices` and
+carries them into the returned `Draft` unchanged, defaulting to an empty list
+when the caller omits the argument, which keeps every existing caller,
+including `cli.py`, unaffected.
 
 `direction` is an optional trailing argument on both functions, defaulting to
 an empty string. An existing caller that does not pass one, including every
@@ -322,7 +332,12 @@ second endpoint.
 The provider maps SDK timeout, connection and status failures to the repository's
 upstream exception types. It also refuses an answer with no choice, no usable
 content, or a truncation finish reason before returning `CompletionResult` to
-`generator.py`.
+`generator.py`. None of these failures are logged by the provider itself: each
+one carries a sanitized diagnostic (the backend, the endpoint host, the model,
+the exception's class name, the HTTP status when there is one, the upstream
+request id, the elapsed seconds and the configured timeout, never the raw
+exception message or an upstream response body) on the `SizuWriterError`
+subclass it raises, and `app.py` or `cli.py` logs that diagnostic once.
 
 #### 5.4.2 The JSON object contract
 
@@ -394,12 +409,19 @@ def normalize_body(text: str) -> Tuple[str, List[str]]
 The rewrites are:
 
 1. Remove one outer backtick or tilde code fence only when it wraps the whole
-   body and there is no separate inner fence.
+   body and there is no separate inner fence. A fence marker is recognized
+   only up to 3 leading ASCII spaces of indentation; a marker indented 4
+   spaces or more is indented code, not a fence boundary, and never opens or
+   closes fence tracking.
 2. Demote a level-one Markdown heading to level two outside backtick and tilde
-   fenced code blocks, adding a notice when that happens.
-3. Collapse three or more consecutive line breaks to a normal paragraph gap
-   outside fenced code blocks, preserving line breaks inside them, and strip
-   surrounding whitespace from the whole body.
+   fenced code blocks, adding a notice when that happens. The same
+   0-to-3-space indentation boundary applies, so a 4-space indented `#` is
+   indented code and is never demoted.
+3. Collapse runs of blank or whitespace-only lines to a single blank line
+   outside fenced code blocks, preserving the exact content of a line inside
+   one, and remove blank boundary lines from the start and end of the whole
+   body without touching the horizontal indentation of the first and last
+   non-blank line.
 
 After those rewrites the formatter only inspects. It adds a notice when the body
 contains a configured boilerplate phrase or a phrase that looks like an
@@ -424,19 +446,35 @@ The Flask application. Four routes.
   Missing or unrecognized `mode` keeps the existing full-generation behavior,
   while a missing or blank title body is refused by the generation core.
 - The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
-- `SizuWriterError` is caught by an `errorhandler`. A correctable 400 response is rendered on `index.html`; other known application errors are rendered on `error.html`, each with `user_message` plus the reference id. An unexpected exception is wrapped in `InternalError` and takes the same path. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- `SizuWriterError` is caught by an `errorhandler`. A correctable 400 response is rendered on `index.html`; other known application errors are rendered on `error.html`, each with `user_message` plus the reference id. An unexpected exception is caught by its own `errorhandler(Exception)`, logged once and rendered through the same `_render_sizu_error()` helper as a generic `InternalError`, without calling the known-error handler a second time. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- Each error handler logs its failure exactly once, before rendering. A known
+  `SizuWriterError` logs `type(error).__name__`, the reference id and
+  `error.diagnostic or error.user_message`; a library module that raised the
+  error does not log it a second time (section 5.4 and 5.4.1). An unexpected
+  exception logs the exception's class name and its traceback stack frames
+  through `traceback.format_tb()`, never `str(error)`, `repr(error)` or
+  `logger.exception()`, so a raw exception message never reaches the log.
+- `error.html` shows the generation retry form (the memo, the Direction, the
+  hidden body, the notices and the mode-appropriate button) only when
+  `retryable` is true. The known-error and unexpected-error handlers set it to
+  whether the failing request was a `POST` to `/generate`; the routing
+  (`HTTPException`) and oversized-request (`RequestEntityTooLarge`) handlers
+  always set it to `False`, since there is no generation attempt to retry.
+  When `retryable` is false the page offers only a link back to `/`.
 - A generation error preserves the recognized operation. A title-only failure
-  passes `mode=titles` and the exact body to `error.html`, so the user's retry
-  remains title-only. A full-generation failure retries with `mode=full`.
-  Neither path is an automatic retry; a new request is made only when the user
-  presses the button.
+  passes `mode=titles`, the exact body and the existing notices to
+  `error.html`, so the user's retry remains title-only and does not lose the
+  notices attached to that body. A full-generation failure retries with
+  `mode=full`. Neither path is an automatic retry; a new request is made only
+  when the user presses the button.
 - A correctable memo validation error (an empty or overlong memo) on a
   title-only request is rendered on `index.html` the same way: when the
-  submitted body is usable, the exact body and `mode=titles` are preserved so
-  the correction stays a title-only regeneration. When the body is missing or
-  blank, title-only regeneration cannot run regardless of the memo, so the
-  screen falls back to `mode=full`. Neither case triggers `generate_draft()`
-  or `regenerate_titles()` while handling the error.
+  submitted body is usable, the exact body, the existing notices and
+  `mode=titles` are preserved so the correction stays a title-only
+  regeneration. When the body is missing or blank, title-only regeneration
+  cannot run regardless of the memo, so the screen falls back to `mode=full`.
+  Neither case triggers `generate_draft()` or `regenerate_titles()` while
+  handling the error.
 - `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
 - An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
 - The optional Direction is read the same way the memo is: the raw form value
@@ -480,11 +518,13 @@ reset_reference_id(token: Token) -> None
 ```
 
 `app.py` sets the reference id at the start of a request and resets it to the
-prior context on request teardown. Provider failure logging reads the same id
-through `get_reference_id()`, so a provider log line and the error page shown
-for the same request carry the same reference. The module keeps only the
-reference id: it holds no API token, memo, prompt or generated text, and it
-imports neither Flask nor a provider SDK.
+prior context on request teardown. The provider no longer logs a failure of
+its own (section 5.4.1); it carries a safe diagnostic on the `SizuWriterError`
+it raises, and `app.py` is the one layer that logs it, next to this same
+reference id, so the log line and the error page shown for the same request
+always carry the same reference. The module keeps only the reference id: it
+holds no API token, memo, prompt or generated text, and it imports neither
+Flask nor a provider SDK.
 
 As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
 
@@ -519,7 +559,7 @@ endpoint first.
 Legacy `OPENAI_*` settings are refused by `config.py`; they are not translated
 into the current names.
 
-`PORT` configures the development server and the `Procfile` gunicorn bind. The bundled systemd unit and Apache configuration deliberately carry explicit matching port values instead of interpolating this setting. A deployment that chooses another port changes both explicit deployment values to the same port; this is deployment configuration, not runtime rewriting by `config.py`.
+`PORT` configures the development server and the `Procfile` gunicorn bind. The `Procfile` reads it with the shell fallback `${PORT:-8090}`, so an unset `PORT` still binds gunicorn to the documented default of 8090 instead of failing with an empty bind address. The bundled systemd unit and Apache configuration deliberately carry explicit matching port values instead of interpolating this setting; `PORT` never rewrites those files. A deployment that chooses another port changes both explicit deployment values to the same port; this is deployment configuration, not runtime rewriting by `config.py`.
 
 ---
 
@@ -586,6 +626,7 @@ What the result form carries for a regeneration:
 | `input_text` | `textarea` (inside the details) | Sent by both regenerations |
 | `direction` | `textarea` (inside the details) | Sent by both regenerations; blank means no additional instruction |
 | `body` | `hidden` | The current body, handed to the model when only the titles are regenerated |
+| `notice` | `hidden`, zero or more | The current body's notices; passed to `regenerate_titles()` so a title-only regeneration keeps them, and ignored by `generate_draft()` on a full regeneration |
 | `mode` | The value of the submit button | `full` / `titles` |
 
 ### 7.4 Copying (`copy.js`)
@@ -609,17 +650,25 @@ click
   Direction, or title-only generation without a settled body) re-renders the
   input screen with the memo and the Direction intact and the message on top.
   A viable title-only operation — a usable settled body submitted with the
-  memo — keeps that exact body and `mode=titles`, so the corrected memo still
-  regenerates titles only. Without a usable body the screen falls back to
-  `mode=full`, since there is nothing to regenerate titles for. Neither case
-  retries generation automatically.
-- An error after generation starts renders `error.html` while keeping the last
-  input and Direction. A title-only failure also keeps the exact body and
-  renders a `mode=titles` button labelled "Regenerate the titles only"; a
-  full-generation failure renders `mode=full` and "Generate once more".
-  Retrying therefore repeats the failed operation instead of changing its
-  scope, with the same Direction reused.
-- Only `user_message` and the reference id are shown.
+  memo — keeps that exact body, its notices and `mode=titles`, so the
+  corrected memo still regenerates titles only. Without a usable body the
+  screen falls back to `mode=full`, since there is nothing to regenerate
+  titles for. Neither case retries generation automatically.
+- An error while processing a `POST /generate` renders `error.html` with its
+  generation retry form, keeping the last input, Direction and notices. A
+  title-only failure also keeps the exact body and renders a `mode=titles`
+  button labelled "Regenerate the titles only"; a full-generation failure
+  renders `mode=full` and "Generate once more". Retrying therefore repeats
+  the failed operation instead of changing its scope, with the same
+  Direction reused.
+- An error that is not a generation error — an address the application does
+  not serve, a method it does not accept, or a request rejected as too large
+  — renders `error.html` without a generation form: no Memo or Direction
+  field, no hidden body, no "Generate once more" or "Regenerate the titles
+  only" button, only a link back to `/`. There is no generation attempt to
+  retry, so the page does not offer to retry one.
+- Only `user_message` and the reference id are shown. The server log carries
+  the matching diagnostic once, next to the same reference id (section 5.6).
 
 ---
 
@@ -684,25 +733,37 @@ The current test inventory and exact assertions live in the test files rather
 than being duplicated here.
 
 - `test_config.py` covers setting parsing, required generation configuration,
-  legacy-name refusal, base-URL validation and the `MAX_POLICY_CHARS` default,
-  override and invalid-value refusal.
+  legacy-name refusal, base-URL validation, the `MAX_POLICY_CHARS` default,
+  override and invalid-value refusal, and the static `Procfile` contract that
+  it falls back to the documented default port of 8090 when `PORT` is unset.
 - `test_generator.py` covers JSON parsing, draft validation, title filtering,
-  the two response modes independently of network transport, and the optional
+  the two response modes independently of network transport, the optional
   direction argument reaching both prompt builders while an existing caller
-  that omits it keeps its prior behavior.
+  that omits it keeps its prior behavior, notice preservation through
+  `regenerate_titles()`, and sanitized `InvalidResponseError` diagnostics
+  raised without a generator-level log.
 - `test_prompts.py` covers `{{direction}}` substitution alongside `{{input}}`
-  and `{{body}}`, a blank default direction, and the shared direction policy
-  wording between the full and title-only system prompts.
+  and `{{body}}`, a blank default direction, the shared direction policy
+  wording between the full and title-only system prompts, and prompt-file
+  diagnostics carried by `InternalError` without a prompts-level log.
 - `test_openai_compatible_provider.py` covers the Chat Completions request,
-  response normalization and mapping of timeout, connection and status failures.
-- `test_formatter.py` covers the mechanical body rewrites and notices.
+  response normalization, mapping of timeout, connection and status failures,
+  and sanitized failure diagnostics carried on the raised exception without a
+  provider-level log.
+- `test_formatter.py` covers the mechanical body rewrites, the 0-to-3-space
+  fence and heading indentation boundary, preservation of leading indentation
+  and whitespace-only blank-line normalization, and notices.
 - `test_web.py` covers routes, rendering, user-visible failures and the health
-  endpoint without a live generation service, plus the optional Direction
-  field: rendering, blank and overlong validation, propagation to both
-  generation modes, preservation across regeneration and retries, and its
-  absence from the application log.
-- `test_cli.py` covers command-line input, overrides and exit status behavior;
-  the optional Direction adds no CLI option and is out of this suite's scope.
+  endpoint without a live generation service; the optional Direction field's
+  rendering, blank and overlong validation, propagation to both generation
+  modes, preservation across regeneration and retries, and its absence from
+  the application log; body notice preservation across title-only
+  regeneration and retries; a single sanitized application log record per
+  failure; and generation retry controls shown only for a retryable
+  generation error, never on the 404, 405 or 413 error pages.
+- `test_cli.py` covers command-line input, overrides and exit status behavior,
+  and a single sanitized CLI log record per `SizuWriterError` failure; the
+  optional Direction adds no CLI option and is out of this suite's scope.
 
 Writing-quality acceptance remains a manual check through `cli.py generate`;
 the offline test suite verifies the software contract, not whether a generated

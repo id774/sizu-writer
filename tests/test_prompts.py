@@ -25,10 +25,11 @@
 #
 #  Test Cases:
 #    - Read and trim a usable prompt file.
-#    - Refuse a missing prompt file.
-#    - Refuse an unreadable prompt file.
-#    - Refuse an empty prompt file.
-#    - Refuse a whitespace-only prompt file.
+#    - Refuse a missing prompt file, carrying the diagnostic on the exception
+#      without a library log.
+#    - Refuse an unreadable prompt file the same way.
+#    - Refuse an empty prompt file the same way.
+#    - Refuse a whitespace-only prompt file the same way.
 #    - Replace template-origin {{input}} without rescanning the memo.
 #    - Replace template-origin {{input}} and {{body}} without rescanning
 #      either value, keeping an unknown placeholder literal.
@@ -37,7 +38,8 @@
 #    - Replace {{direction}}, {{input}} and {{body}} together in the title
 #      message without rescanning any of the three values.
 #    - Refuse a blank prompt before generation reaches the provider.
-#    - Refuse a prompt file that is not valid UTF-8.
+#    - Refuse a prompt file that is not valid UTF-8, carrying the diagnostic
+#      on the exception without a library log.
 #    - Refuse a non-UTF-8 prompt before generation reaches the provider.
 #    - Keep the required title policy shared by the full and title-only prompts.
 #    - Keep the required direction policy shared by the full and title-only prompts.
@@ -47,6 +49,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Cover prompt diagnostics carried by InternalError without library logging.
 #  v1.4 2026-09-21
 #       Cover the optional {{direction}} placeholder and its shared policy.
 #  v1.3 2026-09-12
@@ -85,13 +89,14 @@ class LoadPromptTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as prompt_dir:
             path = str(Path(prompt_dir, "system.md"))
 
-            with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
+            with mock.patch.object(prompts.logger, "error") as error_log:
                 with self.assertRaises(InternalError) as refused:
                     prompts.load_prompt("system.md", prompt_dir)
 
-        self.assertIn(path, "\n".join(recorded.output))
-        self.assertIn("prompt file missing", str(refused.exception))
-        self.assertNotIn("cannot read prompt file", str(refused.exception))
+        error_log.assert_not_called()
+        self.assertIn(path, refused.exception.diagnostic)
+        self.assertIn("prompt file missing", refused.exception.diagnostic)
+        self.assertNotIn("cannot read prompt file", refused.exception.diagnostic)
 
     def test_refuses_an_unreadable_prompt(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
@@ -99,57 +104,55 @@ class LoadPromptTest(unittest.TestCase):
             Path(path).write_text("prompt text", encoding="utf-8")
 
             with mock.patch("builtins.open", side_effect=PermissionError("denied")):
-                with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
+                with mock.patch.object(prompts.logger, "error") as error_log:
                     with self.assertRaises(InternalError) as refused:
                         prompts.load_prompt("system.md", prompt_dir)
 
-        line = "\n".join(recorded.output)
-        self.assertIn(path, line)
-        self.assertIn("Cannot read the prompt file", line)
-        self.assertIn("cannot read prompt file", str(refused.exception))
-        self.assertNotIn("missing", str(refused.exception))
+        error_log.assert_not_called()
+        self.assertIn(path, refused.exception.diagnostic)
+        self.assertIn("cannot read prompt file", refused.exception.diagnostic)
+        self.assertNotIn("missing", refused.exception.diagnostic)
+        self.assertNotIn("denied", refused.exception.diagnostic)
 
     def test_refuses_an_empty_prompt(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
             path = str(Path(prompt_dir, "system.md"))
             Path(path).write_text("", encoding="utf-8")
 
-            with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
-                with self.assertRaises(InternalError):
+            with mock.patch.object(prompts.logger, "error") as error_log:
+                with self.assertRaises(InternalError) as refused:
                     prompts.load_prompt("system.md", prompt_dir)
 
-        line = "\n".join(recorded.output)
-        self.assertIn(path, line)
-        self.assertIn("empty or blank", line)
+        error_log.assert_not_called()
+        self.assertIn(path, refused.exception.diagnostic)
+        self.assertIn("empty or blank", refused.exception.diagnostic)
 
     def test_refuses_a_whitespace_only_prompt(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
             path = str(Path(prompt_dir, "system.md"))
             Path(path).write_text("   \n\n", encoding="utf-8")
 
-            with self.assertLogs("sizu_writer.prompts", level="ERROR") as recorded:
-                with self.assertRaises(InternalError):
+            with mock.patch.object(prompts.logger, "error") as error_log:
+                with self.assertRaises(InternalError) as refused:
                     prompts.load_prompt("system.md", prompt_dir)
 
-        line = "\n".join(recorded.output)
-        self.assertIn(path, line)
-        self.assertIn("empty or blank", line)
+        error_log.assert_not_called()
+        self.assertIn(path, refused.exception.diagnostic)
+        self.assertIn("empty or blank", refused.exception.diagnostic)
 
     def test_refuses_a_prompt_that_is_not_valid_utf8(self):
         with tempfile.TemporaryDirectory() as prompt_dir:
             path = str(Path(prompt_dir, "system.md"))
             Path(path).write_bytes(b"\xff")
 
-            with self.assertLogs(
-                    "sizu_writer.prompts", level="ERROR") as recorded:
+            with mock.patch.object(prompts.logger, "error") as error_log:
                 with self.assertRaises(InternalError) as refused:
                     prompts.load_prompt("system.md", prompt_dir)
 
-        line = "\n".join(recorded.output)
-        self.assertIn(path, line)
-        self.assertIn("not valid UTF-8", line)
-        self.assertNotIn("0xff", line)
-        self.assertIn("not valid UTF-8", str(refused.exception))
+        error_log.assert_not_called()
+        self.assertIn(path, refused.exception.diagnostic)
+        self.assertIn("not valid UTF-8", refused.exception.diagnostic)
+        self.assertNotIn("0xff", refused.exception.diagnostic)
 
 
 class BodyMessagesTest(unittest.TestCase):

@@ -34,6 +34,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.2 2026-09-21
+#       Carry sanitized provider failure diagnostics to the entry point for one log.
 #  v1.1 2026-09-09
 #       Require a finish reason and keep raw upstream error text out of logs.
 #  v1.0 2026-08-05
@@ -46,7 +48,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 from config import Config
-from sizu_writer.diagnostics import get_reference_id
 from sizu_writer.errors import (InternalError, InvalidResponseError,
                                 UpstreamConnectionError, UpstreamStatusError,
                                 UpstreamTimeoutError)
@@ -85,8 +86,7 @@ class OpenAICompatibleProvider:
         """ Build the client described by the configuration. """
         try:
             from openai import OpenAI
-        except ImportError as error:
-            logger.error("The openai package is not installed: %s", error)
+        except ImportError:
             raise InternalError("openai package missing")
 
         # base_url is passed unconditionally. An empty value would let
@@ -130,25 +130,27 @@ class OpenAICompatibleProvider:
         try:
             return client.chat.completions.create(**request)
         except openai.APITimeoutError as error:
-            self._log_failure(config, error, None, started)
-            raise UpstreamTimeoutError()
+            raise UpstreamTimeoutError(
+                self._failure_diagnostic(config, error, None, started))
         except openai.APIConnectionError as error:
-            self._log_failure(config, error, None, started)
-            raise UpstreamConnectionError()
+            raise UpstreamConnectionError(
+                self._failure_diagnostic(config, error, None, started))
         except openai.APIStatusError as error:
-            self._log_failure(config, error,
-                              getattr(error, "status_code", None), started)
-            raise UpstreamStatusError()
+            raise UpstreamStatusError(
+                self._failure_diagnostic(
+                    config, error, getattr(error, "status_code", None), started))
 
-    def _log_failure(self, config: Config, error: Exception,
-                     status_code: Optional[int], started: float) -> None:
+    def _failure_diagnostic(self, config: Config, error: Exception,
+                            status_code: Optional[int], started: float) -> str:
         """
-        Record a failed provider operation without its input or its token.
+        Describe a failed provider operation without its input or its token.
 
-        The status is worth its own line even though the user is never
-        told it apart: 401 is a token to replace, 403 a plan that does
-        not cover the model, 429 a rate limit or an exhausted monthly
-        allowance, and only the log can say which happened.
+        The status is worth carrying even though the user is never told it
+        apart: 401 is a token to replace, 403 a plan that does not cover the
+        model, 429 a rate limit or an exhausted monthly allowance, and only
+        the entry point's log can say which happened. The raw exception
+        message and any upstream response body are never included; only the
+        exception's class name is.
 
         The elapsed seconds sit next to the configured timeout as operational
         context. GENERATION_TIMEOUT is a per-attempt setting, while elapsed
@@ -157,10 +159,10 @@ class OpenAICompatibleProvider:
         also contain earlier attempts and retry waits, so the pair alone does
         not identify the failing attempt or its cause.
         """
-        logger.error(
-            "generation failure: reference=%s backend=%s endpoint_host=%s "
-            "model=%s error=%s status=%s request_id=%s elapsed=%s timeout=%s",
-            get_reference_id() or "-",
+        return (
+            "generation failure: backend={0} endpoint_host={1} model={2} "
+            "error={3} status={4} request_id={5} elapsed={6} timeout={7}"
+        ).format(
             config.generation_backend,
             config.endpoint_host,
             config.generation_model,
@@ -184,25 +186,21 @@ class OpenAICompatibleProvider:
         """ Read the answer into the shape generator.py works with. """
         choices = getattr(response, "choices", None)
         if not choices:
-            logger.error("The answer carries no choice")
-            raise InvalidResponseError()
+            raise InvalidResponseError("the answer carries no choice")
 
         choice = choices[0]
         finish_reason = getattr(choice, "finish_reason", None)
         if not isinstance(finish_reason, str) or not finish_reason.strip():
-            logger.error("The answer carries no usable finish reason")
-            raise InvalidResponseError()
+            raise InvalidResponseError("the answer carries no usable finish reason")
 
         if finish_reason in TRUNCATED_REASONS:
-            logger.error(
-                "The output was cut off (finish_reason=%s); raise "
-                "MAX_OUTPUT_TOKENS or shorten the input", finish_reason)
-            raise InvalidResponseError()
+            raise InvalidResponseError(
+                "the output was cut off (finish_reason={0}); raise "
+                "MAX_OUTPUT_TOKENS or shorten the input".format(finish_reason))
 
         content = getattr(getattr(choice, "message", None), "content", None)
         if not isinstance(content, str) or not content.strip():
-            logger.error("The answer carries no usable content")
-            raise InvalidResponseError()
+            raise InvalidResponseError("the answer carries no usable content")
 
         usage = getattr(response, "usage", None)
         return CompletionResult(

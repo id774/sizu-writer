@@ -117,15 +117,23 @@ The settings decide where a memo is sent, so they are read strictly.
   progress line only when it is useful, and reserve `WARNING` for a degraded
   but recoverable condition the operator should know about.
 - Do not emit duplicate diagnostics at multiple layers merely to prove that a
-  failure was observed. The layer responsible for presenting or logging the
-  failure owns the message unless another interface explicitly requires one.
+  failure was observed. A library module carries a safe diagnostic on the
+  `SizuWriterError` it raises instead of logging the failure itself; the entry
+  point that catches the error is the one layer that logs it, once.
 - Keep the log low-noise. One generation must not leave a trail of per-step
   lines at the default level.
 - When a third-party logger, such as the HTTP client the SDK carries, adds
   nothing to a run, lower that logger rather than raising the global level.
-- The screen shows `user_message` only. The cause, the endpoint, the model and
-  the traceback stay in the log, next to the reference id shown to the user.
-- Do not log the memo, the prompts or the generated text at any level.
+- The screen shows `user_message` only. A safe cause, the endpoint, the model,
+  the exception's class name and traceback stack frames may stay in the log,
+  next to the reference id shown to the user. The raw message of an exception
+  is not logged by default, because it can carry runtime data the caller does
+  not control; it may be logged only as part of a diagnostic the raising code
+  built and sanitized itself, never as `str(error)` or `repr(error)` of an
+  exception this repository did not construct.
+- Do not log the memo, the Direction, the prompts, the generated text, the
+  title or a raw upstream response at any level, whichever exception message
+  it might otherwise have ended up inside.
 
 ### 1.5 Control Flow Rules
 - Reserve `sys.exit` for the process entry point. Commands and helpers return

@@ -153,7 +153,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
 | `PORT` | `8090` | Port used by `app.py`'s development server and by the `Procfile` gunicorn bind. The bundled systemd and Apache examples use explicit matching port values. |
 
-`PORT` does not rewrite the bundled systemd unit or Apache configuration. Those deployment examples deliberately carry explicit matching port values. When a deployment uses a port other than `8090`, change the gunicorn bind and the Apache upstream to the same chosen port as part of that deployment.
+`PORT` does not rewrite the bundled systemd unit or Apache configuration. Those deployment examples deliberately carry explicit matching port values. When a deployment uses a port other than `8090`, change the gunicorn bind and the Apache upstream to the same chosen port as part of that deployment. The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so a platform that starts it with `PORT` unset still binds gunicorn to the documented default of 8090 instead of an empty bind address.
 
 A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. For `GENERATION_BASE_URL`, malformed URL syntax, a missing host, embedded whitespace and an invalid explicit port are refused before the SDK is constructed. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
@@ -377,7 +377,7 @@ title-only request requires the settled body carried by the result form; if that
 body is missing or blank, the request is refused with status 400 rather than
 being turned into a full generation.
 
-Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback.
+Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback. Neither page, nor the 413 page for an oversized request, offers a generation retry button: there was no generation attempt in progress to repeat, only a link back to the input screen. A failure while generating or regenerating still gets the full retry form, in the same operation (full or title-only) that failed.
 
 Below the memo field, an optional **Direction (optional)** field takes extra
 instructions for this generation only: a focus, a length, a tone, something to
@@ -404,9 +404,10 @@ The copy buttons use the clipboard API when the page is served over HTTPS, and f
 5. Paste both into the posting form of Shizuka na Internet.
 6. Read it once more and publish.
 
-If title generation fails, the error page keeps the settled body and retries
-title-only generation when the user asks to try again; it does not regenerate
-the body.
+If title generation fails, the error page keeps the settled body, its notices
+and retries title-only generation when the user asks to try again; it does
+not regenerate the body. Regenerating the whole draft computes fresh notices
+for the new body instead of keeping the old ones.
 
 Steps 5 and 6 are the person's. Nothing in this system reaches the posting site.
 
@@ -436,7 +437,7 @@ The policy they encode comes from the requirements: keep the concrete scene and 
 
 ## Notices
 
-Some things about a draft can be noticed but must not be fixed automatically. `sizu_writer/formatter.py` rewrites only what is mechanical — an outer code fence, a `#` heading demoted to `##`, three or more blank lines collapsed to two — and reports the rest:
+Some things about a draft can be noticed but must not be fixed automatically. `sizu_writer/formatter.py` rewrites only what is mechanical — an outer code fence, a `#` heading demoted to `##`, runs of blank or whitespace-only lines collapsed to one — and reports the rest. A fence marker or a `#` heading is only recognized up to 3 leading spaces of indentation; indented 4 spaces or more it is indented code and is left untouched, together with the leading indentation of the body's first and last non-blank line.
 
 | Notice | Raised when |
 |---|---|
@@ -448,7 +449,7 @@ Notices appear outside the body area on the screen, and on standard error from `
 
 ## When something fails
 
-The screen shows a message meant for the person and a short reference id. The cause, the endpoint, the model and the traceback stay in the log next to that same id, so an error page cannot leak internal information and a report of "it failed" is still traceable.
+The screen shows a message meant for the person and a short reference id. A safe cause, the endpoint, the model and — for an unexpected failure — the exception's class name and its traceback stack frames stay in the log next to that same id, so an error page cannot leak internal information and a report of "it failed" is still traceable. The raw text of an exception is never logged: a library module (the provider, `prompts.py`, `generator.py`) never logs a failure itself, it carries a sanitized diagnostic on the `SizuWriterError` it raises, and the one entry point that catches it — `app.py` or `cli.py` — logs that diagnostic exactly once.
 
 | What is shown | Status | Usually means |
 |---|---|---|
@@ -466,7 +467,15 @@ The screen shows a message meant for the person and a short reference id. The ca
 
 A misconfiguration never reaches this table, because the settings are checked before a request is made: the web process refuses to start and `cli.py` exits 1, each naming the setting at fault.
 
-Every provider failure leaves one structured log line. When the endpoint returned an HTTP error response, `status` records that code. Connection failures and client-side timeouts have no endpoint HTTP response, so they record `status=-`. The screen does not distinguish a returned status — writing "your token is invalid" onto a page is reporting the configuration of the server to whoever asked for a draft — but the log does, and the difference decides what to do next, for the case where the endpoint did answer with one:
+Every provider failure leaves exactly one structured log line, written by the
+entry point that catches the `SizuWriterError` the provider raised, not by the
+provider itself. When the endpoint returned an HTTP error response, `status`
+records that code. Connection failures and client-side timeouts have no
+endpoint HTTP response, so they record `status=-`. The screen does not
+distinguish a returned status — writing "your token is invalid" onto a page is
+reporting the configuration of the server to whoever asked for a draft — but
+the log does, and the difference decides what to do next, for the case where
+the endpoint did answer with one:
 
 | Status | What to do |
 |---|---|
@@ -478,22 +487,23 @@ Every provider failure leaves one structured log line. When the endpoint returne
 
 Two cases are worth knowing by their log line rather than their screen:
 
-**`The output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
+**`the output was cut off (finish_reason=length); raise MAX_OUTPUT_TOKENS or shorten the input`** — the answer stopped partway, so the body is incomplete. A truncated post is not offered as a draft. Raise `MAX_OUTPUT_TOKENS`, or shorten a memo that was long enough to push the answer past it.
 
-**`generation failure: reference=- backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — with the shipped `GENERATION_MAX_RETRIES=0`, `elapsed` is the wall-clock time around the one SDK request attempt and `timeout` is that attempt's configured limit. A successful run repeatedly approaching the limit is evidence that the configured margin is becoming small. When SDK retries are enabled, however, `elapsed` covers the whole SDK call and may include multiple request attempts and waits between them, while `timeout` remains the per-attempt setting. In that case the pair alone does not identify which attempt timed out or how much time was spent waiting between attempts.
+**`generation failure: backend=openai-compatible endpoint_host=... model=... error=APITimeoutError status=- request_id=- elapsed=120.0 timeout=120.0`** — with the shipped `GENERATION_MAX_RETRIES=0`, `elapsed` is the wall-clock time around the one SDK request attempt and `timeout` is that attempt's configured limit. A successful run repeatedly approaching the limit is evidence that the configured margin is becoming small. When SDK retries are enabled, however, `elapsed` covers the whole SDK call and may include multiple request attempts and waits between them, while `timeout` remains the per-attempt setting. In that case the pair alone does not identify which attempt timed out or how much time was spent waiting between attempts.
 
 Shortening the memo is not the general answer to this one, which is why the screen no longer suggests it. The timeout applies to the SDK request attempt, and the operator should read the exception type together with the elapsed and retry context rather than infer the cause from memo length.
 
-**`The answer is not readable as JSON`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
+**`the answer is not readable as JSON: ...`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
 
-Both `cli.py` and `app.py` log in the same format, so a failure reproduced from the command line reads the same as the one from the screen:
+Both `cli.py` and `app.py` log in the same overall format, so a failure reproduced from the command line reads the same as the one from the screen, once the reference id is set aside:
 
 ```
 2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=... elapsed=47.2 timeout=120.0
-2026-08-05 09:42:44,913 ERROR sizu_writer.providers.openai_compatible: generation failure: reference=3f9c1a72 backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
+2026-08-05 09:42:44,913 ERROR app: UpstreamStatusError (reference 3f9c1a72): generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
+2026-08-05 09:42:44,913 ERROR cli: UpstreamStatusError: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
 ```
 
-`reference` is the Web application's 8-hex error-page reference id, shared with the provider failure log for that same request, so a person reporting an error page and an operator reading the log are looking at the same event. `cli.py` has no Web request to attach one to, so its provider failure lines carry `reference=-`. `request_id` is a separate field: it is the id the upstream endpoint itself assigned to the exchange, and it is not a stand-in for the Web reference id.
+The success line still comes from the provider, `sizu_writer.providers`, which is the one thing it still logs. The failure line does not: it comes from `app` or `cli`, the entry point that caught the `SizuWriterError` the provider raised, and it is written exactly once — the provider never logs the same failure a second time. `reference` is the Web application's 8-hex error-page reference id, shown next to the exception's class name, so a person reporting an error page and an operator reading the log are looking at the same event. `cli.py` has no Web request to attach one to, so its failure lines carry no `(reference ...)` at all. `request_id` is a separate field inside the diagnostic: it is the id the upstream endpoint itself assigned to the exchange, and it is not a stand-in for the Web reference id.
 
 The token, memo, prompts, generated body, titles, raw upstream exception text and raw upstream response body appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
 
@@ -521,13 +531,13 @@ Narrower selections use the same runner:
 
 | Module | Subject |
 |---|---|
-| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message |
-| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer including the requirement of a usable `finish_reason` (an unknown non-empty reason is accepted and preserved), the mapping of a timeout, a connection failure and 401/403/429/500, the elapsed seconds recorded next to the limit on both a success and a timeout, and a sanitized failure log that carries the request reference but excludes raw upstream error text |
-| `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request, literal placeholder substitution, and unknown-placeholder preservation |
-| `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit |
-| `test_formatter.py` | fence removal, heading demotion, blank line collapsing, and detection that rewrites nothing |
-| `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation and its exact body across both a generation failure and a correctable memo validation error, that a failure does not expose its cause, that a timeout does not blame the memo, and the one request reference shared between a provider failure log and the error page and cleared after the request |
-| `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model` and `--timeout` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model, the exit codes, and the failure named in the log |
+| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message, the `MAX_POLICY_CHARS` default and its refusal of an invalid value, and the static `Procfile` contract that it falls back to the documented default port of 8090 when `PORT` is unset |
+| `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer including the requirement of a usable `finish_reason` (an unknown non-empty reason is accepted and preserved), the mapping of a timeout, a connection failure and 401/403/429/500, the elapsed seconds recorded next to the limit on both a success and a timeout, and a sanitized failure diagnostic carried on the raised exception, excluding raw upstream error text, that the provider itself never logs |
+| `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request with the diagnostic carried by `InternalError` rather than a library log, `{{direction}}` substitution alongside `{{input}}` and `{{body}}`, literal placeholder substitution, and unknown-placeholder preservation |
+| `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit, the optional direction argument reaching both prompt builders, notice preservation through `regenerate_titles()`, and sanitized `InvalidResponseError` diagnostics raised without a generator-level log |
+| `test_formatter.py` | fence removal, heading demotion, blank and whitespace-only line collapsing, preservation of leading indentation and of a 4-space indented fence marker as code rather than a fence, and detection that rewrites nothing |
+| `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation, its exact body and its notices across both a generation failure and a correctable memo validation error, that a full regeneration ignores submitted notices, that a failure does not expose its cause, that a timeout does not blame the memo, the one request reference and exactly one sanitized application log record per failure, the optional Direction field's validation, propagation and retry preservation, the memo and Direction cleared together, and that the 404, 405 and 413 error pages carry no generation retry control while a retryable generation error still does |
+| `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model`, `--timeout` and `--prompt-dir` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model or prompt directory, non-UTF-8 memo and body files, the exit codes, and exactly one sanitized failure log record naming the failure and its message |
 
 `test_web.py` imports `app` inside an environment replaced by `TEST_ENVIRONMENT` with `clear=True`, and disables dotenv loading for that import. The four required generation settings are fixed test placeholders; the host environment and a local `.env` cannot affect the import, and no generation request is made.
 

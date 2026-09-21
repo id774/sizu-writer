@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if retryable %}
 <form method="post" action="{{ url_for('generate') }}">
   <input type="hidden" name="body" value="{{ body or '' }}">
+  {% for notice in notices or [] %}
+  <input type="hidden" name="notice" value="{{ notice }}">
+  {% endfor %}
   <label for="input_text">Memo</label>
   <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}">{{ input_text or "" }}</textarea>
   <label for="direction">Direction (optional)</label>
@@ -16,4 +20,7 @@
     <a href="{{ url_for('index') }}">Back to the input screen</a>
   </div>
 </form>
+{% else %}
+<p><a href="{{ url_for('index') }}">Back to the input screen</a></p>
+{% endif %}
 {% endblock %}

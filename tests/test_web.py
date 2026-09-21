@@ -80,12 +80,24 @@
 #    - Keep the direction out of the application log.
 #    - Start a new input screen with a blank direction.
 #    - Clear the memo and Direction together and reset both character counts.
+#    - Preserve existing body notices as hidden fields on the result screen.
+#    - Pass existing notices to title-only regeneration.
+#    - Preserve notices across a title-only retry and a correctable title-only
+#      validation error.
+#    - Ignore submitted notices during full regeneration.
+#    - Show no generation retry controls on the 404, 405 and 413 error pages.
+#    - Keep a retryable generation form on an unexpected /generate failure.
+#    - Log an unexpected failure once, without its raw exception message.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Flask
 #
 #  Version History:
+#  v1.7 2026-09-21
+#       Cover single sanitized error logs and retry controls only on generation errors.
+#  v1.6 2026-09-21
+#       Cover notice preservation across title-only regeneration and retries.
 #  v1.5 2026-09-21
 #       Cover optional Direction validation, propagation, retry preservation and
 #       clearing together with the memo.
@@ -125,14 +137,14 @@ from sizu_writer.diagnostics import get_reference_id
 from sizu_writer.errors import EmptyBodyError, UpstreamTimeoutError
 
 
-def draft(body="The body."):
+def draft(body="The body.", notices=None):
     return Draft(
         body=body,
         primary_title="The leading title",
         alternative_titles=["Another candidate"],
         model="test-model",
         generated_at="2026-08-04T09:00:00+09:00",
-        notices=[],
+        notices=list(notices) if notices is not None else [],
     )
 
 
@@ -232,7 +244,7 @@ class WebTest(unittest.TestCase):
                 answer = self.client.post("/generate", data={
                     "input_text": "a memo", "body": "The settled body", "mode": "titles"})
 
-        titles.assert_called_once_with("a memo", "The settled body", web.config, "")
+        titles.assert_called_once_with("a memo", "The settled body", web.config, "", [])
         generate.assert_not_called()
         self.assertIn("The settled body", answer.get_data(as_text=True))
 
@@ -257,7 +269,7 @@ class WebTest(unittest.TestCase):
                 self.assertIn(">Generate<", page)
                 self.assertNotIn("Regenerate the titles only", page)
                 self.assertNotIn('name="body"', page)
-                titles.assert_called_once_with("a memo", body, web.config, "")
+                titles.assert_called_once_with("a memo", body, web.config, "", [])
                 generate.assert_not_called()
 
     def test_keeps_title_only_state_when_the_memo_is_invalid(self):
@@ -303,7 +315,7 @@ class WebTest(unittest.TestCase):
         self.assertIn('name="mode" value="titles"', page)
         self.assertIn("Regenerate the titles only", page)
         self.assertNotIn("Generate once more", page)
-        titles.assert_called_once_with("a memo", body, web.config, "")
+        titles.assert_called_once_with("a memo", body, web.config, "", [])
         generate.assert_not_called()
 
     def test_keeps_full_generation_as_the_retry_mode(self):
@@ -357,6 +369,24 @@ class WebTest(unittest.TestCase):
         self.assertNotIn("Traceback", page)
         self.assertNotIn("nothing-here", page)
 
+    def test_routing_error_pages_have_no_generation_retry_controls(self):
+        answer = self.client.get("/nothing-here")
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(404, answer.status_code)
+        self.assertNotIn("Generate once more", page)
+        self.assertNotIn("Regenerate the titles only", page)
+        self.assertNotIn("<textarea", page)
+
+    def test_method_not_allowed_page_has_no_generation_retry_controls(self):
+        answer = self.client.post("/healthz")
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(405, answer.status_code)
+        self.assertNotIn("Generate once more", page)
+        self.assertNotIn("Regenerate the titles only", page)
+        self.assertNotIn("<textarea", page)
+
     def test_still_refuses_an_oversized_request_with_its_own_status(self):
         # The handler for 413 is more specific than the one for every
         # HTTPException, so adding the latter must not shadow it.
@@ -367,6 +397,17 @@ class WebTest(unittest.TestCase):
         self.assertEqual(413, answer.status_code)
         self.assertIn("The request is too large", answer.get_data(as_text=True))
 
+    def test_oversized_request_page_has_no_generation_retry_controls(self):
+        text = "a" * (web.app.config["MAX_CONTENT_LENGTH"] + 1)
+
+        answer = self.client.post("/generate", data={"input_text": text, "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(413, answer.status_code)
+        self.assertNotIn("Generate once more", page)
+        self.assertNotIn("Regenerate the titles only", page)
+        self.assertNotIn("<textarea", page)
+
     def test_still_reports_an_unexpected_failure_as_a_server_error(self):
         with mock.patch.object(web, "generate_draft", side_effect=RuntimeError("boom")):
             answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
@@ -375,6 +416,32 @@ class WebTest(unittest.TestCase):
         self.assertEqual(500, answer.status_code)
         self.assertIn("The server failed to handle the request", page)
         self.assertNotIn("boom", page)
+
+    def test_unexpected_generation_failure_page_keeps_the_retry_form(self):
+        # /generate is where retrying makes sense: an unexpected failure
+        # there still offers the same retryable generation form.
+        with mock.patch.object(web, "generate_draft", side_effect=RuntimeError("boom")):
+            answer = self.client.post("/generate", data={"input_text": "a memo", "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(500, answer.status_code)
+        self.assertIn("Generate once more", page)
+
+    def test_logs_an_unexpected_failure_once_without_its_raw_message(self):
+        with mock.patch.object(
+                web, "generate_draft",
+                side_effect=RuntimeError("SENSITIVE_MEMO_LIKE_TEXT")):
+            with self.assertLogs("app", level=logging.ERROR) as logged:
+                answer = self.client.post("/generate", data={
+                    "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(500, answer.status_code)
+        self.assertEqual(1, len(logged.output))
+        recorded = logged.output[0]
+        self.assertIn("type=RuntimeError", recorded)
+        self.assertIn("traceback=", recorded)
+        self.assertNotIn("SENSITIVE_MEMO_LIKE_TEXT", recorded)
+        self.assertNotIn("SENSITIVE_MEMO_LIKE_TEXT", answer.get_data(as_text=True))
 
     def test_does_not_blame_the_memo_for_a_timeout(self):
         # GENERATION_TIMEOUT is a per-attempt SDK timeout. Its occurrence
@@ -402,7 +469,8 @@ class WebTest(unittest.TestCase):
         self.assertEqual(504, answer.status_code)
         self.assertEqual("deadbeef", observed["reference_id"])
         self.assertIn("(error id: deadbeef)", page)
-        self.assertIn("(reference deadbeef)", "\n".join(logged.output))
+        self.assertEqual(1, len(logged.output))
+        self.assertIn("(reference deadbeef)", logged.output[0])
         self.assertIsNone(get_reference_id())
         self.assertNotIn("Traceback", page)
 
@@ -456,7 +524,7 @@ class WebTest(unittest.TestCase):
 
         self.assertEqual(200, answer.status_code)
         titles.assert_called_once_with(
-            "a memo", "The settled body", web.config, "Prefer a plain title.")
+            "a memo", "The settled body", web.config, "Prefer a plain title.", [])
 
     def test_refuses_an_overlong_direction_before_generation(self):
         direction = "a" * (web.config.max_policy_chars + 1)
@@ -519,6 +587,71 @@ class WebTest(unittest.TestCase):
 
         self.assertEqual(504, answer.status_code)
         self.assertIn("Keep it short.", answer.get_data(as_text=True))
+
+    def test_result_screen_preserves_existing_notices_as_hidden_fields(self):
+        with mock.patch.object(
+                web, "generate_draft", return_value=draft(notices=["A notice."])):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        self.assertIn('name="notice" value="A notice."',
+                      answer.get_data(as_text=True))
+
+    def test_title_only_regeneration_passes_existing_notices(self):
+        with mock.patch.object(
+                web, "regenerate_titles",
+                return_value=draft("The settled body")) as titles:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "body": "The settled body",
+                "mode": "titles",
+                "notice": ["A notice.", "Another notice."],
+            })
+
+        self.assertEqual(200, answer.status_code)
+        titles.assert_called_once_with(
+            "a memo", "The settled body", web.config, "",
+            ["A notice.", "Another notice."])
+
+    def test_title_only_retry_preserves_notices_after_a_failure(self):
+        with mock.patch.object(
+                web, "regenerate_titles", side_effect=UpstreamTimeoutError()):
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "body": "The settled body",
+                "mode": "titles",
+                "notice": ["A notice."],
+            })
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(504, answer.status_code)
+        self.assertIn('name="notice" value="A notice."', page)
+
+    def test_correctable_title_only_validation_error_preserves_notices(self):
+        answer = self.client.post("/generate", data={
+            "input_text": "  ",
+            "body": "The settled body",
+            "mode": "titles",
+            "notice": ["A notice."],
+        })
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(400, answer.status_code)
+        self.assertIn('name="notice" value="A notice."', page)
+
+    def test_full_regeneration_ignores_submitted_notices(self):
+        with mock.patch.object(
+                web, "generate_draft", return_value=draft()) as generate:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo",
+                "mode": "full",
+                "notice": ["A stale notice."],
+            })
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once_with("a memo", web.config, "")
+        self.assertNotIn("A stale notice.", answer.get_data(as_text=True))
 
     def test_keeps_the_direction_out_of_the_log(self):
         with mock.patch.object(web, "generate_draft", side_effect=UpstreamTimeoutError()):

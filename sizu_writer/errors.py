@@ -7,10 +7,11 @@
 #  Description:
 #  Every failure the user is allowed to see is represented here as an
 #  exception carrying a message and an HTTP status code. The screen
-#  shows user_message only. Internal diagnostic causes, tracebacks,
-#  prompt paths, the endpoint host and the model name may stay in the
-#  server log for diagnosis. The API token, the memo, the prompts and
-#  the generated text do not.
+#  shows user_message only. A safe internal cause, such as a prompt
+#  path, the endpoint host or the model name, may be carried in
+#  diagnostic and logged once by the entry point that catches the
+#  error. The API token, the memo, the prompts, the generated text and
+#  a raw upstream exception message never reach diagnostic.
 #
 #  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -22,6 +23,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-09-21
+#       Separate sanitized internal diagnostics from user-facing error text.
 #  v1.2 2026-09-21
 #       Add DirectionTooLongError for the optional Web Direction field.
 #  v1.1 2026-09-07
@@ -41,6 +44,10 @@ class SizuWriterError(Exception):
     user_message = "The request could not be completed."
     status_code = 500
 
+    def __init__(self, diagnostic: str = "") -> None:
+        self.diagnostic = diagnostic
+        super().__init__(self.user_message)
+
 
 class EmptyInputError(SizuWriterError):
     """ Raised when the input is empty or blank. """
@@ -56,7 +63,7 @@ class InputTooLongError(SizuWriterError):
 
     def __init__(self, limit: int) -> None:
         self.user_message = "The memo is too long. Keep it within {0} characters.".format(limit)
-        super().__init__(self.user_message)
+        super().__init__()
 
 
 class DirectionTooLongError(SizuWriterError):
@@ -66,7 +73,7 @@ class DirectionTooLongError(SizuWriterError):
 
     def __init__(self, limit: int) -> None:
         self.user_message = "The direction is too long. Keep it within {0} characters.".format(limit)
-        super().__init__(self.user_message)
+        super().__init__()
 
 
 class EmptyBodyError(SizuWriterError):

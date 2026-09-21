@@ -251,10 +251,12 @@ One process addresses one endpoint, fixed at startup. Neither the endpoint, the
 model nor the token can be changed from a screen.
 
 `app.py` sets a request-scoped diagnostic reference in
-`sizu_writer/diagnostics.py` before generation runs; provider failure logging
-reads it from there. The memo, the prompt and the completion data never pass
-through that module, and the generator and provider interfaces are unchanged
-by it.
+`sizu_writer/diagnostics.py` before generation runs. The provider does not log
+a failure itself; it raises a `SizuWriterError` carrying a sanitized
+diagnostic, and `app.py` logs it once, next to the same reference id read
+from `sizu_writer/diagnostics.py`. The memo, the prompt and the completion
+data never pass through that module, and the generator and provider
+interfaces are unchanged by it.
 
 ---
 
@@ -314,7 +316,7 @@ by it.
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
 | `PORT` | no | `8090` | Development-server and Procfile gunicorn port; bundled deployment examples use explicit matching values |
 
-`PORT` does not interpolate into `deploy/sizu-writer.service` or `deploy/sizu-writer.conf`. Those examples use explicit matching ports by design; an operator choosing another deployment port changes both examples consistently.
+`PORT` does not interpolate into `deploy/sizu-writer.service` or `deploy/sizu-writer.conf`. Those examples use explicit matching ports by design; an operator choosing another deployment port changes both examples consistently. The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so an unset `PORT` still binds gunicorn to the documented default of 8090 instead of an empty bind address.
 
 ### 8.2 Sakura AI Engine
 
@@ -713,30 +715,42 @@ the answer itself.
 
 ### 13.2 ERROR
 
-One line per failed provider operation, carrying the request reference, the
-backend, the endpoint host, the model, the SDK exception type, the HTTP status,
-the endpoint's request id, the elapsed seconds around the SDK call and the
-per-attempt timeout setting.
+A failed provider operation is not logged by the provider. `_create()` and
+`_result()` catch the SDK's timeout, connection and status failures and the
+provider's own response validation failures, and raise the matching
+`SizuWriterError` subclass (`UpstreamTimeoutError`, `UpstreamConnectionError`,
+`UpstreamStatusError`, `InvalidResponseError`) carrying a sanitized diagnostic
+string built by `_failure_diagnostic()`:
 
-With the shipped zero-retry default, elapsed close to the timeout is useful
-evidence that the single attempt had little margin. With retries enabled,
-elapsed may also contain earlier attempts and retry waits, so the pair alone
-does not identify the failing attempt or distinguish endpoint slowness from a
-connection failure.
+```text
+generation failure: backend=... endpoint_host=... model=... error=... status=... request_id=... elapsed=... timeout=...
+```
 
-The request reference comes from `sizu_writer/diagnostics.py`. For a request
-made through the Web application it is the same id `app.py` shows on the
-error page and logs next to the exception type, so a provider failure line and
-its error page can be matched by that value alone. Outside a Web request —
-the CLI, for instance — no reference has been set, and the field reads `-`.
+`error` is the SDK exception's class name, never its raw message; `status` is
+the numeric HTTP status when there is one, else `-`; `request_id` is the
+upstream request id when the SDK exposes one, else `-`. With the shipped
+zero-retry default, `elapsed` close to `timeout` is useful evidence that the
+single attempt had little margin. With retries enabled, `elapsed` may also
+contain earlier attempts and retry waits, so the pair alone does not identify
+the failing attempt or distinguish endpoint slowness from a connection
+failure.
 
-The raw SDK exception message and any upstream response body it carries are
-not recorded; only the exception's class name is. The status is worth
-recording on its own even though the screen never distinguishes it: 401 is a
-token to replace, 403 a plan that does not cover the model, 429 a rate limit
-or an exhausted monthly allowance, and only the log can say which happened.
-The API token, the memo, the prompt, the generated body, the title and the raw
-answer stay out of this line as they do everywhere else.
+The entry point that catches the error — `app.py`'s `errorhandler(SizuWriterError)`
+for the Web application, `cli.py`'s `except SizuWriterError` for the command
+line — logs this diagnostic exactly once, as one `ERROR` (or `INFO` for a
+400) record: `type(error).__name__`, the request reference from
+`sizu_writer/diagnostics.py` (the Web application only; the field is absent
+outside a Web request) and `error.diagnostic or error.user_message`. The
+provider raising the error and the entry point logging it never both log the
+same failure, so there is exactly one record per failure rather than one from
+the provider and a second from the caller.
+
+Neither the provider's diagnostic string nor the entry point's log line ever
+contains the raw SDK exception message, an upstream response body, the API
+token, the memo, the prompt, the generated body or the title. The status is
+worth carrying even though the screen never distinguishes it: 401 is a token
+to replace, 403 a plan that does not cover the model, 429 a rate limit or an
+exhausted monthly allowance, and only the log can say which happened.
 
 ### 13.3 Usage
 
@@ -871,8 +885,9 @@ screens offer no way to switch endpoints.
 
 The error id's display format is unchanged as well. What changed is only where
 it comes from: it is established once, in the request scope, before generation
-runs, and the same value is what the provider diagnostic and the error handler
-both use.
+runs, and the same value is what the error handler's single log record and the
+error page both use. The provider no longer logs on its own; it only raises
+the error the handler logs (section 13.2).
 
 ---
 
@@ -884,8 +899,9 @@ missing token, a missing or `http` or resource-carrying base URL, a missing
 model, an unknown response mode, a negative retry count, a non-positive
 timeout, the accepted `LOG_LEVEL` values and their case-insensitive
 normalization, the refusal of an unknown `LOG_LEVEL`, the legacy variables,
-the absence of secrets from every message, and the `MAX_POLICY_CHARS` default,
-override and invalid-value refusal.
+the absence of secrets from every message, the `MAX_POLICY_CHARS` default,
+override and invalid-value refusal, and the static `Procfile` contract that it
+falls back to the documented default port of 8090 when `PORT` is unset.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -895,28 +911,47 @@ empty content and a truncated answer, the mapping of a timeout, a connection
 failure and 401, 403, 429 and 500, and the token staying out of the log. It
 also covers the refusal of a missing, `None`, empty or whitespace-only finish
 reason, an unknown non-empty finish reason surviving unchanged onto the
-`CompletionResult`, raw upstream error text staying out of a failure line, and
-a failure line carrying the current request reference.
+`CompletionResult`, raw upstream error text staying out of the failure
+diagnostic carried on the raised exception, and that the provider itself
+never logs the failure — `sizu_writer.providers.openai_compatible`'s logger is
+asserted not called on every mapped failure.
 
 `tests/test_web.py` additionally covers a single request reference: the same
 id the Web application establishes before calling into generation is what a
 failed generation observes through `sizu_writer/diagnostics.py`, what the
-error page shows, and what the application error log records, and that id is
-no longer readable once the request has finished.
+error page shows, and what the application error log records, that id is no
+longer readable once the request has finished, and that exactly one `app`
+logger record is written per failure — a known `SizuWriterError` and an
+unexpected exception alike. An unexpected exception's log record carries its
+class name and `traceback.format_tb()` stack frames and never `str(error)`,
+`repr(error)` or a value passed through the exception, and the rendered page
+never carries that raw message either.
 
 `tests/test_generator.py` covers building a `Draft` from a `CompletionResult`,
 both response modes, a fenced answer, the refusal of prose around the object,
 the absence of any fragment extraction, a missing body, a missing primary
 title, the deduplication of alternatives, `MAX_ALT_TITLES`, the body
-surviving a title regeneration, and an optional direction argument reaching
-both prompt builders while defaulting to blank for a caller that omits it.
+surviving a title regeneration, an optional direction argument reaching both
+prompt builders while defaulting to blank for a caller that omits it, an
+existing `notices` list reaching `Draft.notices` unchanged through
+`regenerate_titles()` while a caller that omits it gets an empty list, and
+that `generator.logger` is not called for an `InvalidResponseError` — the
+reason is carried on `error.diagnostic` instead.
+
+`tests/test_prompts.py` covers `load_prompt()` diagnostics the same way: a
+missing, unreadable, empty, blank or non-UTF-8 prompt file raises
+`InternalError` with the path and the reason on `error.diagnostic`, and
+`sizu_writer.prompts`'s logger is asserted not called for each case.
 
 `tests/test_cli.py` covers the command line side of the settings: the `--model`
 and `--timeout` overrides reaching the generation, a `--timeout` that is not
 positive or not finite and a whitespace-only `--model` being refused before a
 request is spent, a `--model` override trimmed of surrounding whitespace, an
-empty memo being refused the same way, and a configuration that cannot
-address an endpoint ending the run with exit code 1.
+empty memo being refused the same way, a configuration that cannot address an
+endpoint ending the run with exit code 1, and exactly one `cli` logger record
+carrying the failure's class name and `error.diagnostic or error.user_message`
+for a `SizuWriterError` raised anywhere in the call — a library module never
+logs the same failure a second time.
 
 The suite uses no network and no token. Testing against the real Sakura AI
 Engine is a manual acceptance step, and no live token is put into CI.
