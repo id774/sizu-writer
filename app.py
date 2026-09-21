@@ -42,14 +42,9 @@
 #  - Flask 3.x
 #
 #  Version History:
-#  v1.7 2026-09-21
-#       Log failures once without raw exception text and show retry controls only
-#       for retryable generation errors.
-#  v1.6 2026-09-21
-#       Preserve body notices across title-only regeneration and retries.
 #  v1.5 2026-09-21
-#       Add an optional per-request Direction field, validated and preserved
-#       across regeneration and retries the same way as the memo.
+#       Add per-request Direction, preserve title-only body notices, and keep
+#       failure logging sanitized with retry controls only on generation errors.
 #  v1.4 2026-09-11
 #       Match server input length validation to the browser textarea.
 #  v1.3 2026-09-10

@@ -72,10 +72,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.5 2026-09-21
-#       Cover the Procfile fallback to the documented default PORT of 8090.
 #  v1.4 2026-09-21
-#       Cover the MAX_POLICY_CHARS default, override and invalid-value refusal.
+#       Cover MAX_POLICY_CHARS validation and the Procfile fallback to the
+#       documented default port 8090.
 #  v1.3 2026-09-10
 #       Cover malformed base URL syntax, hosts, ports and whitespace.
 #  v1.2 2026-09-06

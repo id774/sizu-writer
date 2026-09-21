@@ -23,10 +23,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.3 2026-09-21
-#       Separate sanitized internal diagnostics from user-facing error text.
 #  v1.2 2026-09-21
-#       Add DirectionTooLongError for the optional Web Direction field.
+#       Add DirectionTooLongError and separate sanitized internal diagnostics
+#       from user-facing error text.
 #  v1.1 2026-09-07
 #       Refuse title-only regeneration when there is no settled post body.
 #  v1.0 2026-08-05
