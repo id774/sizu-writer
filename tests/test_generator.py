@@ -34,6 +34,9 @@
 #  Test Cases:
 #    - Build a draft from a completion result, carrying the served model name.
 #    - Name the configured model when the answer does not name one.
+#    - Default to a blank direction when the caller does not pass one.
+#    - Pass a nonblank direction through to the body prompt builder.
+#    - Pass a nonblank direction through to the title prompt builder.
 #    - Keep at most max_alt_titles alternatives and drop duplicates and blanks.
 #    - Refuse an answer that is not JSON.
 #    - Refuse an answer that is JSON but not an object.
@@ -62,6 +65,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Cover the optional direction argument reaching both prompt builders.
 #  v1.3 2026-09-11
 #       Cover non-standard JSON constants and bodies emptied by normalization,
 #       and outer-fenced prompt-json responses whose body holds a code fence.
@@ -129,6 +134,24 @@ class GenerateDraftTest(unittest.TestCase):
         draft = self.generate(answer(BODY, model=""))
 
         self.assertEqual("a-model", draft.model)
+
+    def test_defaults_to_a_blank_direction(self):
+        config = settings()
+        with mock.patch.object(generator, "build_body_messages",
+                               return_value=[]) as messages:
+            with mock.patch.object(generator, "_complete", return_value=answer(BODY)):
+                generator.generate_draft("a memo", config)
+
+        messages.assert_called_once_with("a memo", config.prompt_dir, "")
+
+    def test_passes_a_nonblank_direction_to_the_body_prompt_builder(self):
+        config = settings()
+        with mock.patch.object(generator, "build_body_messages",
+                               return_value=[]) as messages:
+            with mock.patch.object(generator, "_complete", return_value=answer(BODY)):
+                generator.generate_draft("a memo", config, "Keep it short.")
+
+        messages.assert_called_once_with("a memo", config.prompt_dir, "Keep it short.")
 
     def test_keeps_at_most_max_alt_titles_and_drops_duplicates(self):
         draft = self.generate(answer(dict(BODY, alternative_titles=[
@@ -277,9 +300,24 @@ class RegenerateTitlesTest(unittest.TestCase):
             with mock.patch.object(generator, "_complete", return_value=result):
                 draft = generator.regenerate_titles("a memo", body, config)
 
-        messages.assert_called_once_with("a memo", body, config.prompt_dir)
+        messages.assert_called_once_with("a memo", body, config.prompt_dir, "")
         self.assertEqual(body, draft.body)
         self.assertEqual("A new leading title", draft.primary_title)
+
+    def test_passes_a_nonblank_direction_to_the_title_prompt_builder(self):
+        body = "The settled body"
+        result = answer({"primary_title": "A new leading title",
+                         "alternative_titles": []})
+        config = settings()
+
+        with mock.patch.object(generator, "build_titles_messages",
+                               return_value=[]) as messages:
+            with mock.patch.object(generator, "_complete", return_value=result):
+                generator.regenerate_titles(
+                    "a memo", body, config, "Prefer a plain title.")
+
+        messages.assert_called_once_with(
+            "a memo", body, config.prompt_dir, "Prefer a plain title.")
 
     def test_refuses_a_blank_body_before_building_messages(self):
         for body in ("", "   \n"):

@@ -10,6 +10,13 @@
             aria-describedby="input-count"
             data-character-count-target="input-count">{{ input_text or "" }}</textarea>
   <p id="input-count" class="meta"></p>
+  <label for="direction">Direction (optional)</label>
+  <p class="meta">Add anything that applies to this generation only: focus, length, tone,
+    what to leave out, title direction. Leave blank for the usual generation.</p>
+  <textarea id="direction" name="direction" lang="ja" rows="4" maxlength="{{ max_policy_chars }}"
+            aria-describedby="direction-count"
+            data-character-count-target="direction-count">{{ direction or "" }}</textarea>
+  <p id="direction-count" class="meta"></p>
   <div class="buttons">
     {% if mode == "titles" %}
     <button type="submit" name="mode" value="titles">Regenerate the titles only</button>

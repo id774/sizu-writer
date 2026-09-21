@@ -14,6 +14,22 @@ The body is neither a stretched out microblog post nor a shrunk blog article. It
 - When the matter is unsettled, an observed fact or the point where the thinking started makes a fine title.
 - Do not force a symbolic, literary or sensational title. When the body carries no natural title, a title made from the date is a candidate.
 
+## Optional direction for this request
+
+The user message may include a "Direction" section: extra instructions for
+this title regeneration alone, such as a tone or a title preference. It is not
+a second memo and does not change the settled body, which stays exactly as
+given.
+
+Follow it together with everything above, in this order: this policy and the
+output format below come first, the direction next. The direction may narrow
+how the titles are chosen; it never lifts a rule stated above or changes the
+JSON output format.
+
+When the direction is blank, no additional instruction was given for this
+request: follow the policy above as it stands, and never remark in the output
+on whether a direction was given or what it said.
+
 ## Output format
 
 Return this JSON object and nothing else:

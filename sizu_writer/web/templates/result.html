@@ -49,6 +49,11 @@
   <details>
     <summary>Memo</summary>
     <textarea name="input_text" lang="ja" rows="8" maxlength="{{ max_input_chars }}">{{ input_text }}</textarea>
+    <label for="direction">Direction (optional)</label>
+    <textarea id="direction" name="direction" lang="ja" rows="4" maxlength="{{ max_policy_chars }}"
+              aria-describedby="direction-count"
+              data-character-count-target="direction-count">{{ direction or "" }}</textarea>
+    <p id="direction-count" class="meta"></p>
   </details>
 
   <p class="meta">Model: {{ draft.model }} / Generated at: {{ draft.generated_at }}

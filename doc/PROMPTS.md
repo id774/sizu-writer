@@ -33,25 +33,45 @@ the title policy belongs in both files.
 
 ## Placeholders
 
-Two, substituted by `sizu_writer/prompts.py`:
+Three, substituted by `sizu_writer/prompts.py`:
 
 | Placeholder | Replaced with | Appears in |
 |---|---|---|
 | `{{input}}` | the memo the person entered | `body_user.md`, `titles_user.md` |
 | `{{body}}` | the body already settled | `titles_user.md` |
+| `{{direction}}` | the optional Web Direction for this request, or blank | `body_user.md`, `titles_user.md` |
 
 Substitution scans the original prompt template once for the placeholders used
-by that message. The inserted memo and settled body are opaque text and are not
-scanned again. A memo containing literal `{{body}}`, or a body containing
-literal `{{input}}`, therefore reaches the model with those characters
-unchanged. All occurrences of a used placeholder that were already in the
-template are replaced.
+by that message. The inserted memo, settled body and Direction are opaque text
+and are not scanned again. A memo containing literal `{{body}}`, a Direction
+containing literal `{{input}}`, or any of the three containing literal
+`{{direction}}`, therefore reaches the model with those characters unchanged.
+All occurrences of a used placeholder that were already in the template are
+replaced.
 
 The prompt is not a format string, so braces and percent signs need no escaping.
 An unknown placeholder is not an error. `{{tone}}` written into a prompt stays
 in the text literally and reaches the model as those eight characters, so a
 typo in a placeholder name fails quietly rather than loudly. Check a new
 placeholder against the table above.
+
+### `{{direction}}` and custom prompt sets
+
+`{{direction}}` is not a required placeholder of the prompt loader. A custom
+`PROMPT_DIR` that predates this placeholder, and therefore does not use it,
+keeps working exactly as it did: `generator.py` always passes a direction
+string, which is empty by default, and a prompt template that never mentions
+`{{direction}}` simply never inserts it anywhere. Adopting Direction in a
+custom prompt set means placing `{{direction}}` in its own `*_user.md` files,
+the same way `{{input}}` and `{{body}}` are placed today; there is no separate
+opt-in setting.
+
+The Web Direction field is not a second memo. It carries no new fact,
+experience or event of its own; it shapes how the memo already given is
+handled — a focus, a length, a tone, something to leave out, a title
+preference. When it is blank, no additional instruction was given for that
+request, and the shipped prompts say so without ever remarking on it in the
+generated text.
 
 ## The JSON contract
 

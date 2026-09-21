@@ -22,6 +22,8 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.2 2026-09-21
+#       Add DirectionTooLongError for the optional Web Direction field.
 #  v1.1 2026-09-07
 #       Refuse title-only regeneration when there is no settled post body.
 #  v1.0 2026-08-05
@@ -54,6 +56,16 @@ class InputTooLongError(SizuWriterError):
 
     def __init__(self, limit: int) -> None:
         self.user_message = "The memo is too long. Keep it within {0} characters.".format(limit)
+        super().__init__(self.user_message)
+
+
+class DirectionTooLongError(SizuWriterError):
+    """ Raised when the optional Direction exceeds MAX_POLICY_CHARS. """
+
+    status_code = 400
+
+    def __init__(self, limit: int) -> None:
+        self.user_message = "The direction is too long. Keep it within {0} characters.".format(limit)
         super().__init__(self.user_message)
 
 

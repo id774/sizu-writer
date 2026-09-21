@@ -308,6 +308,7 @@ by it.
 | `GENERATION_TEMPERATURE` | no | not sent | Sent only when set |
 | `MAX_OUTPUT_TOKENS` | no | `6000` | Upper bound of one answer |
 | `MAX_INPUT_CHARS` | no | `4000` | Upper bound of the input field |
+| `MAX_POLICY_CHARS` | no | `2000` | Upper bound of the optional Web Direction field |
 | `MAX_ALT_TITLES` | no | `4` | Alternative titles kept |
 | `PROMPT_DIR` | no | `prompts` | Where the prompts live |
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
@@ -380,6 +381,7 @@ class Config:
     generation_temperature: Optional[float] = None
     max_output_tokens: int = 6000
     max_input_chars: int = 4000
+    max_policy_chars: int = 2000
     max_alt_titles: int = 4
     prompt_dir: str = "prompts"
     log_level: str = "INFO"
@@ -409,7 +411,7 @@ subclass of `ValueError`.
 | `GENERATION_TIMEOUT` | a finite number greater than zero |
 | `GENERATION_MAX_RETRIES` | a whole number, zero or more |
 | `GENERATION_TEMPERATURE` | unset, or a number |
-| `MAX_OUTPUT_TOKENS`, `MAX_INPUT_CHARS` | a whole number greater than zero |
+| `MAX_OUTPUT_TOKENS`, `MAX_INPUT_CHARS`, `MAX_POLICY_CHARS` | a whole number greater than zero |
 | `MAX_ALT_TITLES` | a whole number, zero or more |
 | `PORT` | a whole number from 1 to 65535 |
 | `LOG_LEVEL` | unset, empty or whitespace-only, or one of the accepted levels |
@@ -596,12 +598,16 @@ check and is kept as itself on the `CompletionResult`.
 
 ### 12.1 What it does
 
-1. Assemble the messages for a body or for titles.
-2. Call `GenerationProvider.complete()` once.
+1. Assemble the messages for a body or for titles, from an optional trailing
+   `direction` argument (default `""`) together with the memo and, for title
+   regeneration, the settled body.
+2. Call `GenerationProvider.complete()` once, whether or not a direction was
+   given: a nonblank direction changes what the messages say, never how many
+   requests are made.
 3. Read the whole answer as the JSON object allowed by the configured response mode.
 4. For body generation, validate the raw `body_markdown`, normalize it mechanically, and refuse it if normalization leaves no usable body.
 5. Validate the title fields, including the required `alternative_titles` list, then drop blank and duplicate candidates and keep at most `MAX_ALT_TITLES`.
-6. Return a `Draft`; title regeneration keeps the already settled body unchanged.
+6. Return a `Draft`; title regeneration keeps the already settled body unchanged, whatever the direction says.
 
 It handles no HTTP client, no authentication, no base URL and no SDK exception.
 
@@ -701,8 +707,9 @@ request attempts and SDK-controlled waits between them. `GENERATION_TIMEOUT`
 remains the timeout setting for each attempt, so the two fields are not the
 same kind of bound when retries are enabled.
 
-Never recorded, at any level: the API token, the memo, the generated body, the
-titles, the prompts, the `Authorization` header and the answer itself.
+Never recorded, at any level: the API token, the memo, the optional Direction,
+the generated body, the titles, the prompts, the `Authorization` header and
+the answer itself.
 
 ### 13.2 ERROR
 
@@ -818,6 +825,9 @@ The product counts only the timeout budget of the attempts. The SDK may addition
   regular expression. Checking a colon count would make sizu-writer reject a
   format change the service is entitled to make. Only presence, surrounding
   whitespace and the absence of a line break are checked.
+- The optional Web Direction is held to the same boundary as the memo: no
+  server-side persistence, no session, no log entry at any level, sent only to
+  the configured generation endpoint when a request is made.
 
 ---
 
@@ -836,7 +846,9 @@ The commands are unchanged:
 `GENERATION_TIMEOUT`, for one invocation. There is no option for the token or
 the base URL: a command line is readable through `ps` and in a shell history,
 and one of those two is a secret while the other is a decision that belongs to
-the deployment.
+the deployment. There is likewise no `--direction` option: the optional Web
+Direction is a Web-only concept, and every CLI invocation calls
+`generate_draft()` and `regenerate_titles()` with the default empty direction.
 
 No connection-test subcommand is added. The smallest real generation already
 exercises the authentication, the model, the structured answer and the
@@ -872,7 +884,8 @@ missing token, a missing or `http` or resource-carrying base URL, a missing
 model, an unknown response mode, a negative retry count, a non-positive
 timeout, the accepted `LOG_LEVEL` values and their case-insensitive
 normalization, the refusal of an unknown `LOG_LEVEL`, the legacy variables,
-and the absence of secrets from every message.
+the absence of secrets from every message, and the `MAX_POLICY_CHARS` default,
+override and invalid-value refusal.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -894,8 +907,9 @@ no longer readable once the request has finished.
 `tests/test_generator.py` covers building a `Draft` from a `CompletionResult`,
 both response modes, a fenced answer, the refusal of prose around the object,
 the absence of any fragment extraction, a missing body, a missing primary
-title, the deduplication of alternatives, `MAX_ALT_TITLES`, and the body
-surviving a title regeneration.
+title, the deduplication of alternatives, `MAX_ALT_TITLES`, the body
+surviving a title regeneration, and an optional direction argument reaching
+both prompt builders while defaulting to blank for a caller that omits it.
 
 `tests/test_cli.py` covers the command line side of the settings: the `--model`
 and `--timeout` overrides reaching the generation, a `--timeout` that is not

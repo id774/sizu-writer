@@ -32,16 +32,23 @@
 #    - Replace template-origin {{input}} without rescanning the memo.
 #    - Replace template-origin {{input}} and {{body}} without rescanning
 #      either value, keeping an unknown placeholder literal.
+#    - Replace template-origin {{direction}} without rescanning the value,
+#      defaulting to a blank direction when the caller does not pass one.
+#    - Replace {{direction}}, {{input}} and {{body}} together in the title
+#      message without rescanning any of the three values.
 #    - Refuse a blank prompt before generation reaches the provider.
 #    - Refuse a prompt file that is not valid UTF-8.
 #    - Refuse a non-UTF-8 prompt before generation reaches the provider.
 #    - Keep the required title policy shared by the full and title-only prompts.
+#    - Keep the required direction policy shared by the full and title-only prompts.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.4 2026-09-21
+#       Cover the optional {{direction}} placeholder and its shared policy.
 #  v1.3 2026-09-12
 #       Keep the required title policy shared by full and title-only prompts.
 #  v1.2 2026-09-11
@@ -166,6 +173,37 @@ class BodyMessagesTest(unittest.TestCase):
         self.assertEqual("system", messages[0]["content"])
         self.assertEqual(expected_user, messages[1]["content"])
 
+    def test_defaults_to_a_blank_direction(self):
+        texts = {
+            "system.md": "system",
+            "body_user.md": "Direction: {{direction}}\nMemo: {{input}}",
+        }
+
+        with mock.patch.object(prompts, "load_prompt",
+                               side_effect=lambda name, prompt_dir: texts[name]):
+            messages = prompts.build_body_messages("a memo", "prompts")
+
+        self.assertEqual("Direction: \nMemo: a memo", messages[1]["content"])
+
+    def test_replaces_template_origin_direction_without_rescanning_it(self):
+        texts = {
+            "system.md": "system",
+            "body_user.md": ("Direction one: {{direction}}\n"
+                             "Direction two: {{direction}}\n"
+                             "Memo: {{input}}"),
+        }
+        direction = "literal {{input}} / {{body}} / {{direction}}"
+        expected_user = (
+            "Direction one: literal {{input}} / {{body}} / {{direction}}\n"
+            "Direction two: literal {{input}} / {{body}} / {{direction}}\n"
+            "Memo: a memo")
+
+        with mock.patch.object(prompts, "load_prompt",
+                               side_effect=lambda name, prompt_dir: texts[name]):
+            messages = prompts.build_body_messages("a memo", "prompts", direction)
+
+        self.assertEqual(expected_user, messages[1]["content"])
+
 
 class TitleMessagesTest(unittest.TestCase):
 
@@ -191,6 +229,41 @@ class TitleMessagesTest(unittest.TestCase):
             messages = prompts.build_titles_messages(input_text, body, "prompts")
 
         self.assertEqual("titles system", messages[0]["content"])
+        self.assertEqual(expected_user, messages[1]["content"])
+
+    def test_defaults_to_a_blank_direction(self):
+        texts = {
+            "titles_system.md": "titles system",
+            "titles_user.md": "Direction: {{direction}}\nMemo: {{input}}\nBody: {{body}}",
+        }
+
+        with mock.patch.object(prompts, "load_prompt",
+                               side_effect=lambda name, prompt_dir: texts[name]):
+            messages = prompts.build_titles_messages("a memo", "a body", "prompts")
+
+        self.assertEqual(
+            "Direction: \nMemo: a memo\nBody: a body", messages[1]["content"])
+
+    def test_replaces_direction_input_and_body_without_rescanning_any(self):
+        texts = {
+            "titles_system.md": "titles system",
+            "titles_user.md": ("Direction: {{direction}}\n"
+                               "Memo: {{input}}\n"
+                               "Body: {{body}}"),
+        }
+        direction = "literal {{input}} / {{body}} / {{direction}}"
+        input_text = "memo {{input}} / {{body}} / {{direction}}"
+        body = "body {{input}} / {{body}} / {{direction}}"
+        expected_user = (
+            "Direction: literal {{input}} / {{body}} / {{direction}}\n"
+            "Memo: memo {{input}} / {{body}} / {{direction}}\n"
+            "Body: body {{input}} / {{body}} / {{direction}}")
+
+        with mock.patch.object(prompts, "load_prompt",
+                               side_effect=lambda name, prompt_dir: texts[name]):
+            messages = prompts.build_titles_messages(
+                input_text, body, "prompts", direction)
+
         self.assertEqual(expected_user, messages[1]["content"])
 
 
@@ -244,6 +317,24 @@ class SharedTitlePolicyTest(unittest.TestCase):
             for phrase in required_phrases:
                 with self.subTest(prompt=prompt_name, phrase=phrase):
                     self.assertIn(phrase, text)
+
+
+class SharedDirectionPolicyTest(unittest.TestCase):
+    """ Keep the full and title-only prompts from drifting on direction semantics. """
+
+    def test_full_and_title_only_prompts_share_the_required_direction_policy(self):
+        repository_root = Path(__file__).resolve().parent.parent
+        required_phrase = (
+            "When the direction is blank, no additional instruction was given for "
+            "this\nrequest: follow the policy above as it stands, and never remark "
+            "in the output\non whether a direction was given or what it said."
+        )
+
+        for prompt_name in ("system.md", "titles_system.md"):
+            text = Path(repository_root, "prompts", prompt_name).read_text(
+                encoding="utf-8")
+            with self.subTest(prompt=prompt_name):
+                self.assertIn(required_phrase, text)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ sizu-writer Repository Version History
 
 v1.0.3 (Release Date: TBD)
 --------------------------
+- Add an optional Web Direction to generation, kept for full and title-only
+  regeneration and reflected in the prompts sent for this request only.
 - Refuse a non-finite --timeout override, a whitespace-only --model override and
   an unsupported LOG_LEVEL instead of accepting them.
 - Ship GENERATION_MODEL blank in .env.example instead of a concrete model name.

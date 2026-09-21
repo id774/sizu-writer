@@ -214,6 +214,7 @@ class SizuWriterError(Exception):
 | --- | --- | --- | --- | --- |
 | `EmptyInputError` | Empty or blank input | Enter a memo first. | 400 | INFO |
 | `InputTooLongError` | Input beyond `MAX_INPUT_CHARS` | The memo is too long. Keep it within N characters. | 400 | INFO |
+| `DirectionTooLongError` | Optional Direction beyond `MAX_POLICY_CHARS` | The direction is too long. Keep it within N characters. | 400 | INFO |
 | `EmptyBodyError` | Title-only generation without a non-blank settled body | There is no post body to regenerate titles for. Generate the whole draft first. | 400 | INFO |
 | `UpstreamConnectionError` | Connection, DNS or TLS failure | The generation service could not be reached. Try again in a while. | 502 | ERROR |
 | `UpstreamTimeoutError` | SDK request attempt times out | Generation took too long and was stopped. Generate it once more, or try again in a while. | 504 | ERROR |
@@ -234,17 +235,24 @@ Its only job is reading the prompt files and assembling the messages. It perform
 
 ```python
 def load_prompt(name: str, prompt_dir: str) -> str
-def build_body_messages(input_text: str, prompt_dir: str) -> List[Dict[str, str]]
-def build_titles_messages(input_text: str, body: str, prompt_dir: str) -> List[Dict[str, str]]
+def build_body_messages(input_text: str, prompt_dir: str, direction: str = "") -> List[Dict[str, str]]
+def build_titles_messages(input_text: str, body: str, prompt_dir: str, direction: str = "") -> List[Dict[str, str]]
 ```
 
-- The placeholders are `{{input}}` and `{{body}}` only. Substitution scans the
-  original prompt template once for the placeholders used by that message.
-  Memo and body values are opaque replacement text and are never scanned again,
-  so literal text such as `{{body}}` inside a memo remains part of that memo.
+- The placeholders are `{{input}}`, `{{body}}` and `{{direction}}`.
+  Substitution scans the original prompt template once for the placeholders
+  used by that message. Memo, body and Direction values are opaque replacement
+  text and are never scanned again, so literal text such as `{{body}}` inside a
+  memo remains part of that memo.
 - A placeholder not used by the message, or an unknown placeholder such as
   `{{tone}}`, stays literal. The prompt is not a format string, so braces and
   percent signs need no escaping.
+- `direction` defaults to an empty string, so an existing caller that does not
+  pass one keeps its current behavior unchanged. `{{direction}}` is not a
+  required placeholder of the loader: a custom `PROMPT_DIR` that does not use
+  it keeps working exactly as it did before this placeholder existed. The
+  optional Web Direction (section 7.2) is not a second memo; it shapes how the
+  memo is handled for one request and carries no new fact of its own.
 - `load_prompt()` reads each prompt file on every generation, so prompt edits
   take effect without a restart. There is no prompt cache or built-in fallback.
 - A missing, unreadable, empty or whitespace-only prompt file is logged by path
@@ -282,9 +290,15 @@ Length is written as an instruction that **sets no lower bound**: "a few paragra
 Validates the answer and returns a `Draft`.
 
 ```python
-def generate_draft(input_text: str, config: Config) -> Draft
-def regenerate_titles(input_text: str, body: str, config: Config) -> Draft
+def generate_draft(input_text: str, config: Config, direction: str = "") -> Draft
+def regenerate_titles(input_text: str, body: str, config: Config, direction: str = "") -> Draft
 ```
+
+`direction` is an optional trailing argument on both functions, defaulting to
+an empty string. An existing caller that does not pass one, including every
+call from `cli.py`, keeps its current behavior: `cli.py` has no `--direction`
+option and always runs with the empty default, so its output is unchanged by
+this feature.
 
 `generator.py` owns message assembly, JSON parsing, draft validation and `Draft`
 construction. It delegates the request itself to `sizu_writer/providers/`
@@ -425,6 +439,17 @@ The Flask application. Four routes.
   or `regenerate_titles()` while handling the error.
 - `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
 - An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
+- The optional Direction is read the same way the memo is: the raw form value
+  is measured with the same browser-equivalent textarea length used for
+  `MAX_INPUT_CHARS`, and a value over `MAX_POLICY_CHARS` raises
+  `DirectionTooLongError` before `generate_draft()` or `regenerate_titles()` is
+  called. A blank or whitespace-only Direction is trimmed to an empty string
+  and passed through as "no additional instruction", never as an empty memo. A
+  usable Direction is passed to `generate_draft()` and `regenerate_titles()`
+  alike, and is carried into every screen that can lead to a retry or a
+  regeneration — `index.html`, `error.html` and `result.html` — the same way
+  `input_text` is, so it survives a correctable validation error, a generation
+  failure and a regeneration until the person returns to `/`.
 
 ### 5.7 `cli.py`
 
@@ -436,6 +461,11 @@ python cli.py generate --text "a short thought"  # pass it directly
 python cli.py generate --input memo.txt --json   # print the Draft as JSON (tests, pipes)
 python cli.py titles --input memo.txt --body draft.md   # regenerate the titles only
 ```
+
+The optional Web Direction is out of scope for `cli.py`: there is no
+`--direction` option, and every `cli.py` invocation calls the generation core
+with its default empty direction, so existing invocations and scripts around
+them are unaffected by this feature.
 
 ### 5.8 `sizu_writer/diagnostics.py`
 
@@ -474,8 +504,11 @@ The endpoint identity is explicit: `GENERATION_BACKEND`,
 before a generation request can be made and have no implicit endpoint fallback.
 `GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and
 `GENERATION_TEMPERATURE` shape the request. `MAX_OUTPUT_TOKENS`,
-`MAX_INPUT_CHARS`, `MAX_ALT_TITLES`, `PROMPT_DIR`, `LOG_LEVEL` and `PORT` shape
-the application around it.
+`MAX_INPUT_CHARS`, `MAX_POLICY_CHARS`, `MAX_ALT_TITLES`, `PROMPT_DIR`,
+`LOG_LEVEL` and `PORT` shape the application around it. `MAX_POLICY_CHARS`
+bounds the optional Web Direction field the same way `MAX_INPUT_CHARS` bounds
+the memo: a positive integer, default `2000`, using the same browser-textarea
+length definition, checked before a generation request is made.
 
 `load_config()` parses and validates values that are meaningful on their own.
 `validate_generation_config()` refuses a configuration that cannot address the
@@ -521,6 +554,8 @@ into the current names.
 | Page title | The name of the service and a one line description |
 | Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS`. The limit follows the textarea value length: UTF-16 code units after newline normalization. |
 | Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the field. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
+| Direction field | `<textarea name="direction">`, below the memo field, labelled `Direction (optional)`, a few rows, resizable, `maxlength` of `MAX_POLICY_CHARS`, using the same length definition as the memo field. Blank is the ordinary case. |
+| Direction character count | The same `<length> / <limit>` hook as the memo field's, using the shared `data-character-count-target` mechanism of `copy.js` against `MAX_POLICY_CHARS`. |
 | Generate button | `<button name="mode" value="full">` |
 | Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field; it empties the field and returns the focus |
 
@@ -541,7 +576,7 @@ From top to bottom. **What is posted and what merely supports it are separated v
 5. **Copy the body**: copies the value of the textarea only.
 6. **Notices**: outside the body area, below it. Empty means hidden.
 7. **Regenerate the whole draft**: `<button name="mode" value="full">`.
-8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. The same browser/server length definition applies here. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
+8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. The same browser/server length definition applies here. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. Below it, inside the same `<details>`, an editable `<textarea name="direction">` holds this run's Direction with the same `maxlength` of `MAX_POLICY_CHARS` and the same character-count hook as the input screen's Direction field. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
 9. **Supporting information**: the model name and the time of generation, in small type.
 
 What the result form carries for a regeneration:
@@ -549,6 +584,7 @@ What the result form carries for a regeneration:
 | Field | Kind | Use |
 | --- | --- | --- |
 | `input_text` | `textarea` (inside the details) | Sent by both regenerations |
+| `direction` | `textarea` (inside the details) | Sent by both regenerations; blank means no additional instruction |
 | `body` | `hidden` | The current body, handed to the model when only the titles are regenerated |
 | `mode` | The value of the submit button | `full` / `titles` |
 
@@ -569,18 +605,20 @@ click
 
 ### 7.5 Errors
 
-- A correctable form error (an empty memo, an overlong memo, or title-only
-  generation without a settled body) re-renders the input screen with the memo
-  intact and the message on top. A viable title-only operation — a usable
-  settled body submitted with the memo — keeps that exact body and
-  `mode=titles`, so the corrected memo still regenerates titles only. Without a
-  usable body the screen falls back to `mode=full`, since there is nothing to
-  regenerate titles for. Neither case retries generation automatically.
+- A correctable form error (an empty memo, an overlong memo, an overlong
+  Direction, or title-only generation without a settled body) re-renders the
+  input screen with the memo and the Direction intact and the message on top.
+  A viable title-only operation — a usable settled body submitted with the
+  memo — keeps that exact body and `mode=titles`, so the corrected memo still
+  regenerates titles only. Without a usable body the screen falls back to
+  `mode=full`, since there is nothing to regenerate titles for. Neither case
+  retries generation automatically.
 - An error after generation starts renders `error.html` while keeping the last
-  input. A title-only failure also keeps the exact body and renders a
-  `mode=titles` button labelled "Regenerate the titles only"; a full-generation
-  failure renders `mode=full` and "Generate once more". Retrying therefore
-  repeats the failed operation instead of changing its scope.
+  input and Direction. A title-only failure also keeps the exact body and
+  renders a `mode=titles` button labelled "Regenerate the titles only"; a
+  full-generation failure renders `mode=full` and "Generate once more".
+  Retrying therefore repeats the failed operation instead of changing its
+  scope, with the same Direction reused.
 - Only `user_message` and the reference id are shown.
 
 ---
@@ -646,15 +684,25 @@ The current test inventory and exact assertions live in the test files rather
 than being duplicated here.
 
 - `test_config.py` covers setting parsing, required generation configuration,
-  legacy-name refusal and base-URL validation.
-- `test_generator.py` covers JSON parsing, draft validation, title filtering and
-  the two response modes independently of network transport.
+  legacy-name refusal, base-URL validation and the `MAX_POLICY_CHARS` default,
+  override and invalid-value refusal.
+- `test_generator.py` covers JSON parsing, draft validation, title filtering,
+  the two response modes independently of network transport, and the optional
+  direction argument reaching both prompt builders while an existing caller
+  that omits it keeps its prior behavior.
+- `test_prompts.py` covers `{{direction}}` substitution alongside `{{input}}`
+  and `{{body}}`, a blank default direction, and the shared direction policy
+  wording between the full and title-only system prompts.
 - `test_openai_compatible_provider.py` covers the Chat Completions request,
   response normalization and mapping of timeout, connection and status failures.
 - `test_formatter.py` covers the mechanical body rewrites and notices.
 - `test_web.py` covers routes, rendering, user-visible failures and the health
-  endpoint without a live generation service.
-- `test_cli.py` covers command-line input, overrides and exit status behavior.
+  endpoint without a live generation service, plus the optional Direction
+  field: rendering, blank and overlong validation, propagation to both
+  generation modes, preservation across regeneration and retries, and its
+  absence from the application log.
+- `test_cli.py` covers command-line input, overrides and exit status behavior;
+  the optional Direction adds no CLI option and is out of this suite's scope.
 
 Writing-quality acceptance remains a manual check through `cli.py generate`;
 the offline test suite verifies the software contract, not whether a generated
