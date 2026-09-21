@@ -73,6 +73,11 @@ These lines are not crossed by a setting or by an extension.
   into the generated body. The screen separates the body from every other
   piece of information, structurally and not only visually.
 - Do not render model output with `|safe`.
+- The Web generation form refuses a POST whose Origin does not match the
+  preserved request Host by default. Missing or malformed Origin is also
+  refused. The check may be disabled only through the explicit
+  `REQUIRE_SAME_ORIGIN` setting; it is not authentication. Do not log the
+  Origin value. Do not introduce a session or a cookie to implement it.
 
 ### 1.3 The generation endpoint
 The settings decide where a memo is sent, so they are read strictly.

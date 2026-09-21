@@ -440,6 +440,45 @@ The Flask application. Four routes.
 | GET | `/healthz` | Liveness; no API call |
 | GET | `/static/<file>` | CSS and JS |
 
+- Request processing runs in this order: the diagnostic reference id is
+  established (`begin_request_diagnostics()`); then, for every request, the
+  same-origin guard (`enforce_same_origin_generation()`) runs and returns
+  immediately for anything other than a `POST` to `/generate` with
+  `REQUIRE_SAME_ORIGIN` enabled; only once that guard has let a `POST
+  /generate` through does `generate()` read and validate the form
+  (`_input_text()`, `_direction_text()`) and call `generate_draft()` or
+  `regenerate_titles()`. A rejected request therefore never reaches form
+  validation or the generation core, and spends zero calls to the configured
+  endpoint.
+- `enforce_same_origin_generation()` is a second `@app.before_request`
+  function, not a general middleware: its own guard clause
+  (`request.method != "POST" or request.endpoint != "generate"`) keeps it
+  from touching `GET /`, `GET /healthz`, static files, or any future POST
+  route added without updating it. `_same_origin_failure()` reads only the
+  `Origin` request header; it never reads the form or the body. When
+  `config.require_same_origin` is `False` the guard returns immediately and
+  every request reaches the code that existed before this check.
+- The `Origin` comparison is `urlsplit(origin).netloc` against
+  `request.host`, compared with `.casefold()`. Origin syntax is validated
+  (scheme `http` or `https`, a non-empty `netloc`, no userinfo, no path, no
+  query, no fragment; `Origin: null` and anything `urlsplit` cannot parse a
+  port from are refused) but the scheme itself is never compared to
+  `request.scheme`: Apache terminates TLS in front of gunicorn, so the WSGI
+  request is plain HTTP even when the browser's Origin is `https`, and
+  `deploy/sizu-writer.conf`'s `ProxyPreserveHost On` is what keeps
+  `request.host` equal to the public host the browser used. The authority
+  comparison includes the port, so a foreign explicit port is refused the
+  same way a foreign host is; comparing host alone would accept a request
+  from an unrelated service running on another port of the same box.
+- A rejection is answered directly by the guard, not by raising a
+  `SizuWriterError`: it renders `error.html` with `retryable=False` and the
+  fixed message "This request must be submitted from this site." at status
+  400, and logs one `INFO` line, `Same-origin generation request refused
+  (reference <id>): <reason>`, where `<reason>` is one of `missing Origin`,
+  `invalid Origin` or `foreign Origin` — never the raw `Origin` header or
+  the request `Host`. Because the guard runs before `_input_text()` and
+  `request.form` is not read for this decision, no submitted memo,
+  Direction, body or notice is reflected back onto the rejection page.
 - Generation and regeneration share one endpoint, so the form always posts to
   the same place. `mode=titles` always means title-only regeneration; the
   presence of `body` does not turn that operation into a full generation.
@@ -545,10 +584,17 @@ before a generation request can be made and have no implicit endpoint fallback.
 `GENERATION_RESPONSE_MODE`, `GENERATION_TIMEOUT`, `GENERATION_MAX_RETRIES` and
 `GENERATION_TEMPERATURE` shape the request. `MAX_OUTPUT_TOKENS`,
 `MAX_INPUT_CHARS`, `MAX_POLICY_CHARS`, `MAX_ALT_TITLES`, `PROMPT_DIR`,
-`LOG_LEVEL` and `PORT` shape the application around it. `MAX_POLICY_CHARS`
-bounds the optional Web Direction field the same way `MAX_INPUT_CHARS` bounds
-the memo: a positive integer, default `2000`, using the same browser-textarea
-length definition, checked before a generation request is made.
+`LOG_LEVEL`, `PORT` and `REQUIRE_SAME_ORIGIN` shape the application around it.
+`MAX_POLICY_CHARS` bounds the optional Web Direction field the same way
+`MAX_INPUT_CHARS` bounds the memo: a positive integer, default `2000`, using
+the same browser-textarea length definition, checked before a generation
+request is made. `REQUIRE_SAME_ORIGIN` is a strict boolean, parsed by the
+`_boolean()` helper (accepted spellings: `1`/`0`, `true`/`false`, `yes`/`no`,
+`on`/`off`, case-insensitively; anything else is a `ConfigError`), default
+`True`, read by `load_config()` rather than `validate_generation_config()`:
+it is a Web request-validation setting, not part of what makes the
+generation endpoint addressable, but a malformed value is still refused as a
+configuration error before any request, CLI included.
 
 `load_config()` parses and validates values that are meaningful on their own.
 `validate_generation_config()` refuses a configuration that cannot address the
@@ -687,6 +733,14 @@ click
   authentication. `mod_ratelimit` limits response transfer rate and is not a
   generation-request counter.
 - No internal information on an error page (section 5.2).
+- `REQUIRE_SAME_ORIGIN` (default on) refuses a `POST /generate` whose
+  `Origin` authority does not match `request.host` (section 5.6), so a
+  cross-site form on another page cannot spend a generation request. This is
+  a same-site boundary against cross-site form submission, not
+  authentication, and does not replace Basic authentication, IP restriction
+  or a VPN. It introduces no session, cookie, token or `SECRET_KEY`: the
+  application remains as stateless as section 2.3 describes, and the check
+  is a pure function of the `Origin` and `Host` headers of the one request.
 
 ### 8.2 Availability
 
@@ -734,8 +788,10 @@ than being duplicated here.
 
 - `test_config.py` covers setting parsing, required generation configuration,
   legacy-name refusal, base-URL validation, the `MAX_POLICY_CHARS` default,
-  override and invalid-value refusal, and the static `Procfile` contract that
-  it falls back to the documented default port of 8090 when `PORT` is unset.
+  override and invalid-value refusal, the static `Procfile` contract that
+  it falls back to the documented default port of 8090 when `PORT` is unset,
+  and the `REQUIRE_SAME_ORIGIN` default, its documented boolean forms and
+  the refusal of an unknown value.
 - `test_generator.py` covers JSON parsing, draft validation, title filtering,
   the two response modes independently of network transport, the optional
   direction argument reaching both prompt builders while an existing caller
@@ -759,8 +815,12 @@ than being duplicated here.
   modes, preservation across regeneration and retries, and its absence from
   the application log; body notice preservation across title-only
   regeneration and retries; a single sanitized application log record per
-  failure; and generation retry controls shown only for a retryable
-  generation error, never on the 404, 405 or 413 error pages.
+  failure; generation retry controls shown only for a retryable generation
+  error, never on the 404, 405 or 413 error pages; and default same-origin
+  protection on `POST /generate` — a matching or foreign-scheme-but-matching
+  Origin accepted, a missing, malformed, foreign-host or foreign-port Origin
+  refused before generation without reflecting form values or the raw
+  Origin, other routes and the disabled-protection path unaffected.
 - `test_cli.py` covers command-line input, overrides and exit status behavior,
   and a single sanitized CLI log record per `SizuWriterError` failure; the
   optional Direction adds no CLI option and is out of this suite's scope.

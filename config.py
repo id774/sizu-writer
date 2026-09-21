@@ -83,8 +83,14 @@
 #      Port used by the development server and the Procfile gunicorn
 #      bind. Defaults to 8090; bundled deployment examples use explicit
 #      matching port values.
+#  - REQUIRE_SAME_ORIGIN
+#      Whether Web POST /generate must carry an Origin whose authority
+#      matches the request Host. Defaults to true. Accepted booleans are
+#      1/0, true/false, yes/no and on/off, case-insensitively.
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Add REQUIRE_SAME_ORIGIN, enabled by default with strict boolean parsing.
 #  v1.4 2026-09-21
 #       Add MAX_POLICY_CHARS, the upper bound of the optional Web Direction field.
 #  v1.3 2026-09-10
@@ -129,6 +135,12 @@ RESPONSE_MODES = ("json-object", "prompt-json")
 LOG_LEVELS = ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO",
               "DEBUG", "NOTSET")
 
+# Accepted spellings of a strict boolean setting, matched
+# case-insensitively. An unknown value is refused rather than guessed at
+# with bool(raw), so a typo is reported instead of silently read as true.
+TRUE_VALUES = ("1", "true", "yes", "on")
+FALSE_VALUES = ("0", "false", "no", "off")
+
 # The settings these replaced. They are refused rather than translated,
 # because a host with a stale OPENAI_API_KEY exported would otherwise
 # keep working against an endpoint nobody chose.
@@ -169,6 +181,7 @@ class Config:
     prompt_dir: str = "prompts"
     log_level: str = "INFO"
     port: int = 8090
+    require_same_origin: bool = True
 
     @property
     def endpoint_host(self) -> str:
@@ -211,6 +224,23 @@ def _whole(name: str, default: int, minimum: int) -> int:
         raise ConfigError(
             "{0} is {1}; expected {2}.".format(name, raw, expected))
     return int(value)
+
+
+def _boolean(name: str, default: bool) -> bool:
+    """ Read a strict boolean setting, using the default only when blank. """
+    raw = _text(name, "")
+    if not raw:
+        return default
+
+    value = raw.lower()
+    if value in TRUE_VALUES:
+        return True
+    if value in FALSE_VALUES:
+        return False
+
+    raise ConfigError(
+        "{0} is '{1}'; expected one of: {2}.".format(
+            name, raw, ", ".join(TRUE_VALUES + FALSE_VALUES)))
 
 
 def _validate_timeout(name: str, value: float) -> None:
@@ -287,6 +317,7 @@ def load_config() -> Config:
         prompt_dir=_text("PROMPT_DIR", "prompts"),
         log_level=log_level,
         port=port,
+        require_same_origin=_boolean("REQUIRE_SAME_ORIGIN", True),
     )
 
 

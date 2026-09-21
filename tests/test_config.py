@@ -66,12 +66,18 @@
 #    - Keep a credential out of the LOG_LEVEL refusal message.
 #    - Treat a blank or whitespace-only LOG_LEVEL as unset.
 #    - Cover the Procfile fallback to the documented default PORT of 8090.
+#    - Enable REQUIRE_SAME_ORIGIN by default.
+#    - Accept documented boolean forms for REQUIRE_SAME_ORIGIN.
+#    - Treat blank REQUIRE_SAME_ORIGIN as the enabled default.
+#    - Refuse an unknown REQUIRE_SAME_ORIGIN value.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.6 2026-09-21
+#       Cover REQUIRE_SAME_ORIGIN defaults, accepted booleans and refusal.
 #  v1.5 2026-09-21
 #       Cover the Procfile fallback to the documented default PORT of 8090.
 #  v1.4 2026-09-21
@@ -127,6 +133,7 @@ class LoadConfigTest(unittest.TestCase):
         self.assertEqual(4, loaded.max_alt_titles)
         self.assertEqual("prompts", loaded.prompt_dir)
         self.assertEqual(8090, loaded.port)
+        self.assertTrue(loaded.require_same_origin)
 
     def test_loads_a_valid_max_policy_chars_override(self):
         self.assertEqual(
@@ -381,6 +388,49 @@ class ValidateGenerationConfigTest(unittest.TestCase):
                           {"generation_base_url": "http://api.example.net/v1"},
                           {"generation_model": ""}):
             self.assertNotIn("uuid:secret", self.refuse(**overrides))
+
+
+class RequireSameOriginTest(unittest.TestCase):
+    """ REQUIRE_SAME_ORIGIN is a strict boolean, enabled by default. """
+
+    def load(self, environment):
+        with mock.patch.dict(os.environ, environment, clear=True):
+            with mock.patch.object(config, "load_dotenv", None):
+                return config.load_config()
+
+    def refuse(self, environment):
+        with self.assertRaises(config.ConfigError) as refused:
+            self.load(environment)
+        return str(refused.exception)
+
+    def test_is_enabled_by_default(self):
+        self.assertTrue(self.load({}).require_same_origin)
+
+    def test_accepts_documented_true_values(self):
+        for value in ("1", "true", "TRUE", "yes", "on", "ON"):
+            with self.subTest(value=value):
+                self.assertTrue(
+                    self.load({"REQUIRE_SAME_ORIGIN": value}).require_same_origin)
+
+    def test_accepts_documented_false_values(self):
+        for value in ("0", "false", "FALSE", "no", "off", "OFF"):
+            with self.subTest(value=value):
+                self.assertFalse(
+                    self.load({"REQUIRE_SAME_ORIGIN": value}).require_same_origin)
+
+    def test_treats_a_blank_value_as_the_enabled_default(self):
+        for value in ("", "   "):
+            with self.subTest(value=repr(value)):
+                self.assertTrue(
+                    self.load({"REQUIRE_SAME_ORIGIN": value}).require_same_origin)
+
+    def test_refuses_an_unknown_value(self):
+        for value in ("maybe", "enabled", "2"):
+            with self.subTest(value=value):
+                message = self.refuse({"REQUIRE_SAME_ORIGIN": value})
+
+                self.assertIn("REQUIRE_SAME_ORIGIN", message)
+                self.assertIn("expected one of", message)
 
 
 class ProcfileTest(unittest.TestCase):

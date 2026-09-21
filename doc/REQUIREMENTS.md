@@ -374,6 +374,14 @@ At a minimum:
 - Hold the optional Direction to the same boundary as the memo: no server-side
   persistence, no log entry, sent only to the configured generation endpoint
   when a request is made.
+- By default, refuse a published Web generation POST whose browser Origin
+  authority does not match the request's Host, including a missing or
+  malformed Origin, before an external generation call is made. An operator
+  may disable this check explicitly, but the default for a browser
+  deployment is enabled. This check is a same-site boundary against
+  cross-site form submission; it is not authentication and does not replace
+  Basic authentication, IP restriction or a VPN. A rejected request does not
+  reflect the submitted memo or Direction back onto the screen.
 
 ### 10.2 Availability
 
@@ -461,6 +469,8 @@ The initial specification is met when:
 10. the person can post by copying, pasting and reading it once more
 11. the system posts nothing by itself
 12. the generation API token never reaches the browser
+13. a foreign or missing Origin cannot trigger a generation request
+    when same-origin protection is enabled
 
 ## 15. Summary
 

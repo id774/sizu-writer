@@ -21,6 +21,7 @@ v1.0.3 (Release Date: TBD)
 - Complete the designed Web character count, submit state, body auto-growth and
   result memo length limit.
 - Show generation retry controls only for retryable generation errors.
+- Reject missing or foreign Origin headers on Web generation POSTs by default.
 - Refuse generation responses that omit the required alternative_titles field.
 - Refuse malformed GENERATION_BASE_URL hosts, ports and whitespace at startup.
 - Refuse non-UTF-8 memo, body and prompt files without a traceback.

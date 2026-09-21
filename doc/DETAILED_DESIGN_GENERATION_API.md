@@ -258,6 +258,19 @@ from `sizu_writer/diagnostics.py`. The memo, the prompt and the completion
 data never pass through that module, and the generator and provider
 interfaces are unchanged by it.
 
+Before any of this diagram runs, `app.py`'s same-origin guard
+(`REQUIRE_SAME_ORIGIN`, default on) refuses a `POST /generate` whose browser
+`Origin` does not match the request `Host`. A refused request never reaches
+`sizu_writer/generator.py`, so it spends zero calls to
+`sizu_writer/providers/` and zero requests to `GENERATION_BASE_URL`; the
+purpose is exactly that a cross-site form submission cannot spend a
+generation request or its budget. This check is Web-only: `cli.py` calls
+`sizu_writer/generator.py` directly and never passes through `app.py` or this
+guard. With `REQUIRE_SAME_ORIGIN=off` this diagram is reached exactly as it
+was before this guard existed. The check changes nothing below `[Flask
+app.py]`: the request payload sent to the OpenAI-compatible endpoint, the
+response mode, the retry count and the timeouts are all unaffected.
+
 ---
 
 ## 7. Layout
@@ -315,8 +328,16 @@ interfaces are unchanged by it.
 | `PROMPT_DIR` | no | `prompts` | Where the prompts live |
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
 | `PORT` | no | `8090` | Development-server and Procfile gunicorn port; bundled deployment examples use explicit matching values |
+| `REQUIRE_SAME_ORIGIN` | no | `true` | Whether Web `POST /generate` must carry an `Origin` whose authority matches the request `Host`; a strict boolean (`1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`) |
 
 `PORT` does not interpolate into `deploy/sizu-writer.service` or `deploy/sizu-writer.conf`. Those examples use explicit matching ports by design; an operator choosing another deployment port changes both examples consistently. The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so an unset `PORT` still binds gunicorn to the documented default of 8090 instead of an empty bind address.
+
+`REQUIRE_SAME_ORIGIN` is a Web-only concern: `cli.py` never issues an HTTP
+request to this application, so it never reaches the guard that reads this
+setting, and its generation calls are unaffected whatever this is set to. A
+malformed value is still refused by `load_config()` as a `ConfigError`
+before any request, `cli.py` included, the same way every other setting
+here is validated eagerly rather than left to fail later.
 
 ### 8.2 Sakura AI Engine
 
@@ -900,8 +921,11 @@ model, an unknown response mode, a negative retry count, a non-positive
 timeout, the accepted `LOG_LEVEL` values and their case-insensitive
 normalization, the refusal of an unknown `LOG_LEVEL`, the legacy variables,
 the absence of secrets from every message, the `MAX_POLICY_CHARS` default,
-override and invalid-value refusal, and the static `Procfile` contract that it
-falls back to the documented default port of 8090 when `PORT` is unset.
+override and invalid-value refusal, the static `Procfile` contract that it
+falls back to the documented default port of 8090 when `PORT` is unset, and
+`REQUIRE_SAME_ORIGIN`'s enabled-by-default value, its documented boolean
+forms (`1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`, case-insensitively),
+a blank value read as the enabled default, and the refusal of an unknown one.
 
 `tests/test_openai_compatible_provider.py` covers the token and base URL
 reaching the SDK, `max_retries=0`, `response_format` under each mode,
@@ -926,6 +950,21 @@ unexpected exception alike. An unexpected exception's log record carries its
 class name and `traceback.format_tb()` stack frames and never `str(error)`,
 `repr(error)` or a value passed through the exception, and the rendered page
 never carries that raw message either.
+
+`tests/test_web.py` also covers the default same-origin guard: a `POST
+/generate` whose `Origin` authority matches `request.host` is accepted and
+reaches `generate_draft()`/`regenerate_titles()`; a request with no `Origin`,
+a malformed one (`null`, a non-`http(s)` scheme, one carrying userinfo, a
+path, a query or an unparsable port), a foreign host or a foreign explicit
+port is refused with status 400 before either function is called; an
+`https://` Origin is accepted against a plain-HTTP test request with the
+same host, pinning that the scheme is validated but never compared to
+`request.scheme`; the rejection page and the one `INFO` log record it writes
+carry none of the submitted form values and none of the raw `Origin` header;
+`REQUIRE_SAME_ORIGIN=False` restores the pre-guard behavior for both a
+same-origin and a foreign request; and a non-`/generate` route such as `POST
+/healthz` keeps its own status (405) rather than being intercepted by the
+guard.
 
 `tests/test_generator.py` covers building a `Draft` from a `CompletionResult`,
 both response modes, a fenced answer, the refusal of prose around the object,

@@ -42,6 +42,8 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.8 2026-09-21
+#       Refuse Web generation POSTs without a matching Origin by default.
 #  v1.7 2026-09-21
 #       Log failures once without raw exception text and show retry controls only
 #       for retryable generation errors.
@@ -69,6 +71,7 @@
 import logging
 import secrets
 import traceback
+from urllib.parse import urlsplit
 
 from flask import Flask, g, render_template, request
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
@@ -129,6 +132,64 @@ def end_request_diagnostics(_error):
     if token is not None:
         reset_reference_id(token)
         g._sizu_reference_token = None
+
+
+def _same_origin_failure() -> str:
+    """ Return why this generation POST fails the Origin check, or blank. """
+    origin = request.headers.get("Origin", "").strip()
+    if not origin:
+        return "missing Origin"
+
+    try:
+        parts = urlsplit(origin)
+        parts.port
+    except ValueError:
+        return "invalid Origin"
+
+    if (
+            parts.scheme not in ("http", "https")
+            or not parts.netloc
+            or parts.username is not None
+            or parts.password is not None
+            or parts.path
+            or parts.query
+            or parts.fragment):
+        return "invalid Origin"
+
+    if parts.netloc.casefold() != request.host.casefold():
+        return "foreign Origin"
+
+    return ""
+
+
+@app.before_request
+def enforce_same_origin_generation():
+    """ Refuse a generation POST that did not come from this Web origin. """
+    if (
+            not config.require_same_origin
+            or request.method != "POST"
+            or request.endpoint != "generate"):
+        return None
+
+    reason = _same_origin_failure()
+    if not reason:
+        return None
+
+    reference_id = _request_reference_id()
+    logger.info(
+        "Same-origin generation request refused (reference %s): %s",
+        reference_id,
+        reason,
+    )
+    page = render_template(
+        "error.html",
+        error="This request must be submitted from this site.",
+        reference_id=reference_id,
+        retryable=False,
+        max_input_chars=config.max_input_chars,
+        max_policy_chars=config.max_policy_chars,
+    )
+    return page, 400
 
 
 def _textarea_length(text: str) -> int:

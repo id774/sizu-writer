@@ -119,6 +119,15 @@ Add an HTTP virtual host if port 80 should redirect to HTTPS:
 Enable `mod_alias` if the redirect directive is unavailable.
 Run `apache2ctl configtest` before every Apache reload.
 
+`deploy/sizu-writer.conf` already sets `ProxyPreserveHost On`. Keep it: the
+application's same-origin check on `POST /generate`
+(`REQUIRE_SAME_ORIGIN`, on by default; see README.md "Configuration")
+compares the browser's `Origin` header against the request's `Host`, and
+`ProxyPreserveHost On` is what keeps that `Host` equal to the public host
+the browser used instead of `127.0.0.1:8090`. No additional Apache module,
+`RequestHeader` directive or `mod_security` rule is required for this check;
+it is enforced entirely by the Flask application.
+
 ## Restrict access
 
 Do not publish an unrestricted instance.
@@ -139,6 +148,16 @@ Use `htpasswd` without `-c` when adding another user.
 
 Application-level rate limiting is not implemented.
 Authentication, a VPN, `mod_qos`, or another shared limiter must enforce it.
+
+The application's `REQUIRE_SAME_ORIGIN` check (on by default) refuses a
+`POST /generate` whose browser `Origin` does not belong to this site. It
+narrows who a cross-site page in someone else's browser can make spend a
+generation request; it is not authentication and does not identify or
+authorize a caller. Keep it enabled for a published browser deployment, and
+still restrict readers with one of the methods above. Turn it off only for
+a controlled non-browser client — a script or another service that
+intentionally posts to `/generate` — never as a substitute for the access
+restriction this section describes.
 
 ## Verify the complete path
 
