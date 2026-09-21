@@ -65,12 +65,15 @@
 #    - Refuse an unknown, non-empty LOG_LEVEL, naming the setting.
 #    - Keep a credential out of the LOG_LEVEL refusal message.
 #    - Treat a blank or whitespace-only LOG_LEVEL as unset.
+#    - Cover the Procfile fallback to the documented default PORT of 8090.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.5 2026-09-21
+#       Cover the Procfile fallback to the documented default PORT of 8090.
 #  v1.4 2026-09-21
 #       Cover the MAX_POLICY_CHARS default, override and invalid-value refusal.
 #  v1.3 2026-09-10
@@ -86,6 +89,7 @@
 
 import os
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import config
@@ -377,6 +381,16 @@ class ValidateGenerationConfigTest(unittest.TestCase):
                           {"generation_base_url": "http://api.example.net/v1"},
                           {"generation_model": ""}):
             self.assertNotIn("uuid:secret", self.refuse(**overrides))
+
+
+class ProcfileTest(unittest.TestCase):
+    """ Static contract: the Procfile falls back to the documented PORT default. """
+
+    def test_falls_back_to_the_documented_default_port(self):
+        path = Path(__file__).resolve().parent.parent / "Procfile"
+        text = path.read_text(encoding="utf-8")
+
+        self.assertIn("--bind 127.0.0.1:${PORT:-8090}", text)
 
 
 if __name__ == "__main__":

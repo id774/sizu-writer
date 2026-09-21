@@ -31,7 +31,7 @@
 #
 #  Usage:
 #      python app.py
-#      gunicorn app:app --bind 127.0.0.1:${PORT} --timeout 240
+#      gunicorn app:app --bind 127.0.0.1:${PORT:-8090} --timeout 240
 #
 #  Options:
 #  - None. Every setting comes from the environment or .env, through
@@ -42,6 +42,11 @@
 #  - Flask 3.x
 #
 #  Version History:
+#  v1.7 2026-09-21
+#       Log failures once without raw exception text and show retry controls only
+#       for retryable generation errors.
+#  v1.6 2026-09-21
+#       Preserve body notices across title-only regeneration and retries.
 #  v1.5 2026-09-21
 #       Add an optional per-request Direction field, validated and preserved
 #       across regeneration and retries the same way as the memo.
@@ -63,6 +68,7 @@
 
 import logging
 import secrets
+import traceback
 
 from flask import Flask, g, render_template, request
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
@@ -166,10 +172,11 @@ def generate():
     text = _input_text()
     direction = _direction_text()
     body = request.form.get("body", "")
+    notices = request.form.getlist("notice")
 
     mode = request.form.get("mode")
     if mode == "titles":
-        draft = regenerate_titles(text, body, config, direction)
+        draft = regenerate_titles(text, body, config, direction, notices)
     else:
         draft = generate_draft(text, config, direction)
 
@@ -185,14 +192,14 @@ def healthz():
     return {"status": "ok"}
 
 
-@app.errorhandler(SizuWriterError)
-def handle_known_error(error: SizuWriterError):
-    """ Show the message meant for the user and log the cause. """
-    reference_id = _request_reference_id()
-    # An input the user can correct is not a failure of the server.
-    level = logging.INFO if error.status_code == 400 else logging.ERROR
-    logger.log(level, "%s (reference %s): %s", type(error).__name__, reference_id, error)
+def _generate_post_in_progress() -> bool:
+    """ Return whether the failing request was a POST to /generate. """
+    return request.endpoint == "generate" and request.method == "POST"
 
+
+def _render_sizu_error(error: SizuWriterError, reference_id: str,
+                       retryable: bool):
+    """ Render the screen for a known error, without logging it. """
     template = "index.html" if error.status_code == 400 else "error.html"
     body = request.form.get("body", "")
     mode = "titles" if request.form.get("mode") == "titles" else "full"
@@ -209,10 +216,25 @@ def handle_known_error(error: SizuWriterError):
         body=body,
         direction=request.form.get("direction", ""),
         mode=mode,
+        notices=request.form.getlist("notice"),
+        retryable=retryable,
         max_input_chars=config.max_input_chars,
         max_policy_chars=config.max_policy_chars,
     )
     return page, error.status_code
+
+
+@app.errorhandler(SizuWriterError)
+def handle_known_error(error: SizuWriterError):
+    """ Show the message meant for the user and log the cause once. """
+    reference_id = _request_reference_id()
+    # An input the user can correct is not a failure of the server.
+    level = logging.INFO if error.status_code == 400 else logging.ERROR
+    detail = error.diagnostic or error.user_message
+    logger.log(level, "%s (reference %s): %s",
+               type(error).__name__, reference_id, detail)
+
+    return _render_sizu_error(error, reference_id, _generate_post_in_progress())
 
 
 @app.errorhandler(RequestEntityTooLarge)
@@ -224,6 +246,7 @@ def handle_request_too_large(error: RequestEntityTooLarge):
         "error.html",
         error="The request is too large. Reduce its contents and try again.",
         reference_id=reference_id,
+        retryable=False,
         max_input_chars=config.max_input_chars,
         max_policy_chars=config.max_policy_chars,
     )
@@ -252,6 +275,7 @@ def handle_http_error(error: HTTPException):
         "error.html",
         error=HTTP_MESSAGES.get(error.code, "The request could not be completed."),
         reference_id=reference_id,
+        retryable=False,
         max_input_chars=config.max_input_chars,
         max_policy_chars=config.max_policy_chars,
     )
@@ -260,14 +284,17 @@ def handle_http_error(error: HTTPException):
 
 @app.errorhandler(Exception)
 def handle_unexpected_error(error: Exception):
-    """ Report an unexpected failure without exposing its detail. """
+    """ Log a sanitized failure once and show a generic server error. """
     reference_id = _request_reference_id()
-    logger.exception(
-        "Unexpected failure (reference %s): %s",
+    trace = "".join(traceback.format_tb(error.__traceback__)).strip()
+    logger.error(
+        "Unexpected failure (reference %s): type=%s traceback=%s",
         reference_id,
-        error,
+        type(error).__name__,
+        trace or "-",
     )
-    return handle_known_error(InternalError(str(error)))
+    return _render_sizu_error(
+        InternalError(), reference_id, _generate_post_in_progress())
 
 
 if __name__ == "__main__":

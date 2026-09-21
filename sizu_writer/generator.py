@@ -30,6 +30,10 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
+#  v1.6 2026-09-21
+#       Carry sanitized response-validation diagnostics without library error logs.
+#  v1.5 2026-09-21
+#       Preserve existing body notices when regenerating titles.
 #  v1.4 2026-09-21
 #       Accept an optional per-request direction and pass it to prompt assembly.
 #  v1.3 2026-09-11
@@ -50,7 +54,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from config import Config
 from sizu_writer import Draft
@@ -111,12 +115,11 @@ def _payload(content: str, response_mode: str) -> Dict[str, Any]:
             parse_constant=_reject_non_json_constant,
         )
     except ValueError as error:
-        logger.error("The answer is not readable as JSON: %s", error)
-        raise InvalidResponseError()
+        raise InvalidResponseError(
+            "the answer is not readable as JSON: {0}".format(error))
 
     if not isinstance(payload, dict):
-        logger.error("The answer is JSON but not an object")
-        raise InvalidResponseError()
+        raise InvalidResponseError("the answer is JSON but not an object")
     return payload
 
 
@@ -124,23 +127,20 @@ def _titles(payload: Dict[str, Any], config: Config) -> List[str]:
     """ Validate the titles and keep at most MAX_ALT_TITLES others. """
     primary = payload.get("primary_title")
     if not isinstance(primary, str) or not primary.strip():
-        logger.error("The answer has no usable primary_title")
-        raise InvalidResponseError()
+        raise InvalidResponseError("the answer has no usable primary_title")
 
     if "alternative_titles" not in payload:
-        logger.error("The answer has no alternative_titles")
-        raise InvalidResponseError()
+        raise InvalidResponseError("the answer has no alternative_titles")
 
     others = payload["alternative_titles"]
     if not isinstance(others, list):
-        logger.error("alternative_titles is not a list")
-        raise InvalidResponseError()
+        raise InvalidResponseError("alternative_titles is not a list")
 
     kept: List[str] = []
     for title in others:
         if not isinstance(title, str):
-            logger.error("alternative_titles holds a value that is not a string")
-            raise InvalidResponseError()
+            raise InvalidResponseError(
+                "alternative_titles holds a value that is not a string")
         title = title.strip()
         if title and title != primary.strip() and title not in kept:
             kept.append(title)
@@ -161,13 +161,12 @@ def generate_draft(input_text: str, config: Config, direction: str = "") -> Draf
 
     raw_body = payload.get("body_markdown")
     if not isinstance(raw_body, str) or not raw_body.strip():
-        logger.error("The answer has no usable body_markdown")
-        raise InvalidResponseError()
+        raise InvalidResponseError("the answer has no usable body_markdown")
 
     body, notices = normalize_body(raw_body)
     if not body:
-        logger.error("The answer has no usable body_markdown after normalization")
-        raise InvalidResponseError()
+        raise InvalidResponseError(
+            "the answer has no usable body_markdown after normalization")
 
     titles = _titles(payload, config)
 
@@ -182,7 +181,8 @@ def generate_draft(input_text: str, config: Config, direction: str = "") -> Draf
 
 
 def regenerate_titles(input_text: str, body: str, config: Config,
-                      direction: str = "") -> Draft:
+                      direction: str = "",
+                      notices: Optional[List[str]] = None) -> Draft:
     """ Generate title candidates for a body that is already settled. """
     if not isinstance(body, str) or not body.strip():
         raise EmptyBodyError()
@@ -198,5 +198,5 @@ def regenerate_titles(input_text: str, body: str, config: Config,
         alternative_titles=titles[1:],
         model=result.model or config.generation_model,
         generated_at=_now(),
-        notices=[],
+        notices=list(notices or []),
     )

@@ -37,15 +37,21 @@
 #    - Demote a level-one ATX heading with leading spaces, a tab separator or
 #      an empty heading.
 #    - Keep a four-space indented hash line, which is indented code, untouched.
+#    - Preserve leading indentation on the first non-blank line of a body.
+#    - Keep a four-space indented backtick or tilde marker from being read as
+#      a fence.
+#    - Collapse whitespace-only blank lines into a single blank line.
+#    - Strip only whitespace-only boundary lines, keeping the indentation of
+#      the first and last non-blank line.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
-#  v1.2 2026-09-12
-#       Cover fenced-code preservation and level-one ATX heading
-#       indentation and separator boundaries.
+#  v1.2 2026-09-21
+#       Cover fenced and indented Markdown preservation, ATX heading
+#       boundaries and whitespace-only blank-line normalization.
 #  v1.1 2026-08-11
 #       Cover separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-05
@@ -200,6 +206,41 @@ class NormalizeBodyTest(unittest.TestCase):
         body, notices = normalize_body(source)
 
         self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_preserves_leading_indentation_of_indented_code(self):
+        source = "    # literal\n    echo value"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_does_not_read_a_four_space_indented_fence_marker_as_a_fence(self):
+        cases = [
+            "    ```\n    literal\n    ```",
+            "    ~~~\n    literal\n    ~~~",
+        ]
+        for source in cases:
+            with self.subTest(source=source):
+                body, notices = normalize_body(source)
+
+                self.assertEqual(source, body)
+                self.assertEqual([], notices)
+
+    def test_collapses_whitespace_only_blank_lines(self):
+        source = "一段落目。\n   \n\t\n  \n二段落目。"
+
+        body, _ = normalize_body(source)
+
+        self.assertEqual("一段落目。\n\n二段落目。", body)
+
+    def test_strips_only_whitespace_only_boundary_lines(self):
+        source = "   \n\t  \n    literal line\n    second line\n  \n\t"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual("    literal line\n    second line", body)
         self.assertEqual([], notices)
 
 

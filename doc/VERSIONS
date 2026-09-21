@@ -12,14 +12,15 @@ v1.0.3 (Release Date: TBD)
   when retrying a failed generation.
 - Preserve memo and body text literally during prompt substitution and refuse
   empty prompt files before generation.
-- Require generation responses to report a finish reason, correlate failures by
-  error id, and keep raw upstream error text out of logs.
-- Preserve blank lines and headings inside backtick and tilde fenced code blocks
-  during Markdown normalization.
+- Require generation responses to report a usable finish reason.
+- Keep failure diagnostics single, correlated and free of raw exception text.
+- Preserve fenced and indented Markdown while normalizing headings and blank lines.
 - Preserve title-only regeneration and its settled body when memo validation
   fails before generation.
+- Preserve body notices across title-only regeneration and retries.
 - Complete the designed Web character count, submit state, body auto-growth and
   result memo length limit.
+- Show generation retry controls only for retryable generation errors.
 - Refuse generation responses that omit the required alternative_titles field.
 - Refuse malformed GENERATION_BASE_URL hosts, ports and whitespace at startup.
 - Refuse non-UTF-8 memo, body and prompt files without a traceback.
@@ -29,13 +30,12 @@ v1.0.3 (Release Date: TBD)
 - Distinguish missing prompt files from other prompt read failures.
 - Accept outer-fenced prompt-json responses when generated body text contains
   a Markdown fenced code block.
-- Demote valid level-one Markdown ATX headings with supported indentation and
-  separators during body normalization.
 - Refuse blank --prompt-dir CLI overrides and trim usable values before applying
   them.
 - Keep the full-generation title prompt aligned with the title-only title policy.
 - Give the generation and regeneration submit buttons a primary, mobile-sized
   visual style, distinct from the secondary Copy and Clear buttons.
+- Use port 8090 from the Procfile when PORT is unset.
 
 v1.0.2 (2026-08-26)
 -------------------

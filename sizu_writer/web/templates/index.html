@@ -4,6 +4,9 @@
 <form method="post" action="{{ url_for('generate') }}">
   {% if mode == "titles" %}
   <input type="hidden" name="body" value="{{ body or '' }}">
+  {% for notice in notices or [] %}
+  <input type="hidden" name="notice" value="{{ notice }}">
+  {% endfor %}
   {% endif %}
   <label for="input_text">Memo</label>
   <textarea id="input_text" name="input_text" lang="ja" rows="12" maxlength="{{ max_input_chars }}"

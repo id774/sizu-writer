@@ -3,6 +3,9 @@
 {% block content %}
 <form method="post" action="{{ url_for('generate') }}">
   <input type="hidden" name="body" value="{{ draft.body }}">
+  {% for notice in draft.notices %}
+  <input type="hidden" name="notice" value="{{ notice }}">
+  {% endfor %}
 
   <section>
     <h2>Leading title</h2>

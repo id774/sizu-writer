@@ -22,9 +22,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.2 2026-09-12
-#       Preserve fenced-code contents and demote valid level-one ATX headings
-#       with supported Markdown indentation and separators.
+#  v1.2 2026-09-21
+#       Preserve fenced and indented Markdown while normalizing headings
+#       and blank-line runs without stripping meaningful indentation.
 #  v1.1 2026-08-11
 #       Preserve separate code blocks at the boundaries of a body.
 #  v1.0 2026-08-04
@@ -53,7 +53,7 @@ INSTRUCTION_LEAKS = (
     "ご要望に沿って",
 )
 
-FENCE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
+FENCE = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
 
 ATX_H1 = re.compile(r"^(?P<indent> {0,3})#(?=$|[ \t])")
 
@@ -80,25 +80,38 @@ def _closes_fence(line: str, opening: Tuple[str, int]) -> bool:
     )
 
 
+def _strip_outer_blank_lines(text: str) -> str:
+    """ Remove blank boundary lines without changing content indentation. """
+    lines = text.split("\n")
+
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    return "\n".join(lines)
+
+
 def _strip_outer_body_fence(text: str) -> str:
     """ Remove a code fence wrapping the whole answer. """
-    lines = text.strip().split("\n")
+    text = _strip_outer_blank_lines(text)
+    lines = text.split("\n")
     if len(lines) < 2:
-        return text.strip()
+        return text
 
     opening_fence = _fence(lines[0])
     if opening_fence is None:
-        return text.strip()
+        return text
 
     opening = (opening_fence[0], opening_fence[1])
     if not _closes_fence(lines[-1], opening):
-        return text.strip()
+        return text
 
     inner_has_fence = any(_fence(line) is not None for line in lines[1:-1])
     if inner_has_fence:
-        return text.strip()
+        return text
 
-    return "\n".join(lines[1:-1]).strip()
+    return _strip_outer_blank_lines("\n".join(lines[1:-1]))
 
 
 def _demote_headings(text: str) -> Tuple[str, bool]:
@@ -146,9 +159,9 @@ def _collapse_blank_lines(text: str) -> str:
             previous_empty = False
             continue
 
-        if line == "":
+        if not line.strip():
             if not previous_empty:
-                result.append(line)
+                result.append("")
             previous_empty = True
         else:
             result.append(line)
@@ -166,7 +179,8 @@ def normalize_body(text: str) -> Tuple[str, List[str]]:
     if demoted:
         notices.append("The heading level of the body was adjusted.")
 
-    body = _collapse_blank_lines(body).strip()
+    body = _collapse_blank_lines(body)
+    body = _strip_outer_blank_lines(body)
 
     if any(phrase in body for phrase in BOILERPLATE):
         notices.append("The body may contain a formulaic opening or closing.")

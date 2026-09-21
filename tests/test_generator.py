@@ -59,12 +59,20 @@
 #    - Keep the exact settled body while regenerating titles.
 #    - Read a fenced answer under prompt-json when regenerating titles.
 #    - Call the configured provider once per generation operation.
+#    - Default to an empty notices list when a caller omits it.
+#    - Preserve existing body notices, in order, when regenerating titles.
+#    - Refuse an invalid response without a generator library log, carrying a
+#      sanitized reason on the exception diagnostic instead.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.6 2026-09-21
+#       Cover sanitized InvalidResponseError diagnostics without generator logging.
+#  v1.5 2026-09-21
+#       Cover notice preservation during title-only regeneration.
 #  v1.4 2026-09-21
 #       Cover the optional direction argument reaching both prompt builders.
 #  v1.3 2026-09-11
@@ -174,11 +182,12 @@ class GenerateDraftTest(unittest.TestCase):
     def test_refuses_a_body_that_becomes_empty_after_normalization(self):
         payload = dict(BODY, body_markdown="```markdown\n   \n```")
 
-        with self.assertLogs("sizu_writer.generator", level="ERROR") as recorded:
-            with self.assertRaises(InvalidResponseError):
+        with mock.patch.object(generator.logger, "error") as error_log:
+            with self.assertRaises(InvalidResponseError) as refused:
                 self.generate(answer(payload))
 
-        self.assertIn("after normalization", "\n".join(recorded.output))
+        error_log.assert_not_called()
+        self.assertIn("after normalization", refused.exception.diagnostic)
 
     def test_refuses_an_answer_without_a_primary_title(self):
         with self.assertRaises(InvalidResponseError):
@@ -188,11 +197,12 @@ class GenerateDraftTest(unittest.TestCase):
         payload = dict(BODY)
         del payload["alternative_titles"]
 
-        with self.assertLogs("sizu_writer.generator", level="ERROR") as recorded:
-            with self.assertRaises(InvalidResponseError):
+        with mock.patch.object(generator.logger, "error") as error_log:
+            with self.assertRaises(InvalidResponseError) as refused:
                 self.generate(answer(payload))
 
-        self.assertIn("alternative_titles", "\n".join(recorded.output))
+        error_log.assert_not_called()
+        self.assertIn("alternative_titles", refused.exception.diagnostic)
 
     def test_accepts_an_empty_alternative_titles_list(self):
         draft = self.generate(answer(dict(BODY, alternative_titles=[])))
@@ -303,6 +313,34 @@ class RegenerateTitlesTest(unittest.TestCase):
         messages.assert_called_once_with("a memo", body, config.prompt_dir, "")
         self.assertEqual(body, draft.body)
         self.assertEqual("A new leading title", draft.primary_title)
+
+    def test_defaults_to_an_empty_notices_list(self):
+        result = answer({"primary_title": "A new leading title",
+                         "alternative_titles": []})
+
+        with mock.patch.object(generator, "build_titles_messages", return_value=[]):
+            with mock.patch.object(generator, "_complete", return_value=result):
+                draft = generator.regenerate_titles(
+                    "a memo", "The settled body", settings())
+
+        self.assertEqual([], draft.notices)
+
+    def test_preserves_existing_notices_in_order(self):
+        existing_notices = [
+            "The heading level of the body was adjusted.",
+            "The body may contain a formulaic opening or closing.",
+        ]
+        result = answer({"primary_title": "A new leading title",
+                         "alternative_titles": []})
+
+        with mock.patch.object(generator, "build_titles_messages", return_value=[]):
+            with mock.patch.object(generator, "_complete", return_value=result):
+                draft = generator.regenerate_titles(
+                    "a memo", "The settled body", settings(),
+                    notices=existing_notices)
+
+        self.assertEqual(existing_notices, draft.notices)
+        self.assertEqual("The settled body", draft.body)
 
     def test_passes_a_nonblank_direction_to_the_title_prompt_builder(self):
         body = "The settled body"
