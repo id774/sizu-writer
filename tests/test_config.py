@@ -66,6 +66,10 @@
 #    - Keep a credential out of the LOG_LEVEL refusal message.
 #    - Treat a blank or whitespace-only LOG_LEVEL as unset.
 #    - Cover the Procfile fallback to the documented default PORT of 8090.
+#    - Require same-origin Web generation POSTs by default.
+#    - Accept documented boolean forms for REQUIRE_SAME_ORIGIN.
+#    - Treat a blank REQUIRE_SAME_ORIGIN as the enabled default.
+#    - Refuse an unknown REQUIRE_SAME_ORIGIN value.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -73,8 +77,8 @@
 #
 #  Version History:
 #  v1.4 2026-09-21
-#       Cover MAX_POLICY_CHARS validation and the Procfile fallback to the
-#       documented default port 8090.
+#       Cover MAX_POLICY_CHARS, the Procfile port fallback, and strict
+#       REQUIRE_SAME_ORIGIN boolean parsing.
 #  v1.3 2026-09-10
 #       Cover malformed base URL syntax, hosts, ports and whitespace.
 #  v1.2 2026-09-06
@@ -126,6 +130,7 @@ class LoadConfigTest(unittest.TestCase):
         self.assertEqual(4, loaded.max_alt_titles)
         self.assertEqual("prompts", loaded.prompt_dir)
         self.assertEqual(8090, loaded.port)
+        self.assertTrue(loaded.require_same_origin)
 
     def test_loads_a_valid_max_policy_chars_override(self):
         self.assertEqual(
@@ -233,6 +238,33 @@ class LoadConfigTest(unittest.TestCase):
         loaded = self.load({"GENERATION_BASE_URL": "https://api.ai.sakura.ad.jp/v1"})
 
         self.assertEqual("api.ai.sakura.ad.jp", loaded.endpoint_host)
+
+    def test_requires_same_origin_by_default(self):
+        self.assertTrue(self.load({}).require_same_origin)
+
+    def test_accepts_true_require_same_origin_values(self):
+        for value in ("1", "true", "TRUE", "yes", "on", "ON"):
+            with self.subTest(value=value):
+                self.assertTrue(
+                    self.load({"REQUIRE_SAME_ORIGIN": value}).require_same_origin)
+
+    def test_accepts_false_require_same_origin_values(self):
+        for value in ("0", "false", "FALSE", "no", "off", "OFF"):
+            with self.subTest(value=value):
+                self.assertFalse(
+                    self.load({"REQUIRE_SAME_ORIGIN": value}).require_same_origin)
+
+    def test_treats_blank_require_same_origin_as_default(self):
+        self.assertTrue(
+            self.load({"REQUIRE_SAME_ORIGIN": "   "}).require_same_origin)
+
+    def test_refuses_unknown_require_same_origin_value(self):
+        for value in ("maybe", "enabled", "2"):
+            with self.subTest(value=value):
+                message = self.refuse({"REQUIRE_SAME_ORIGIN": value})
+
+                self.assertIn("REQUIRE_SAME_ORIGIN", message)
+                self.assertIn("expected one of", message)
 
 
 class LegacyVariableTest(unittest.TestCase):

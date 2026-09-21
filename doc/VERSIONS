@@ -36,6 +36,8 @@ v1.0.3 (Release Date: TBD)
 - Give the generation and regeneration submit buttons a primary, mobile-sized
   visual style, distinct from the secondary Copy and Clear buttons.
 - Use port 8090 from the Procfile when PORT is unset.
+- Require same-origin Web generation POSTs by default, with
+  REQUIRE_SAME_ORIGIN=off only for controlled non-browser form clients.
 
 v1.0.2 (2026-08-26)
 -------------------

@@ -88,6 +88,13 @@
 #    - Show no generation retry controls on the 404, 405 and 413 error pages.
 #    - Keep a retryable generation form on an unexpected /generate failure.
 #    - Log an unexpected failure once, without its raw exception message.
+#    - Accept a same-origin generation POST, including an https Origin behind
+#      TLS termination.
+#    - Refuse a missing, malformed or foreign Origin before generation, with
+#      no form reflection and no raw Origin in the log.
+#    - Allow the previous behavior when REQUIRE_SAME_ORIGIN is disabled.
+#    - Leave non-generation routes and request ordering unaffected by the
+#      same-origin guard.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -95,8 +102,8 @@
 #
 #  Version History:
 #  v1.5 2026-09-21
-#       Cover Direction lifecycle, title-only notice preservation, sanitized error
-#       logging, and retry controls limited to generation errors.
+#       Cover Direction/notices/error retries and default-on same-origin
+#       protection for Web generation POSTs.
 #  v1.4 2026-09-11
 #       Cover browser-equivalent MAX_INPUT_CHARS validation on the server.
 #  v1.3 2026-09-10
@@ -149,6 +156,7 @@ class WebTest(unittest.TestCase):
     def setUp(self):
         web.app.config["TESTING"] = True
         self.client = web.app.test_client()
+        self.client.environ_base["HTTP_ORIGIN"] = "http://localhost"
 
     def test_shows_the_input_screen(self):
         answer = self.client.get("/")
@@ -712,6 +720,145 @@ class WebTest(unittest.TestCase):
         self.assertIn("data-submitting", script)
         self.assertIn("aria-busy", script)
         self.assertIn("Generating...", script)
+
+    def test_accepts_same_origin_generation_post(self):
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = self.client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once()
+
+    def test_accepts_same_authority_with_https_origin(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "https://localhost"
+
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once()
+
+    def test_refuses_generation_post_without_origin(self):
+        client = web.app.test_client()
+
+        with mock.patch.object(
+                web, "generate_draft", return_value=draft()) as generate:
+            with mock.patch.object(web, "regenerate_titles") as titles:
+                answer = client.post("/generate", data={
+                    "input_text": "a memo", "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(400, answer.status_code)
+        self.assertIn("This request must be submitted from this site.", page)
+        generate.assert_not_called()
+        titles.assert_not_called()
+        self.assertNotIn("a memo", page)
+        self.assertNotIn("Generate once more", page)
+
+    def test_refuses_foreign_origin_before_generation(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "https://foreign.example"
+
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(400, answer.status_code)
+        generate.assert_not_called()
+
+    def test_refuses_origin_with_different_port(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "http://localhost:8091"
+
+        with mock.patch.object(web, "generate_draft", return_value=draft()) as generate:
+            answer = client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(400, answer.status_code)
+        generate.assert_not_called()
+
+    def test_refuses_malformed_origins(self):
+        origins = (
+            "null",
+            "file://local",
+            "https://localhost/path",
+            "https://user@localhost",
+            "https://localhost:abc",
+            "https://local host",
+            "https://localhost?x=1",
+            "https://localhost#fragment",
+        )
+        for origin in origins:
+            with self.subTest(origin=origin):
+                client = web.app.test_client()
+                client.environ_base["HTTP_ORIGIN"] = origin
+
+                with mock.patch.object(
+                        web, "generate_draft", return_value=draft()) as generate:
+                    answer = client.post("/generate", data={
+                        "input_text": "a memo", "mode": "full"})
+
+                self.assertEqual(400, answer.status_code)
+                generate.assert_not_called()
+
+    def test_logs_foreign_origin_without_raw_header(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "https://SENSITIVE-FOREIGN-ORIGIN.example"
+
+        with self.assertLogs("app", level=logging.INFO) as logged:
+            answer = client.post("/generate", data={
+                "input_text": "a memo", "mode": "full"})
+
+        page = answer.get_data(as_text=True)
+        self.assertEqual(400, answer.status_code)
+        self.assertEqual(1, len(logged.output))
+        recorded = logged.output[0]
+        self.assertIn("foreign Origin", recorded)
+        self.assertNotIn("SENSITIVE-FOREIGN-ORIGIN", recorded)
+        self.assertNotIn("SENSITIVE-FOREIGN-ORIGIN", page)
+
+    def test_allows_missing_origin_when_same_origin_check_is_disabled(self):
+        client = web.app.test_client()
+
+        with mock.patch.object(web.config, "require_same_origin", False):
+            with mock.patch.object(
+                    web, "generate_draft", return_value=draft()) as generate:
+                answer = client.post("/generate", data={
+                    "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once()
+
+    def test_allows_foreign_origin_when_same_origin_check_is_disabled(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "https://foreign.example"
+
+        with mock.patch.object(web.config, "require_same_origin", False):
+            with mock.patch.object(
+                    web, "generate_draft", return_value=draft()) as generate:
+                answer = client.post("/generate", data={
+                    "input_text": "a memo", "mode": "full"})
+
+        self.assertEqual(200, answer.status_code)
+        generate.assert_called_once()
+
+    def test_origin_check_does_not_change_method_not_allowed_route(self):
+        client = web.app.test_client()
+
+        answer = client.post("/healthz")
+
+        self.assertEqual(405, answer.status_code)
+
+    def test_foreign_origin_is_refused_before_oversized_form_parsing(self):
+        client = web.app.test_client()
+        client.environ_base["HTTP_ORIGIN"] = "https://foreign.example"
+        text = "a" * (web.app.config["MAX_CONTENT_LENGTH"] + 1)
+
+        answer = client.post("/generate", data={"input_text": text, "mode": "full"})
+
+        self.assertEqual(400, answer.status_code)
 
 
 if __name__ == "__main__":

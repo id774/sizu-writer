@@ -83,10 +83,15 @@
 #      Port used by the development server and the Procfile gunicorn
 #      bind. Defaults to 8090; bundled deployment examples use explicit
 #      matching port values.
+#  - REQUIRE_SAME_ORIGIN
+#      Whether Web POST /generate must carry an Origin whose authority
+#      matches the request Host. Defaults to true. Accepted booleans are
+#      1/0, true/false, yes/no and on/off, case-insensitively.
 #
 #  Version History:
 #  v1.4 2026-09-21
-#       Add MAX_POLICY_CHARS, the upper bound of the optional Web Direction field.
+#       Add MAX_POLICY_CHARS and default-on REQUIRE_SAME_ORIGIN with strict
+#       boolean parsing for Web generation protection.
 #  v1.3 2026-09-10
 #       Refuse malformed generation base URLs before they reach the client.
 #  v1.2 2026-09-06
@@ -129,6 +134,9 @@ RESPONSE_MODES = ("json-object", "prompt-json")
 LOG_LEVELS = ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO",
               "DEBUG", "NOTSET")
 
+TRUE_VALUES = ("1", "true", "yes", "on")
+FALSE_VALUES = ("0", "false", "no", "off")
+
 # The settings these replaced. They are refused rather than translated,
 # because a host with a stale OPENAI_API_KEY exported would otherwise
 # keep working against an endpoint nobody chose.
@@ -165,6 +173,7 @@ class Config:
     max_output_tokens: int = 6000
     max_input_chars: int = 4000
     max_policy_chars: int = 2000
+    require_same_origin: bool = True
     max_alt_titles: int = 4
     prompt_dir: str = "prompts"
     log_level: str = "INFO"
@@ -211,6 +220,23 @@ def _whole(name: str, default: int, minimum: int) -> int:
         raise ConfigError(
             "{0} is {1}; expected {2}.".format(name, raw, expected))
     return int(value)
+
+
+def _boolean(name: str, default: bool) -> bool:
+    """ Read a strict boolean setting, using the default only when blank. """
+    raw = _text(name, "")
+    if not raw:
+        return default
+
+    value = raw.lower()
+    if value in TRUE_VALUES:
+        return True
+    if value in FALSE_VALUES:
+        return False
+
+    raise ConfigError(
+        "{0} is '{1}'; expected one of: {2}.".format(
+            name, raw, ", ".join(TRUE_VALUES + FALSE_VALUES)))
 
 
 def _validate_timeout(name: str, value: float) -> None:
@@ -283,6 +309,7 @@ def load_config() -> Config:
         max_output_tokens=_whole("MAX_OUTPUT_TOKENS", 6000, 1),
         max_input_chars=_whole("MAX_INPUT_CHARS", 4000, 1),
         max_policy_chars=_whole("MAX_POLICY_CHARS", 2000, 1),
+        require_same_origin=_boolean("REQUIRE_SAME_ORIGIN", True),
         max_alt_titles=_whole("MAX_ALT_TITLES", 4, 0),
         prompt_dir=_text("PROMPT_DIR", "prompts"),
         log_level=log_level,

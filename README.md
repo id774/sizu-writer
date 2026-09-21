@@ -148,6 +148,7 @@ All settings are read from environment variables, optionally through `.env`, and
 | `MAX_OUTPUT_TOKENS` | `6000` | Upper bound of one answer. Enough for a few thousand Japanese characters and the titles. |
 | `MAX_INPUT_CHARS` | `4000` | Upper bound of the memo field using the browser textarea length: UTF-16 code units after textarea newline normalization. The server applies the same limit. |
 | `MAX_POLICY_CHARS` | `2000` | Upper bound of the optional Web Direction field, using the same browser textarea length as `MAX_INPUT_CHARS`. The server applies the same limit. |
+| `REQUIRE_SAME_ORIGIN` | `on` | Require Web `POST /generate` requests to carry an `Origin` whose host and port match the request `Host`. Accepted booleans, case-insensitively: `1/0`, `true/false`, `yes/no`, `on/off`. Turn it off only for a controlled non-browser client intentionally posting the form endpoint. |
 | `MAX_ALT_TITLES` | `4` | Number of alternative titles kept, beyond the leading one. Lowering it takes effect on its own; raising it above 4 also needs `prompts/system.md` and `prompts/titles_system.md`, which ask the model for at most 4. |
 | `PROMPT_DIR` | `prompts` | Directory holding the prompt files. Pointing it elsewhere replaces the writing policy as a whole. |
 | `LOG_LEVEL` | `INFO` | Level of the application log. Accepted, case-insensitively: `CRITICAL`, `FATAL`, `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG`, `NOTSET`; any other value is refused rather than read as `INFO`. |
@@ -155,7 +156,7 @@ All settings are read from environment variables, optionally through `.env`, and
 
 `PORT` does not rewrite the bundled systemd unit or Apache configuration. Those deployment examples deliberately carry explicit matching port values. When a deployment uses a port other than `8090`, change the gunicorn bind and the Apache upstream to the same chosen port as part of that deployment. The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so a platform that starts it with `PORT` unset still binds gunicorn to the documented default of 8090 instead of an empty bind address.
 
-A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. For `GENERATION_BASE_URL`, malformed URL syntax, a missing host, embedded whitespace and an invalid explicit port are refused before the SDK is constructed. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
+A malformed value raises `ConfigError` naming the variable, rather than falling back to the default. A setting that is silently ignored is worse than one that fails. For `GENERATION_BASE_URL`, malformed URL syntax, a missing host, embedded whitespace and an invalid explicit port are refused before the SDK is constructed. `REQUIRE_SAME_ORIGIN` uses strict boolean parsing; an unknown value is refused rather than guessed. The required settings listed above are checked before any request is made: `app.py` checks them while it is imported, so a worker that cannot address an endpoint never starts, and `cli.py` checks them before it reads the input. `cli.py --version` and the test suite need none of them.
 
 `GENERATION_API_TOKEN` deliberately has no command line option: a command line is readable by every user of the host, through `ps`. The token stays in the environment or in `.env`. `GENERATION_BASE_URL` has none either, for a different reason — the endpoint is a decision of the deployment, not of an invocation.
 
@@ -377,6 +378,17 @@ title-only request requires the settled body carried by the result form; if that
 body is missing or blank, the request is refused with status 400 rather than
 being turned into a full generation.
 
+By default, `POST /generate` also requires an `Origin` header whose host and
+port match the request `Host`. The check happens before form parsing or
+generation, so a missing, malformed or foreign Origin is answered 400 without
+spending a generation request or reflecting the submitted form. Apache must
+preserve the public Host; the bundled configuration already uses
+`ProxyPreserveHost On`. Because TLS terminates at Apache, the backend scheme
+is not compared. `REQUIRE_SAME_ORIGIN=off` disables this check only for a
+controlled non-browser client intentionally posting the existing HTML form
+endpoint. It does not turn the endpoint into a public API and does not
+replace authentication or rate limiting.
+
 Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure, so a browser asking for `/favicon.ico` costs a note in the log instead of a traceback. Neither page, nor the 413 page for an oversized request, offers a generation retry button: there was no generation attempt in progress to repeat, only a link back to the input screen. A failure while generating or regenerating still gets the full retry form, in the same operation (full or title-only) that failed.
 
 Below the memo field, an optional **Direction (optional)** field takes extra
@@ -457,6 +469,7 @@ The screen shows a message meant for the person and a short reference id. A safe
 | There is no post body to regenerate titles for. Generate the whole draft first. | 400 | A title-only request did not carry a settled body |
 | The memo is too long. | 400 | Over `MAX_INPUT_CHARS` |
 | The direction is too long. | 400 | Over `MAX_POLICY_CHARS` |
+| This request must be submitted from this site. | 400 | `POST /generate` lacked a valid same-origin `Origin` while `REQUIRE_SAME_ORIGIN` is enabled |
 | The generation service could not be reached. | 502 | DNS, network or a wrong `GENERATION_BASE_URL` |
 | The generation service answered with an error. | 502 | A 4xx or 5xx answer: a bad token, no quota, a rate limit, an unknown model |
 | Generation took too long and was stopped. | 504 | The SDK reported a request-attempt timeout |
@@ -531,12 +544,12 @@ Narrower selections use the same runner:
 
 | Module | Subject |
 |---|---|
-| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message, the `MAX_POLICY_CHARS` default and its refusal of an invalid value, and the static `Procfile` contract that it falls back to the documented default port of 8090 when `PORT` is unset |
+| `test_config.py` | environment driven settings, blank values, refusal of a malformed value, the accepted `LOG_LEVEL` values and its case-insensitive normalization, refusal of a legacy `OPENAI_*` variable, the base URL rules, the token kept out of `repr` and out of every message, the `MAX_POLICY_CHARS` default and its refusal of an invalid value, the static `Procfile` contract that it falls back to the documented default port of 8090 when `PORT` is unset, and `REQUIRE_SAME_ORIGIN`'s strict boolean parsing — the default, its accepted forms and its refusal of an unknown value |
 | `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer including the requirement of a usable `finish_reason` (an unknown non-empty reason is accepted and preserved), the mapping of a timeout, a connection failure and 401/403/429/500, the elapsed seconds recorded next to the limit on both a success and a timeout, and a sanitized failure diagnostic carried on the raised exception, excluding raw upstream error text, that the provider itself never logs |
 | `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request with the diagnostic carried by `InternalError` rather than a library log, `{{direction}}` substitution alongside `{{input}}` and `{{body}}`, literal placeholder substitution, and unknown-placeholder preservation |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit, the optional direction argument reaching both prompt builders, notice preservation through `regenerate_titles()`, and sanitized `InvalidResponseError` diagnostics raised without a generator-level log |
 | `test_formatter.py` | fence removal, heading demotion, blank and whitespace-only line collapsing, preservation of leading indentation and of a 4-space indented fence marker as code rather than a fence, and detection that rewrites nothing |
-| `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation, its exact body and its notices across both a generation failure and a correctable memo validation error, that a full regeneration ignores submitted notices, that a failure does not expose its cause, that a timeout does not blame the memo, the one request reference and exactly one sanitized application log record per failure, the optional Direction field's validation, propagation and retry preservation, the memo and Direction cleared together, and that the 404, 405 and 413 error pages carry no generation retry control while a retryable generation error still does |
+| `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation, its exact body and its notices across both a generation failure and a correctable memo validation error, that a full regeneration ignores submitted notices, that a failure does not expose its cause, that a timeout does not blame the memo, the one request reference and exactly one sanitized application log record per failure, the optional Direction field's validation, propagation and retry preservation, the memo and Direction cleared together, that the 404, 405 and 413 error pages carry no generation retry control while a retryable generation error still does, and the default-on same-origin `Origin` guard — accepted and rejected authorities, no form reflection or raw `Origin` in the log on rejection, and the `REQUIRE_SAME_ORIGIN=off` escape hatch |
 | `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model`, `--timeout` and `--prompt-dir` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model or prompt directory, non-UTF-8 memo and body files, the exit codes, and exactly one sanitized failure log record naming the failure and its message |
 
 `test_web.py` imports `app` inside an environment replaced by `TEST_ENVIRONMENT` with `clear=True`, and disables dotenv loading for that import. The four required generation settings are fixed test placeholders; the host environment and a local `.env` cannot affect the import, and no generation request is made.
@@ -643,7 +656,6 @@ Possible future extensions that are not part of the current implementation:
 
 - the `json_schema` response format mode, for endpoints supporting Structured Outputs; `json-object` and `prompt-json` are the two modes that exist
 - a second backend in `providers/`; `openai-compatible` is the only one sizu-writer speaks
-- the `Origin` check on POST (`REQUIRE_SAME_ORIGIN`)
 - persistence of the generated drafts (requirement 11, a future extension)
 
 `PROMPT_RELOAD` is not a setting because no prompt cache exists. The prompts are read on every generation, so there is no cache behavior for such a setting to control.
