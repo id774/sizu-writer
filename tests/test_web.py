@@ -79,6 +79,7 @@
 #    - Preserve the direction on a full-generation retry after a failure.
 #    - Keep the direction out of the application log.
 #    - Start a new input screen with a blank direction.
+#    - Clear the memo and Direction together and reset both character counts.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -86,8 +87,8 @@
 #
 #  Version History:
 #  v1.5 2026-09-21
-#       Cover the optional Direction field: validation, prompt propagation and
-#       state preservation across regeneration and retries.
+#       Cover optional Direction validation, propagation, retry preservation and
+#       clearing together with the memo.
 #  v1.4 2026-09-11
 #       Cover browser-equivalent MAX_INPUT_CHARS validation on the server.
 #  v1.3 2026-09-10
@@ -538,6 +539,23 @@ class WebTest(unittest.TestCase):
         page = answer.get_data(as_text=True)
         self.assertIn('name="direction"', page)
         self.assertNotIn("Keep it short.", page)
+
+    def test_clear_button_targets_the_memo_and_direction(self):
+        answer = self.client.get("/")
+
+        page = answer.get_data(as_text=True)
+        self.assertIn('data-clear-target="input_text direction"', page)
+
+    def test_clear_helper_supports_multiple_targets(self):
+        answer = self.client.get("/static/copy.js")
+
+        self.assertEqual(200, answer.status_code)
+        script = answer.get_data(as_text=True)
+        self.assertIn('getAttribute("data-clear-target")', script)
+        self.assertIn('clearTargets.trim().split(/\\s+/)', script)
+        self.assertIn("for (var clearIndex = 0", script)
+        self.assertIn("updateCharacterCount(field)", script)
+        self.assertIn("firstField.focus()", script)
 
     def test_result_screen_has_memo_limit_and_body_auto_growth_hook(self):
         with mock.patch.object(web, "generate_draft", return_value=draft()):

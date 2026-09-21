@@ -93,7 +93,7 @@ The input screen carries:
 - an optional field, below the memo, for a Direction that applies to this
   generation only
 - a generate button
-- a button that clears the field
+- a button that clears both the memo and the optional Direction together
 
 The field is a textarea that accepts several paragraphs.
 
@@ -117,7 +117,8 @@ overlong Direction is refused before a generation request is made, the same
 way an overlong memo is (section 6.6). The Direction is not persisted, is
 never written to a log, and is carried across a regeneration and a correctable
 retry the same way the memo is (section 6.5), until the person returns to a
-fresh input screen.
+fresh input screen. The input-screen Clear action clears the memo and the
+Direction together.
 
 ### 6.2 Generation
 
@@ -325,7 +326,7 @@ At a minimum:
 - the memo field
 - the optional Direction field, below the memo
 - the generate button
-- the button that clears the field
+- the button that clears both the memo and the optional Direction together
 
 ### 9.2 Result screen
 
