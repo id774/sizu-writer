@@ -1,8 +1,8 @@
 sizu-writer Repository Version History
 ======================================
 
-v1.0.3 (Release Date: TBD)
---------------------------
+v1.1 (2026-09-21)
+-----------------
 - Add an optional Web Direction, cleared with the memo, kept across regeneration
   and reflected in prompts for this request only.
 - Refuse a non-finite --timeout override, a whitespace-only --model override and
