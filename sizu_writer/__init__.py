@@ -28,7 +28,7 @@
 from dataclasses import dataclass, field
 from typing import List
 
-__version__ = "1.0.3"
+__version__ = "1.1"
 
 
 @dataclass
