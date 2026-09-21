@@ -28,10 +28,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.5 2026-09-21
-#       Carry prompt-file diagnostics through InternalError without duplicate logs.
 #  v1.4 2026-09-21
-#       Add the optional {{direction}} placeholder to body and title messages.
+#       Add the optional {{direction}} placeholder and carry prompt-file
+#       diagnostics through InternalError without duplicate library logs.
 #  v1.3 2026-09-11
 #       Distinguish missing prompt files from other read failures.
 #  v1.2 2026-09-10

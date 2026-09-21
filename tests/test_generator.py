@@ -69,12 +69,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.6 2026-09-21
-#       Cover sanitized InvalidResponseError diagnostics without generator logging.
-#  v1.5 2026-09-21
-#       Cover notice preservation during title-only regeneration.
 #  v1.4 2026-09-21
-#       Cover the optional direction argument reaching both prompt builders.
+#       Cover Direction propagation, title-only notice preservation, and sanitized
+#       InvalidResponseError diagnostics without generator logging.
 #  v1.3 2026-09-11
 #       Cover non-standard JSON constants and bodies emptied by normalization,
 #       and outer-fenced prompt-json responses whose body holds a code fence.

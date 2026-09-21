@@ -94,13 +94,9 @@
 #  - Flask
 #
 #  Version History:
-#  v1.7 2026-09-21
-#       Cover single sanitized error logs and retry controls only on generation errors.
-#  v1.6 2026-09-21
-#       Cover notice preservation across title-only regeneration and retries.
 #  v1.5 2026-09-21
-#       Cover optional Direction validation, propagation, retry preservation and
-#       clearing together with the memo.
+#       Cover Direction lifecycle, title-only notice preservation, sanitized error
+#       logging, and retry controls limited to generation errors.
 #  v1.4 2026-09-11
 #       Cover browser-equivalent MAX_INPUT_CHARS validation on the server.
 #  v1.3 2026-09-10

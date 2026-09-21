@@ -30,12 +30,9 @@
 #  - Standard library only; the provider brings the client
 #
 #  Version History:
-#  v1.6 2026-09-21
-#       Carry sanitized response-validation diagnostics without library error logs.
-#  v1.5 2026-09-21
-#       Preserve existing body notices when regenerating titles.
 #  v1.4 2026-09-21
-#       Accept an optional per-request direction and pass it to prompt assembly.
+#       Support per-request Direction, preserve title-only notices, and carry
+#       sanitized response-validation diagnostics without library error logs.
 #  v1.3 2026-09-11
 #       Refuse non-standard JSON constants and bodies emptied by normalization,
 #       and accept outer-fenced prompt-json responses with code-fenced bodies.

@@ -49,10 +49,9 @@
 #  - Standard library only
 #
 #  Version History:
-#  v1.5 2026-09-21
-#       Cover prompt diagnostics carried by InternalError without library logging.
 #  v1.4 2026-09-21
-#       Cover the optional {{direction}} placeholder and its shared policy.
+#       Cover the optional {{direction}} placeholder, its shared policy, and
+#       prompt diagnostics carried without library logging.
 #  v1.3 2026-09-12
 #       Keep the required title policy shared by full and title-only prompts.
 #  v1.2 2026-09-11
