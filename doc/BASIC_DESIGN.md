@@ -553,11 +553,11 @@ into the current names.
 | --- | --- |
 | Page title | The name of the service and a one line description |
 | Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS`. The limit follows the textarea value length: UTF-16 code units after newline normalization. |
-| Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the field. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
+| Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the memo. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
 | Direction field | `<textarea name="direction">`, below the memo field, labelled `Direction (optional)`, a few rows, resizable, `maxlength` of `MAX_POLICY_CHARS`, using the same length definition as the memo field. Blank is the ordinary case. |
-| Direction character count | The same `<length> / <limit>` hook as the memo field's, using the shared `data-character-count-target` mechanism of `copy.js` against `MAX_POLICY_CHARS`. |
+| Direction character count | The same `<length> / <limit>` hook as the memo field's, using the shared `data-character-count-target` mechanism of `copy.js` against `MAX_POLICY_CHARS`, and likewise reset to `0 / MAX_POLICY_CHARS` when Clear empties the Direction. |
 | Generate button | `<button name="mode" value="full">` |
-| Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field; it empties the field and returns the focus |
+| Clear button | Not `type="reset"`, which restores the initial value rather than clearing the field. It clears both the Memo and Direction, updates both character counts, and returns focus to the Memo field. |
 
 ### 7.3 Result screen (the answer of `/generate`)
 

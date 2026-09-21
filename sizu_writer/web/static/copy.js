@@ -97,12 +97,23 @@
       return;
     }
 
-    var clearId = button.getAttribute("data-clear-target");
-    if (clearId) {
-      var field = document.getElementById(clearId);
-      field.value = "";
-      field.focus();
-      updateCharacterCount(field);
+    var clearTargets = button.getAttribute("data-clear-target");
+    if (clearTargets) {
+      var targetIds = clearTargets.trim().split(/\s+/);
+      var firstField = null;
+
+      for (var clearIndex = 0; clearIndex < targetIds.length; clearIndex += 1) {
+        var field = document.getElementById(targetIds[clearIndex]);
+        field.value = "";
+        updateCharacterCount(field);
+        if (!firstField) {
+          firstField = field;
+        }
+      }
+
+      if (firstField) {
+        firstField.focus();
+      }
       return;
     }
 
