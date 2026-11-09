@@ -43,12 +43,21 @@
 #    - Collapse whitespace-only blank lines into a single blank line.
 #    - Strip only whitespace-only boundary lines, keeping the indentation of
 #      the first and last non-blank line.
+#    - Preserve a body consisting only of a language-labelled code fence.
+#    - Preserve a body consisting only of a language-labelled tilde fence.
+#    - Keep removing Markdown, md and unlabelled outer fences.
+#    - Preserve blank runs between indented code lines.
+#    - Preserve blank runs between mixed tab and space indented code lines.
+#    - Keep collapsing blank runs that are not between indented code lines.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-11-09
+#       Cover preservation of labelled code fences and blank runs in indented
+#       code.
 #  v1.2 2026-09-21
 #       Cover fenced and indented Markdown preservation, ATX heading
 #       boundaries and whitespace-only blank-line normalization.
@@ -242,6 +251,64 @@ class NormalizeBodyTest(unittest.TestCase):
 
         self.assertEqual("    literal line\n    second line", body)
         self.assertEqual([], notices)
+
+
+    def test_preserves_a_language_labeled_literal_code_only_body(self):
+        source = "```python\n# literal\nprint(1)\n```"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_preserves_a_tilde_language_labeled_literal_code_only_body(self):
+        source = "~~~sh\necho hello\n~~~"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_still_unwraps_markdown_and_unlabeled_outer_fences(self):
+        for source in (
+            "```markdown\n本文\n```",
+            "```md\n本文\n```",
+            "```\n本文\n```",
+            "~~~markdown\n本文\n~~~",
+        ):
+            with self.subTest(source=source):
+                body, notices = normalize_body(source)
+
+                self.assertEqual("本文", body)
+                self.assertEqual([], notices)
+
+    def test_preserves_blank_runs_inside_indented_code(self):
+        source = "    first\n\n   \n\t\n    second"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_preserves_blank_runs_between_mixed_indented_code_lines(self):
+        source = "\tfirst\n\n\n    second"
+
+        body, notices = normalize_body(source)
+
+        self.assertEqual(source, body)
+        self.assertEqual([], notices)
+
+    def test_still_collapses_blank_runs_outside_indented_code(self):
+        for source, expected in (
+            ("    code\n\n\nparagraph", "    code\n\nparagraph"),
+            ("paragraph\n\n\n    code", "paragraph\n\n    code"),
+            ("one\n\n\ntwo", "one\n\ntwo"),
+        ):
+            with self.subTest(source=source):
+                body, notices = normalize_body(source)
+
+                self.assertEqual(expected, body)
+                self.assertEqual([], notices)
 
 
 if __name__ == "__main__":
