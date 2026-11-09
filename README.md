@@ -49,7 +49,7 @@ The repository is written in English — the code, the comments, the screens, th
 - **The writing policy is not code**: `prompts/*.md` lives outside the Python package, so adjusting how the system writes needs neither a code change nor a reinstall
 - **Copy without picking**: the body and each title have their own copy button, and the copied text never carries a label or an explanation from the screen
 - **Regenerate at two scales**: the whole draft, or the titles alone against a body already settled
-- **Mechanical cleanup only**: an outer code fence, a `#` heading and runs of blank lines are rewritten; anything that would touch the meaning of a sentence is reported as a notice instead
+- **Mechanical cleanup only**: an outer unlabelled, `markdown` or `md` code fence, a `#` heading and runs of blank lines outside indented code are rewritten; a single code block with another language label and the blank lines between indented code lines are kept; anything that would touch the meaning of a sentence is reported as a notice instead
 - **No state on the server**: the memo and the body travel with the form, so any worker answers any request and a restart loses nothing
 - **The token stays in the process**: it reaches neither a template, nor JavaScript, nor an error page
 - **Deployable as is**: `systemd` and Apache examples in [deploy/](deploy), a `Procfile` for a platform that wants one
@@ -320,19 +320,23 @@ Moving a host over is therefore: rewrite `.env` from [.env.example](.env.example
 .venv/bin/python cli.py generate --text "MEMO"
 .venv/bin/python cli.py generate --input memo.txt
 .venv/bin/python cli.py generate --input memo.txt --json
-.venv/bin/python cli.py titles --input memo.txt --body draft.md
+.venv/bin/python cli.py titles --input memo.txt --body body.md
 ```
 
 `generate` produces a body and its title candidates. `titles` produces
 candidates for a body that is already settled, and leaves that body untouched.
 The body file must contain non-blank text; an empty or whitespace-only body ends
-the command with status 1 before a generation request is made.
+the command with status 1 before a generation request is made. `body.md` is a UTF-8
+file holding only the settled post body, for example the text saved from the Web
+screen's Copy the body; the CLI has no option that extracts a body from other output.
 
 The memo comes from `--text` or from `--input`, one or the other. Human readable output prints the leading title as a `#` heading, the other candidates as a list, then the body; notices go to standard error, so redirecting standard output gives a clean draft:
 
 ```sh
 .venv/bin/python cli.py generate --input memo.txt > draft.md
 ```
+
+`draft.md` holds the whole human readable output — the leading title, the alternative candidates and the body — so it is not a file to pass to `--body`.
 
 `--json` prints the whole `Draft` instead — body, titles, model, timestamp and notices — which is what to look at when the question is whether the model filled the right field rather than whether the writing is good.
 
@@ -449,7 +453,7 @@ The policy they encode comes from the requirements: keep the concrete scene and 
 
 ## Notices
 
-Some things about a draft can be noticed but must not be fixed automatically. `sizu_writer/formatter.py` rewrites only what is mechanical — an outer code fence, a `#` heading demoted to `##`, runs of blank or whitespace-only lines collapsed to one — and reports the rest. A fence marker or a `#` heading is only recognized up to 3 leading spaces of indentation; indented 4 spaces or more it is indented code and is left untouched, together with the leading indentation of the body's first and last non-blank line.
+Some things about a draft can be noticed but must not be fixed automatically. `sizu_writer/formatter.py` rewrites only what is mechanical — an outer unlabelled, `markdown` or `md` code fence, a `#` heading demoted to `##`, runs of blank or whitespace-only lines collapsed to one — and reports the rest. A single code block whose opening fence carries any other language label is literal content and is kept with its fences, and so are the blank lines between 4-space or tab indented code lines, while blank runs between ordinary paragraphs still become one. A fence marker or a `#` heading is only recognized up to 3 leading spaces of indentation; indented 4 spaces or more it is indented code and is left untouched, together with the leading indentation of the body's first and last non-blank line.
 
 | Notice | Raised when |
 |---|---|
@@ -506,7 +510,7 @@ Two cases are worth knowing by their log line rather than their screen:
 
 Shortening the memo is not the general answer to this one, which is why the screen no longer suggests it. The timeout applies to the SDK request attempt, and the operator should read the exception type together with the elapsed and retry context rather than infer the cause from memo length.
 
-**`the answer is not readable as JSON: ...`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. Read the answer back with `cli.py generate --json` before changing a prompt.
+**`the answer is not readable as JSON: ...`** — the endpoint answered with something other than the object it was asked for. Under `json-object` that usually means the endpoint accepted `response_format` and ignored it; under `prompt-json` it usually means the model wrote a sentence around the object. `--json` formats only a successfully validated Draft. An invalid JSON response makes the CLI exit with status 1, and the raw upstream response is neither printed nor logged. Use the sanitized diagnostic to identify the failure and check the configured endpoint's response-format compatibility, without expecting `--json` to show the rejected answer.
 
 Both `cli.py` and `app.py` log in the same overall format, so a failure reproduced from the command line reads the same as the one from the screen, once the reference id is set aside:
 
@@ -548,7 +552,7 @@ Narrower selections use the same runner:
 | `test_openai_compatible_provider.py` | what reaches the SDK — token, base URL, retries, model, `max_tokens`, `response_format` per mode, `temperature` only when set — the normalization of an answer including the requirement of a usable `finish_reason` (an unknown non-empty reason is accepted and preserved), the mapping of a timeout, a connection failure and 401/403/429/500, the elapsed seconds recorded next to the limit on both a success and a timeout, and a sanitized failure diagnostic carried on the raised exception, excluding raw upstream error text, that the provider itself never logs |
 | `test_prompts.py` | prompt loading, refusal of missing/unreadable/blank prompts before a request with the diagnostic carried by `InternalError` rather than a library log, `{{direction}}` substitution alongside `{{input}}` and `{{body}}`, literal placeholder substitution, and unknown-placeholder preservation |
 | `test_generator.py` | building a `Draft` from a `CompletionResult`, both response modes, a fenced answer, refusal of prose around the object and of any fragment extraction, the title limit, the optional direction argument reaching both prompt builders, notice preservation through `regenerate_titles()`, and sanitized `InvalidResponseError` diagnostics raised without a generator-level log |
-| `test_formatter.py` | fence removal, heading demotion, blank and whitespace-only line collapsing, preservation of leading indentation and of a 4-space indented fence marker as code rather than a fence, and detection that rewrites nothing |
+| `test_formatter.py` | fence removal, preservation of language-labelled literal fences and of blank runs between indented code lines, heading demotion, blank and whitespace-only line collapsing, preservation of leading indentation and of a 4-space indented fence marker as code rather than a fence, and detection that rewrites nothing |
 | `test_web.py` | the screens, input limits, regeneration of the titles alone, refusal of title-only regeneration without a settled body and its return to full generation, preservation of the title-only operation, its exact body and its notices across both a generation failure and a correctable memo validation error, that a full regeneration ignores submitted notices, that a failure does not expose its cause, that a timeout does not blame the memo, the one request reference and exactly one sanitized application log record per failure, the optional Direction field's validation, propagation and retry preservation, the memo and Direction cleared together, that the 404, 405 and 413 error pages carry no generation retry control while a retryable generation error still does, and the default-on same-origin `Origin` guard — accepted and rejected authorities, no form reflection or raw `Origin` in the log on rejection, and the `REQUIRE_SAME_ORIGIN=off` escape hatch |
 | `test_cli.py` | reading the memo from `--text` or `--input`, refusal of an empty one, the `--model`, `--timeout` and `--prompt-dir` overrides, the refusal of a timeout that is not positive or not finite and of a whitespace-only model or prompt directory, non-UTF-8 memo and body files, the exit codes, and exactly one sanitized failure log record naming the failure and its message |
 

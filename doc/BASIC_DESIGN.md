@@ -409,7 +409,9 @@ def normalize_body(text: str) -> Tuple[str, List[str]]
 The rewrites are:
 
 1. Remove one outer backtick or tilde code fence only when it wraps the whole
-   body and there is no separate inner fence. A fence marker is recognized
+   body, there is no separate inner fence, and its info string is empty,
+   `markdown` or `md` (case-insensitive). A single fenced block with any other
+   info string is literal content and is kept with its fences. A fence marker is recognized
    only up to 3 leading ASCII spaces of indentation; a marker indented 4
    spaces or more is indented code, not a fence boundary, and never opens or
    closes fence tracking.
@@ -419,7 +421,8 @@ The rewrites are:
    indented code and is never demoted.
 3. Collapse runs of blank or whitespace-only lines to a single blank line
    outside fenced code blocks, preserving the exact content of a line inside
-   one, and remove blank boundary lines from the start and end of the whole
+   one. A run lying between two non-blank lines that both begin with 4 ASCII
+   spaces or a tab is kept exactly as it is. Remove blank boundary lines from the start and end of the whole
    body without touching the horizontal indentation of the first and last
    non-blank line.
 

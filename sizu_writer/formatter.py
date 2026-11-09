@@ -7,8 +7,9 @@
 #  Description:
 #  This module turns the model output into a body that can be pasted
 #  into the posting form. It rewrites only what can be decided
-#  mechanically: an outer code fence, a level one heading, and runs of
-#  blank lines. Anything that would touch the meaning of a sentence is
+#  mechanically: an outer Markdown or unlabelled code fence, a level one
+#  heading, and runs of blank lines outside code. A code block with a
+#  language label and blank lines between indented code lines are kept. Anything that would touch the meaning of a sentence is
 #  reported as a notice instead, and the notices are shown outside the
 #  body area so that they can never be copied with it.
 #
@@ -22,6 +23,9 @@
 #  - Standard library only
 #
 #  Version History:
+#  v1.3 2026-11-09
+#       Preserve language-labelled literal code fences and blank runs between
+#       indented code lines.
 #  v1.2 2026-09-21
 #       Preserve fenced and indented Markdown while normalizing headings
 #       and blank-line runs without stripping meaningful indentation.
@@ -93,7 +97,7 @@ def _strip_outer_blank_lines(text: str) -> str:
 
 
 def _strip_outer_body_fence(text: str) -> str:
-    """ Remove a code fence wrapping the whole answer. """
+    """ Remove only a whole-answer wrapper, keeping literal code fences. """
     text = _strip_outer_blank_lines(text)
     lines = text.split("\n")
     if len(lines) < 2:
@@ -105,6 +109,10 @@ def _strip_outer_body_fence(text: str) -> str:
 
     opening = (opening_fence[0], opening_fence[1])
     if not _closes_fence(lines[-1], opening):
+        return text
+
+    # An explicit code language denotes literal content, not a Markdown wrapper.
+    if opening_fence[2].strip().casefold() not in ("", "markdown", "md"):
         return text
 
     inner_has_fence = any(_fence(line) is not None for line in lines[1:-1])
@@ -140,32 +148,49 @@ def _demote_headings(text: str) -> Tuple[str, bool]:
 
 
 def _collapse_blank_lines(text: str) -> str:
-    """ Collapse runs of blank lines outside fenced code blocks. """
+    """ Collapse paragraph gaps while preserving blanks inside code. """
+    lines = text.split("\n")
     opening: Optional[Tuple[str, int]] = None
-    previous_empty = False
     result: List[str] = []
+    index = 0
 
-    for line in text.split("\n"):
+    while index < len(lines):
+        line = lines[index]
         if opening is not None:
             result.append(line)
             if _closes_fence(line, opening):
                 opening = None
+            index += 1
             continue
 
         fence = _fence(line)
         if fence is not None:
             opening = (fence[0], fence[1])
             result.append(line)
-            previous_empty = False
+            index += 1
             continue
 
-        if not line.strip():
-            if not previous_empty:
-                result.append("")
-            previous_empty = True
-        else:
+        if line.strip():
             result.append(line)
-            previous_empty = False
+            index += 1
+            continue
+
+        end = index + 1
+        while end < len(lines) and not lines[end].strip():
+            end += 1
+
+        # Retain the exact gap only between explicitly indented code lines.
+        previous_is_code = bool(result) and (
+            result[-1].startswith("    ") or result[-1].startswith("\t")
+        )
+        next_is_code = end < len(lines) and (
+            lines[end].startswith("    ") or lines[end].startswith("\t")
+        )
+        if previous_is_code and next_is_code:
+            result.extend(lines[index:end])
+        else:
+            result.append("")
+        index = end
 
     return "\n".join(result)
 
