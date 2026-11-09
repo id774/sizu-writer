@@ -45,7 +45,8 @@
 #      the first and last non-blank line.
 #    - Preserve a body consisting only of a language-labelled code fence.
 #    - Preserve a body consisting only of a language-labelled tilde fence.
-#    - Keep removing Markdown, md and unlabelled outer fences.
+#    - Keep removing Markdown and md outer fences case-insensitively,
+#      together with unlabelled outer fences.
 #    - Preserve blank runs between indented code lines.
 #    - Preserve blank runs between mixed tab and space indented code lines.
 #    - Keep collapsing blank runs that are not between indented code lines.
@@ -275,6 +276,19 @@ class NormalizeBodyTest(unittest.TestCase):
             "```md\n本文\n```",
             "```\n本文\n```",
             "~~~markdown\n本文\n~~~",
+        ):
+            with self.subTest(source=source):
+                body, notices = normalize_body(source)
+
+                self.assertEqual("本文", body)
+                self.assertEqual([], notices)
+
+    def test_unwraps_markdown_info_strings_case_insensitively(self):
+        for source in (
+            "```Markdown\n本文\n```",
+            "```MD\n本文\n```",
+            "~~~mArKdOwN\n本文\n~~~",
+            "~~~Md\n本文\n~~~",
         ):
             with self.subTest(source=source):
                 body, notices = normalize_body(source)
