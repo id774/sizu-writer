@@ -9,7 +9,8 @@
 #  into the posting form. It rewrites only what can be decided
 #  mechanically: an outer Markdown or unlabelled code fence, a level one
 #  heading, and runs of blank lines outside code. A code block with a
-#  language label and blank lines between indented code lines are kept. Anything that would touch the meaning of a sentence is
+#  language label and blank lines between indented code lines are kept.
+#  Anything that would touch the meaning of a sentence is
 #  reported as a notice instead, and the notices are shown outside the
 #  body area so that they can never be copied with it.
 #
