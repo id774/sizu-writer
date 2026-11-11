@@ -34,6 +34,8 @@
 #  - Standard library only; a provider module brings its own client
 #
 #  Version History:
+#  v1.2 2026-11-11
+#       Sanitize provider response metadata before writing success logs.
 #  v1.1 2026-09-21
 #       Carry provider-selection diagnostics through InternalError without logging twice.
 #  v1.0 2026-08-05
@@ -42,8 +44,10 @@
 ########################################################################
 
 import logging
+import math
+import re
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Protocol
+from typing import Callable, Dict, List, Optional, Protocol, Union
 
 from config import Config
 from sizu_writer.errors import InternalError
@@ -128,6 +132,34 @@ def build_provider(config: Config) -> GenerationProvider:
     return loader()()
 
 
+def _log_atom(value: object) -> str:
+    """ Keep only a bounded, single-field ASCII metadata token. """
+    if type(value) is not str:
+        return "-"
+    return value if re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}", value
+    ) is not None else "-"
+
+
+def _log_count(value: object) -> Optional[int]:
+    """ Keep a realistic nonnegative usage integer; never coerce values. """
+    return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
+
+
+def _log_measure(value: object) -> Union[int, float, str]:
+    """ Keep bounded nonnegative integers and finite nonnegative floats. """
+    if type(value) is int:
+        return value if 0 <= value <= 2**63 - 1 else "-"
+    if type(value) is float and math.isfinite(value) and value >= 0:
+        return value
+    return "-"
+
+
+def _log_http_status(value: object) -> Union[int, str]:
+    """ Keep a numeric HTTP status only. """
+    return value if type(value) is int and 100 <= value <= 599 else "-"
+
+
 def log_response(config: Config, result: CompletionResult) -> None:
     """
     Record the shape of one answer, and none of its content.
@@ -146,14 +178,14 @@ def log_response(config: Config, result: CompletionResult) -> None:
         "generation response: backend=%s endpoint_host=%s request_id=%s "
         "model=%s finish_reason=%s prompt_tokens=%s completion_tokens=%s "
         "total_tokens=%s elapsed=%s timeout=%s",
-        config.generation_backend,
-        config.endpoint_host,
-        result.request_id or "-",
-        result.model or "-",
-        result.finish_reason or "-",
-        result.prompt_tokens,
-        result.completion_tokens,
-        result.total_tokens,
-        result.elapsed_seconds if result.elapsed_seconds is not None else "-",
-        config.generation_timeout,
+        _log_atom(config.generation_backend),
+        _log_atom(config.endpoint_host),
+        _log_atom(result.request_id),
+        _log_atom(result.model),
+        _log_atom(result.finish_reason),
+        _log_count(result.prompt_tokens),
+        _log_count(result.completion_tokens),
+        _log_count(result.total_tokens),
+        _log_measure(result.elapsed_seconds),
+        _log_measure(config.generation_timeout),
     )

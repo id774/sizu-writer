@@ -18,7 +18,7 @@
 #  Usage:
 #      python cli.py generate --text "MEMO" [--json]
 #      python cli.py generate --input memo.txt [--model NAME] [--json]
-#      python cli.py titles --input memo.txt --body draft.md [--json]
+#      python cli.py titles --input memo.txt --body body.md [--json]
 #      python cli.py -h | --help
 #      python cli.py -v | --version
 #

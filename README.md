@@ -524,6 +524,13 @@ The success line still comes from the provider, `sizu_writer.providers`, which i
 
 The token, memo, prompts, generated body, titles, raw upstream exception text and raw upstream response body appear at no level. What is left is the shape of the exchange, which is what matches a run against the usage the endpoint counted.
 
+Provider-supplied metadata is checked before it reaches an operational log.
+Only bounded ASCII identifiers are printed as log field values; unsafe
+identifiers are replaced with `-`, and malformed usage counters with `None`.
+HTTP statuses are numeric only within 100 to 599. Normal identifiers and
+counts remain visible, and no generated content or raw exception text is
+added. This changes logs, not the returned draft or the request behavior.
+
 ## Tests
 
 The suite lives in `tests/` and uses `unittest` from the standard library: no outbound access, no API token and no `.env` are needed. Tests that exercise the generation path stub the external client; the provider tests go further and stub the `openai` package itself, so they exercise the request that would have been sent without importing the SDK at all.

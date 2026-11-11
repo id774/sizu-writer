@@ -6,6 +6,7 @@ v1.1.1 (Release Date: TBD)
 - Clarify repository policy governance and agent pull request workflows.
 - Preserve literal code fences and indented-code blank lines in post bodies.
 - Correct CLI guidance for title-only body files and invalid JSON diagnostics.
+- Prevent untrusted provider metadata from corrupting operational logs.
 
 v1.1 (2026-09-21)
 -----------------

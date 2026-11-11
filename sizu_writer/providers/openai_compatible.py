@@ -34,6 +34,8 @@
 #  - openai
 #
 #  Version History:
+#  v1.3 2026-11-11
+#       Sanitize upstream identifiers and status in failure diagnostics.
 #  v1.2 2026-09-21
 #       Carry sanitized provider failure diagnostics to the entry point for one log.
 #  v1.1 2026-09-09
@@ -51,14 +53,17 @@ from config import Config
 from sizu_writer.errors import (InternalError, InvalidResponseError,
                                 UpstreamConnectionError, UpstreamStatusError,
                                 UpstreamTimeoutError)
-from sizu_writer.providers import CompletionResult, log_response
+from sizu_writer.providers import (CompletionResult, _log_atom,
+                                    _log_http_status, _log_measure,
+                                    log_response)
 
 logger = logging.getLogger(__name__)
 
 # Finish reasons that mean the output hit its limit. A truncated body is
 # not offered as a draft. The list is explicit: an unknown reason from a
-# compatible endpoint is reported as itself and added here once a log
-# has shown it, rather than guessed to mean the same as 'length'.
+# compatible endpoint stays unchanged in the CompletionResult, and only a
+# safe metadata token is shown in the log, rather than guessed to mean
+# the same as 'length'.
 TRUNCATED_REASONS = ("length", "max_tokens")
 
 
@@ -163,14 +168,14 @@ class OpenAICompatibleProvider:
             "generation failure: backend={0} endpoint_host={1} model={2} "
             "error={3} status={4} request_id={5} elapsed={6} timeout={7}"
         ).format(
-            config.generation_backend,
-            config.endpoint_host,
-            config.generation_model,
-            type(error).__name__,
-            status_code if status_code is not None else "-",
-            getattr(error, "request_id", None) or "-",
-            self._elapsed(started),
-            config.generation_timeout,
+            _log_atom(config.generation_backend),
+            _log_atom(config.endpoint_host),
+            _log_atom(config.generation_model),
+            _log_atom(type(error).__name__),
+            _log_http_status(status_code),
+            _log_atom(getattr(error, "request_id", None)),
+            _log_measure(self._elapsed(started)),
+            _log_measure(config.generation_timeout),
         )
 
     def _elapsed(self, started: float) -> float:

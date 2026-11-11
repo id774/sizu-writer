@@ -339,6 +339,17 @@ request id, the elapsed seconds and the configured timeout, never the raw
 exception message or an upstream response body) on the `SizuWriterError`
 subclass it raises, and `app.py` or `cli.py` logs that diagnostic once.
 
+Provider log fields are sanitized at the logging boundary. Metadata atoms
+must be ASCII tokens of 1 to 128 characters, using letters, digits and the
+specified punctuation; unsafe values are displayed as `-`. Usage counters
+must be exact nonnegative integers no larger than 2^63 - 1, or they are
+logged as `None`. Invalid HTTP statuses and non-finite measurements become
+`-`. Ordinary valid identifiers, statuses and counts are retained.
+
+This affects log presentation and failure diagnostics only. The fields in
+`CompletionResult`, response acceptance, generated drafts and the number
+of requests are unchanged.
+
 #### 5.4.2 The JSON object contract
 
 For body generation the accepted object has this shape:

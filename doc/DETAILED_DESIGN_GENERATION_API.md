@@ -615,8 +615,10 @@ max_tokens
 ```
 
 Both mean a truncated body, which is not offered as a draft. The list is
-explicit: another value from a compatible endpoint is reported as itself and
-added here once a log has shown it, never assumed to mean the same thing.
+explicit: a different non-empty value remains unchanged in the
+`CompletionResult`. Its log representation is preserved when it is a safe
+metadata token according to section 13; otherwise the log displays `-`.
+Unknown non-empty finish reasons are not reclassified as truncation.
 
 A response whose finish reason is missing or blank is refused before it
 reaches this list, as an invalid response rather than a truncated one — see
@@ -731,6 +733,17 @@ request_id=... model=... finish_reason=... prompt_tokens=... completion_tokens=.
 total_tokens=... elapsed=... timeout=...
 ```
 
+All log field values are kept single-line. A metadata atom is retained only
+when its type is exactly `str`, its length is 1 to 128 characters, it starts
+with an ASCII letter or digit, and every later character is an ASCII letter,
+digit, `.`, `_`, `:`, `/`, `@`, `+` or `-`. Any other atom appears as `-`.
+Usage counters are recorded only for exact integers from 0 to 2^63 - 1;
+invalid counters appear as `None`. Elapsed seconds and timeout are recorded
+only as finite nonnegative floats or bounded nonnegative integers; others
+appear as `-`.
+Normal response identifiers, model names and finish reasons remain visible.
+These restrictions apply at the log boundary, not to `CompletionResult`.
+
 `elapsed` is the wall-clock time measured on this side around the SDK
 `create()` call and rounded to a tenth. With `GENERATION_MAX_RETRIES=0` it
 covers the single request attempt. With retries enabled it may include several
@@ -755,9 +768,11 @@ string built by `_failure_diagnostic()`:
 generation failure: backend=... endpoint_host=... model=... error=... status=... request_id=... elapsed=... timeout=...
 ```
 
-`error` is the SDK exception's class name, never its raw message; `status` is
-the numeric HTTP status when there is one, else `-`; `request_id` is the
-upstream request id when the SDK exposes one, else `-`. With the shipped
+`error` is the SDK exception's class name, not its raw message, passed
+through the same metadata atom rule as INFO fields. `status` is an exact
+integer from 100 to 599, or `-`; `request_id` is the upstream identifier
+only when it meets the metadata atom rule, otherwise `-`. Backend, host and
+model are also formatted as safe single-line atoms. With the shipped
 zero-retry default, `elapsed` close to `timeout` is useful evidence that the
 single attempt had little margin. With retries enabled, `elapsed` may also
 contain earlier attempts and retry waits, so the pair alone does not identify
@@ -961,6 +976,9 @@ reason, an unknown non-empty finish reason surviving unchanged onto the
 diagnostic carried on the raised exception, and that the provider itself
 never logs the failure — `sizu_writer.providers.openai_compatible`'s logger is
 asserted not called on every mapped failure.
+It also verifies that valid provider metadata stays visible, while unsafe
+metadata tokens, malformed usage counters, invalid HTTP statuses and
+non-finite log measurements cannot create forged log fields or lines.
 
 `tests/test_web.py` additionally covers a single request reference: the same
 id the Web application establishes before calling into generation is what a
