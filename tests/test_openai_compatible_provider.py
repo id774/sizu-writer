@@ -63,12 +63,16 @@
 #    - Keep the token out of a failure diagnostic.
 #    - Do not log a provider failure; the entry point logs it once instead.
 #    - Keep raw upstream error text out of a failure diagnostic.
+#    - Keep valid metadata visible and sanitize malformed response log fields.
+#    - Prevent upstream request ids and HTTP statuses from forging failure logs.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
 #  - Standard library only (the openai package is stubbed, never imported)
 #
 #  Version History:
+#  v1.3 2026-11-11
+#       Cover safe and malformed provider metadata in operational logging.
 #  v1.2 2026-09-21
 #       Cover sanitized provider diagnostics without provider-side failure logging.
 #  v1.1 2026-09-09
@@ -87,7 +91,8 @@ from unittest import mock
 from config import Config
 from sizu_writer.errors import (InvalidResponseError, UpstreamConnectionError,
                                 UpstreamStatusError, UpstreamTimeoutError)
-from sizu_writer.providers import openai_compatible
+from sizu_writer.providers import (CompletionResult, log_response,
+                                    openai_compatible)
 from sizu_writer.providers.openai_compatible import OpenAICompatibleProvider
 
 TOKEN = "00000000-0000-0000-0000-000000000000:secret-value"
@@ -426,6 +431,124 @@ class LogTest(ProviderTest):
         self.assertIn("timeout=120.0", diagnostic)
         self.assertNotIn("SENSITIVE_UPSTREAM_RESPONSE_TEXT", diagnostic)
         self.assertNotIn(TOKEN, diagnostic)
+
+    def test_sanitizes_untrusted_success_metadata(self):
+        usage = SimpleNamespace(prompt_tokens=11, completion_tokens=22,
+                                total_tokens=33)
+        module = fake_openai(answer(
+            content="SECRET_BODY", model="SENSITIVE_MODEL\nFORGED_MODEL",
+            identifier="req_1\nFORGED_ID",
+            finish_reason="stop\r\nFORGED_REASON", usage=usage))
+
+        with self.assertLogs("sizu_writer.providers", level=logging.INFO) as logged:
+            result = self.complete(module)
+
+        self.assertEqual(1, len(logged.output))
+        recorded = logged.output[0]
+        self.assertIn(
+            "request_id=- model=- finish_reason=- prompt_tokens=11 "
+            "completion_tokens=22 total_tokens=33", recorded)
+        for forbidden in ("SENSITIVE_MODEL", "FORGED_MODEL", "FORGED_ID",
+                          "FORGED_REASON", "SECRET_BODY", TOKEN, "\r", "\n"):
+            self.assertNotIn(forbidden, recorded)
+        self.assertEqual("SENSITIVE_MODEL\nFORGED_MODEL", result.model)
+        self.assertEqual("req_1\nFORGED_ID", result.request_id)
+        self.assertEqual("stop\r\nFORGED_REASON", result.finish_reason)
+
+    def test_preserves_safe_unknown_finish_reason_and_identifiers_in_log(self):
+        usage = SimpleNamespace(prompt_tokens=0, completion_tokens=12,
+                                total_tokens=2**63 - 1)
+        module = fake_openai(answer(
+            content="{}", model="provider/model-v1", identifier="req_abc-123",
+            finish_reason="provider-specific", usage=usage))
+
+        with self.assertLogs("sizu_writer.providers", level=logging.INFO) as logged:
+            result = self.complete(module)
+
+        self.assertEqual(1, len(logged.output))
+        self.assertIn(
+            "request_id=req_abc-123 model=provider/model-v1 "
+            "finish_reason=provider-specific prompt_tokens=0 "
+            "completion_tokens=12 total_tokens=9223372036854775807",
+            logged.output[0])
+        self.assertEqual("provider-specific", result.finish_reason)
+
+    def test_rejects_invalid_usage_metadata_in_log_only(self):
+        fields = ("prompt_tokens", "completion_tokens", "total_tokens")
+        invalid = (False, True, -1, 2**63, 1.0, "1", None, object())
+        for field in fields:
+            for value in invalid:
+                with self.subTest(field=field, value=repr(value)):
+                    counts = dict.fromkeys(fields, 0)
+                    counts[field] = value
+                    module = fake_openai(answer(
+                        content="{}", usage=SimpleNamespace(**counts)))
+
+                    with self.assertLogs("sizu_writer.providers",
+                                         level=logging.INFO) as logged:
+                        result = self.complete(module)
+
+                    self.assertEqual(1, len(logged.output))
+                    for name in fields:
+                        expected = "None" if name == field else "0"
+                        self.assertIn(
+                            "{0}={1}".format(name, expected), logged.output[0])
+                    self.assertIs(value, getattr(result, field))
+
+    def test_rejects_invalid_log_measurements(self):
+        for value in (float("nan"), float("inf"), -1.0, 10**1000,
+                      "1\nFORGED_ELAPSED"):
+            with self.subTest(value=repr(value)[:30]):
+                result = CompletionResult(content="{}", elapsed_seconds=value)
+
+                with self.assertLogs("sizu_writer.providers",
+                                     level=logging.INFO) as logged:
+                    log_response(settings(), result)
+
+                self.assertEqual(1, len(logged.output))
+                recorded = logged.output[0]
+                self.assertIn("elapsed=- ", recorded)
+                self.assertNotIn("FORGED_ELAPSED", recorded)
+                self.assertNotIn("\r", recorded)
+                self.assertNotIn("\n", recorded)
+
+        for value in (0.0, 1.5):
+            with self.subTest(value=value):
+                result = CompletionResult(content="{}", elapsed_seconds=value)
+
+                with self.assertLogs("sizu_writer.providers",
+                                     level=logging.INFO) as logged:
+                    log_response(settings(), result)
+
+                self.assertIn("elapsed={0} ".format(value), logged.output[0])
+                self.assertIn("timeout=120.0", logged.output[0])
+
+    def test_sanitizes_untrusted_failure_diagnostic_metadata(self):
+        error = FakeStatusError(429)
+        error.request_id = "req_1\nFORGED_FAILURE"
+        error.status_code = "429\rFORGED_STATUS"
+        config = settings(generation_model="model\nFORGED_CONFIG")
+
+        with mock.patch.object(openai_compatible.logger, "error") as error_log:
+            with mock.patch.dict(sys.modules,
+                                 {"openai": fake_openai(error=error)}):
+                with self.assertRaises(UpstreamStatusError) as refused:
+                    OpenAICompatibleProvider().complete([], config)
+
+        diagnostic = refused.exception.diagnostic
+        for expected in ("model=-", "status=-", "request_id=-",
+                         "error=FakeStatusError", "elapsed=", "timeout=120.0"):
+            self.assertIn(expected, diagnostic)
+        for forbidden in ("FORGED_FAILURE", "FORGED_STATUS", "FORGED_CONFIG",
+                          TOKEN, "\r", "\n"):
+            self.assertNotIn(forbidden, diagnostic)
+        error_log.assert_not_called()
+
+        with self.assertRaises(UpstreamStatusError) as ordinary:
+            self.raise_from_sdk(FakeStatusError(429))
+
+        self.assertIn("status=429 request_id=req_1",
+                      ordinary.exception.diagnostic)
 
 
 if __name__ == "__main__":
