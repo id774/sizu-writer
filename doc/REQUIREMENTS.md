@@ -16,7 +16,8 @@ form of Shizuka na Internet and publishes.
 - Run on a server as a Flask application, continuously.
 - Publish it through the Apache HTTP Server.
 - Let the person enter a short text through a web page.
-- Use the explicitly configured generation endpoint to produce the whole post body and the title candidates.
+- Use the explicitly configured generation endpoint to produce the whole post
+  body and the title candidates.
 - Show the post body so that it can be copied whole.
 - Show each title candidate so that it can be copied on its own.
 - Leave the posting to the person.
@@ -79,7 +80,8 @@ none of them reasons to treat a text as unsuited to this medium.
 - Use the Apache HTTP Server.
 - Forward requests from Apache to the Flask application.
 - Either WSGI or a reverse proxy is acceptable.
-- HTTPS, access control and authentication are managed by Apache, according to the deployment.
+- HTTPS, access control and authentication are managed by Apache, according to
+  the deployment.
 
 ### 5.2 Application
 
@@ -90,11 +92,14 @@ none of them reasons to treat a text as unsuited to this medium.
 
 ### 5.3 External API
 
-- Use an explicitly configured endpoint speaking the OpenAI-compatible Chat Completions API.
+- Use an explicitly configured endpoint speaking the OpenAI-compatible Chat
+  Completions API.
 - Do not write the generation API token into the source or onto a screen.
-- Read the token from an environment variable or from a configuration file with restricted access.
+- Read the token from an environment variable or from a configuration file with
+  restricted access.
 - Receive the answer in a structured form, so that the body and the titles are separate.
-- Do not choose an endpoint implicitly and do not fall back to a second endpoint after a failure.
+- Do not choose an endpoint implicitly and do not fall back to a second endpoint
+  after a failure.
 
 ## 6. Functional requirements
 
@@ -150,7 +155,8 @@ change to the body.
 
 - Show the post body alone, in its own area.
 - It must be copyable as it stands, straight into the posting form.
-- Never mix an instruction to the AI, an editing note, an internal remark or a review result into the body.
+- Never mix an instruction to the AI, an editing note, an internal remark or a
+  review result into the body.
 - Produce the body as Markdown.
 - Provide a button that copies the whole body.
 - Do not let a label or an explanatory sentence on the screen fall inside what is copied.
@@ -237,7 +243,8 @@ Keep, in preference to anything else:
 - the question
 - what is not settled
 
-Never invent an experience, an emotion, a fact or a causal link in order to make the text tidier.
+Never invent an experience, an emotion, a fact or a causal link in order to make
+the text tidier.
 
 ### 7.4 How much to explain
 
@@ -254,8 +261,9 @@ Do not widen into:
 - a systematic argument
 
 No causal link and no generalization is added that the material does not carry.
-Before the text moves to a wide subject — 「社会では」, 「人間は」, 「私たちは」 — that move has
-to be needed, and it says no more than the particular observation supports.
+Before the text moves to a wide subject — 「社会では」, 「人間は」, 「私たちは」 —
+that move has to be needed, and it says no more than the particular
+observation supports.
 
 ### 7.5 Register
 
@@ -315,7 +323,8 @@ When a familiar theme is being sorted out, a stance of "known for a while" or
 
 ### 7.10 What is not looked up
 
-- Research and the gathering of references are no part of the work. The text is written from the input alone.
+- Research and the gathering of references are no part of the work. The text is
+  written from the input alone.
 - What has not been checked is not stated as established. Where a particular
   fact would have to be verified, the text writes around it or leaves the
   uncertainty visible.
@@ -350,7 +359,8 @@ The policy is:
 - add no word for the sake of search, spread or clicks
 - avoid a title that makes the content look settled
 - avoid a question form suggesting a resolution the body does not reach
-- when the matter is unsettled, an observed fact or the point where the thinking started makes a fine title
+- when the matter is unsettled, an observed fact or the point where the thinking
+  started makes a fine title
 - do not force a symbolic, literary or sensational title
 - when the content carries no natural title, a title made from the date is a candidate
 
@@ -423,7 +433,8 @@ At a minimum:
 - Run the Flask application as a service.
 - Restart it automatically when the process ends.
 - Start it automatically after a reboot.
-- On an API failure, return an error to the person and run no subsequent step. There is none to run.
+- On an API failure, return an error to the person and run no subsequent step.
+  There is none to run.
 
 ### 10.3 Maintainability
 
@@ -520,4 +531,5 @@ individually.
 The person copies the title they choose and the whole body, pastes them into the
 posting form of Shizuka na Internet, reads them once more and publishes.
 
-The system does not post, does not automate a browser and holds no credential of the posting site.
+The system does not post, does not automate a browser and holds no credential of
+the posting site.

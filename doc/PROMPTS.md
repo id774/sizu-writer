@@ -22,7 +22,7 @@ only carries text to an endpoint and validates what comes back.
 | `titles_user.md` | user message | `titles` |
 
 Two pairs, one per command. `sizu_writer/prompts.py` reads them and assembles
-the message list; it performs no API call, so a prompt can be exercised without
+the message list. It performs no API call, so a prompt can be exercised without
 spending a request.
 
 `titles_system.md` deliberately repeats the title policy of `system.md` rather
@@ -63,11 +63,11 @@ keeps working exactly as it did: `generator.py` always passes a direction
 string, which is empty by default, and a prompt template that never mentions
 `{{direction}}` simply never inserts it anywhere. Adopting Direction in a
 custom prompt set means placing `{{direction}}` in its own `*_user.md` files,
-the same way `{{input}}` and `{{body}}` are placed today; there is no separate
+the same way `{{input}}` and `{{body}}` are placed today. There is no separate
 opt-in setting.
 
 The Web Direction field is not a second memo. It carries no new fact,
-experience or event of its own; it shapes how the memo already given is
+experience or event of its own. It shapes how the memo already given is
 handled — a focus, a length, a tone, something to leave out, a title
 preference. When it is blank, no additional instruction was given for that
 request, and the shipped prompts say so without ever remarking on it in the
@@ -96,7 +96,7 @@ is also asked. That is what `GENERATION_RESPONSE_MODE` selects:
 | `json-object` | sends `response_format={"type":"json_object"}` | states it again in words |
 
 The instruction stays in the prompt even under `json-object`, because the two
-do different work. `response_format` makes the answer parse; the prompt is what
+do different work. `response_format` requests a parseable JSON answer. The prompt is what
 keeps an editing note out of `body_markdown`. A model told only to return JSON
 will happily return valid JSON whose body field opens with a remark about the
 instructions it was given.
@@ -124,7 +124,7 @@ reaches `sizu_writer/generator.py` when:
 - `primary_title` is missing, not a string, or blank
 - `alternative_titles` is missing, is not a list, or holds a value that is not a string
 
-An empty `alternative_titles` is accepted; the requirement sets a maximum, not
+An empty `alternative_titles` is accepted because the requirement sets a maximum, not
 a minimum. Blank entries, duplicates and repeats of `primary_title` are dropped,
 and `MAX_ALT_TITLES` of the rest are kept. Renaming a field in a prompt without
 renaming it in `generator.py` produces `InvalidResponseError` on every run.
@@ -228,7 +228,7 @@ diff, and two simultaneous changes leave no way to say which one did it.
 `sizu_writer/prompts.py` reads the files on every call, so a prompt edited
 while the development server runs takes effect on the next generation with no
 restart. Under gunicorn the same holds, since each request reads the files
-again; there is no cache to invalidate and no `PROMPT_RELOAD` setting to turn
+again. There is no cache to invalidate and no `PROMPT_RELOAD` setting to turn
 on. The cost is two small reads per generation operation — the system/user prompt
 pair for the selected mode — next to an API call that takes seconds.
 
@@ -256,7 +256,7 @@ matched against the generated body so that a notice can be raised when one
 slipped through. Adding a forbidden phrase to a prompt is therefore two edits:
 the prompt tells the model not to write it, and `BOILERPLATE` or
 `INSTRUCTION_LEAKS` in `formatter.py` catches it when the model does anyway.
-The prompt alone changes what is asked for; the formatter alone changes what is
+The prompt alone changes what is asked for. The formatter alone changes what is
 reported. Neither rewrites the sentence, because deciding that a sentence is
 formulaic is not something that can be settled mechanically without touching
 its meaning.
