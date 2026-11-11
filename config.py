@@ -36,7 +36,7 @@
 #  Environment Variables:
 #  - GENERATION_BACKEND
 #      Wire protocol of the endpoint. Required. 'openai-compatible' is
-#      the only value this version accepts; an unknown one is refused
+#      the only value this version accepts. An unknown one is refused
 #      rather than read as the default.
 #  - GENERATION_API_TOKEN
 #      API key or Bearer token of the endpoint. Required. Sakura AI
@@ -46,7 +46,7 @@
 #      the resource name. Required: an absolute https URL with a host,
 #      no embedded whitespace, and a port from 1 to 65535 when given.
 #  - GENERATION_MODEL
-#      Model used for generation. Required; no default is shipped,
+#      Model used for generation. Required. No default is shipped,
 #      because the available models differ per endpoint.
 #  - GENERATION_RESPONSE_MODE
 #      How a structured answer is asked for: 'json-object' sends
@@ -77,11 +77,11 @@
 #      Level of the application log. Defaults to INFO. Accepted values,
 #      matched case-insensitively: CRITICAL, FATAL, ERROR, WARNING, WARN,
 #      INFO, DEBUG, NOTSET. An unset, empty or whitespace-only value
-#      falls back to INFO; any other value is refused rather than read
+#      falls back to INFO. Any other value is refused rather than read
 #      as INFO.
 #  - PORT
 #      Port used by the development server and the Procfile gunicorn
-#      bind. Defaults to 8090; bundled deployment examples use explicit
+#      bind. Defaults to 8090. Bundled deployment examples use explicit
 #      matching port values.
 #  - REQUIRE_SAME_ORIGIN
 #      Whether Web POST /generate must carry an Origin whose authority
@@ -119,8 +119,8 @@ except ImportError:
     load_dotenv = None
 
 # Wire protocols this version can speak. A backend is added by writing
-# a provider module and naming it here and in sizu_writer/providers;
-# see doc/DETAILED_DESIGN_GENERATION_API.md.
+# a provider module and naming it here and in sizu_writer/providers.
+# See doc/DETAILED_DESIGN_GENERATION_API.md.
 GENERATION_BACKENDS = ("openai-compatible",)
 
 # How a structured answer is asked for. There is no 'auto': deciding

@@ -7,6 +7,7 @@ v1.1.1 (Release Date: TBD)
 - Preserve literal code fences and indented-code blank lines in post bodies.
 - Correct CLI guidance for title-only body files and invalid JSON diagnostics.
 - Prevent untrusted provider metadata from corrupting operational logs.
+- Refuse redirected generation requests and align the timeout documentation.
 
 v1.1 (2026-09-21)
 -----------------
