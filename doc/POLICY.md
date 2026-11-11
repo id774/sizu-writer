@@ -34,14 +34,14 @@ and are not to be relaxed to match a more general rule.
 
 This principle governs the following implementation and maintenance rules. It
 does not permit dropping required behavior, security, compatibility, or
-validation; satisfy those obligations without unnecessary complexity.
+validation. Satisfy those obligations without unnecessary complexity.
 
 ## 1. General Policy
 
 ### 1.1 Design Philosophy
 - Prioritize clarity, portability, and explicit control over convenience.
 - Favor predictable behavior and long-term maintainability.
-- Avoid implicit behavior; make control flow, errors, and side effects explicit.
+- Avoid implicit behavior. Make control flow, errors, and side effects explicit.
 - Keep the generation core (`sizu_writer/`) independent from Flask, so that
   `cli.py` and `app.py` exercise exactly the same code.
 
@@ -69,7 +69,7 @@ exception. Express preferences and situational decisions with `prefer`,
 so would defeat the repository's stated purpose, intended behavior,
 compatibility, safety, or approved change scope. Where the applicable
 specifications and policy leave a legitimate choice open, an explicit
-maintainer decision governs that choice; general conventions do not override
+maintainer decision governs that choice. General conventions do not override
 it.
 
 ### 1.2 Invariants
@@ -93,8 +93,8 @@ These lines are not crossed by a setting or by an extension.
 - Web `POST /generate` is same-origin by default. When
   `REQUIRE_SAME_ORIGIN` is enabled, a missing, malformed or foreign `Origin`
   is refused before form parsing and before generation.
-- The guard compares only the parsed Origin authority with `request.host`;
-  schemes are not compared because TLS terminates at Apache.
+- The guard compares only the parsed Origin authority with `request.host`.
+  Schemes are not compared because TLS terminates at Apache.
 - The refusal logs only a fixed classification and the existing request
   reference. Raw `Origin`, raw `Host` and submitted form content are not logged.
 - Do not implement this boundary with session state, cookies, a CSRF token,
@@ -125,13 +125,13 @@ The settings decide where a memo is sent, so they are read strictly.
   a log line carries is the shape of the exchange: the backend, the endpoint
   host, the model, the request id, the finish reason and the token counts.
 - Do not accept part of an answer. A structured answer is the whole response,
-  or the whole inside of one code fence; an object cut out of surrounding
+  or the whole inside of one code fence. An object cut out of surrounding
   prose is refused, because that is the heuristic which lets a remark become
   the first line of a post.
 
 ### 1.4 Logging and Output
 - Use the standard `logging` module. Obtain a module logger with
-  `logging.getLogger(__name__)`; do not print status from library modules.
+  `logging.getLogger(__name__)`. Do not print status from library modules.
 - Configure logging once, at the entry point, with `logging.basicConfig`
   writing to standard error, in the format
   `%(asctime)s %(levelname)s %(name)s: %(message)s`.
@@ -144,7 +144,7 @@ The settings decide where a memo is sent, so they are read strictly.
   but recoverable condition the operator should know about.
 - Do not emit duplicate diagnostics at multiple layers merely to prove that a
   failure was observed. A library module carries a safe diagnostic on the
-  `SizuWriterError` it raises instead of logging the failure itself; the entry
+  `SizuWriterError` it raises instead of logging the failure itself. The entry
   point that catches the error is the one layer that logs it, once.
 - Keep the log low-noise. One generation must not leave a trail of per-step
   lines at the default level.
@@ -154,7 +154,7 @@ The settings decide where a memo is sent, so they are read strictly.
   the exception's class name and traceback stack frames may stay in the log,
   next to the reference id shown to the user. The raw message of an exception
   is not logged by default, because it can carry runtime data the caller does
-  not control; it may be logged only as part of a diagnostic the raising code
+  not control. It may be logged only as part of a diagnostic the raising code
   built and sanitized itself, never as `str(error)` or `repr(error)` of an
   exception this repository did not construct.
 - Do not log the memo, the Direction, the prompts, the generated text, the
@@ -174,7 +174,7 @@ The settings decide where a memo is sent, so they are read strictly.
 - A command line tool provides `-h`, `--help` for usage and `-v`, `--version`
   for the version, and both exit with code `0`: a user who asked for them got
   what they asked for.
-- Build the parser with `argparse`. It provides `-h`/`--help`; `-v`/`--version`
+- Build the parser with `argparse`. It provides `-h`/`--help`. `-v`/`--version`
   is declared explicitly.
 - An invalid or unsupported option results in usage output.
 - Exit codes are consistent and are documented in the module header.
@@ -186,14 +186,14 @@ The settings decide where a memo is sent, so they are read strictly.
 - An option value the pipeline cannot use is refused by the parser, before a
   request is spent.
 - Subcommands carry the verbs of the tool. A new mode of operation becomes a
-  subcommand; it does not become a flag that changes what an existing
+  subcommand. It does not become a flag that changes what an existing
   subcommand means.
 
 ### 1.7 Error Handling and Exit Codes
 - Treat the operation result, whether processing may continue, and whether a
   message is emitted as separate decisions. A prerequisite or failure that
-  makes correct generation impossible stops the affected request or command;
-  it is not downgraded to a warning merely to continue.
+  makes correct generation impossible stops the affected request or command.
+  It is not downgraded to a warning merely to continue.
 - Detect an unmet prerequisite early. A misconfiguration is refused before a
   request is spent, not after.
 - Log the reason and the affected target when an error occurs.
@@ -249,7 +249,7 @@ The settings decide where a memo is sent, so they are read strictly.
 - Post processing is mechanical and changes no meaning: an outer code fence, a
   heading level and an excess of blank lines. The required spacing between a
   full width character and adjacent ASCII alphanumerics belongs to the prompt
-  policy; the formatter does not insert it. A problem with how the post reads
+  policy. The formatter does not insert it. A problem with how the post reads
   is solved in the prompts.
 - An inspection that finds a forbidden formula, or a phrase that reads as a
   remark about the work, reports it and rewrites nothing. Handing the finding
@@ -274,7 +274,7 @@ The settings decide where a memo is sent, so they are read strictly.
   entry already standing at the top of `doc/VERSIONS`.
 - An unreleased entry carries `(Release Date: TBD)`, and its version number
   stays provisional until it ships. An entry opened under one number may be
-  released under another once what accumulated in it is known; which number it
+  released under another once what accumulated in it is known, which number it
   takes is decided then. Replacing `TBD` with the actual date is the release
   itself, not a change to record.
 - A repository that has not yet made its first release is in its initial
@@ -313,7 +313,7 @@ The settings decide where a memo is sent, so they are read strictly.
 - Where the file has settled on a width of its own, predating this limit, a
   new entry is wrapped to that width and balanced against the lines already
   standing, so that the version history stays of a piece. Wrapping to hold an
-  established form does not overturn the two-line, 80-column limit above; the
+  established form does not overturn the two-line, 80-column limit above. The
   entries already written are not reflowed or rebuilt to suit it.
 - When an entry runs long, look first for what can be dropped or abstracted:
   the implementation detail, the example, the detailed reason, the secondary
@@ -324,7 +324,7 @@ The settings decide where a memo is sent, so they are read strictly.
 - An entry that is long because it names the identifiers it needs is not
   shortened for its length alone.
 - Merge changes that serve one purpose. Related changes to the same file within
-  one version are merged as a rule; changes to the same file that mean
+  one version are merged as a rule. Changes to the same file that mean
   different things are left as separate entries rather than forced together.
 - Place entries that touch the same feature, file or purpose near each other,
   and append an independent change to the end of that version. Reading well as
@@ -342,7 +342,7 @@ The settings decide where a memo is sent, so they are read strictly.
   not make it one.
 - The name states the format so that nobody has to infer it from the content.
   Reading a file to guess what it is gives a different answer to every reader
-  and to every agent; the extension gives all of them the same answer.
+  and to every agent. The extension gives all of them the same answer.
 - The two formats are kept apart because they are read in different places.
   Markdown is read rendered, in a browser, where the structure carries the
   meaning. Plain text is read raw, in a terminal, a pager or a diff, where the
@@ -442,12 +442,12 @@ The settings decide where a memo is sent, so they are read strictly.
   names the section it falls in. A document named with `.md` is covered by that
   line and needs no entry of its own.
 - `doc/VERSIONS` is excluded. It is underlined plain text, and `diff=markdown`
-  empties the hunk headers that otherwise name the version; leaving it out
+  empties the hunk headers that otherwise name the version. Leaving it out
   agrees with treating it as a plain text version history.
 - `doc/COPYING` and `doc/COPYING.LESSER` are excluded as the licence texts,
   which agrees with their role as the official legal wording.
 - No file is given `linguist-language`. Nothing in `.gitattributes` makes GitHub
-  render a document that carries no extension; that is what the `.md` names are
+  render a document that carries no extension. That is what the `.md` names are
   for, and an extensionless document is not dressed up as Markdown.
 - How a document appears on GitHub is not a reason on its own to change its
   format or its attributes.
@@ -566,7 +566,7 @@ Before a change is proposed, it answers these:
 
 ### 1.13 License
 - Follow the applicable terms in `doc/LICENSE.md`, `doc/COPYING`, and
-  `doc/COPYING.LESSER`; those documents are the authority for licensing.
+  `doc/COPYING.LESSER`. Those documents are the authority for licensing.
 - Every module header repeats the license line of the standard identifying
   block, so that a file read on its own still states its terms.
 - Add a dependency only when its license is compatible with that choice.
@@ -619,20 +619,20 @@ Before a change is proposed, it answers these:
 - A credential never gets a command line option: a command line is readable by
   every user of the host.
 - Validation is in two stages. `load_config()` converts values and refuses one
-  that is malformed on its own terms; `validate_generation_config()` refuses a
+  that is malformed on its own terms. The function `validate_generation_config()` refuses a
   configuration that cannot address an endpoint. Every path that reaches the
-  API passes both; `cli.py --version` and the tests pass neither.
+  API passes both. The command `cli.py --version` and the tests pass neither.
 - No error message quotes a secret. A token is reported as present or absent.
 - An empty or whitespace-only string setting reads as unset, so that a bare
   `NAME=` line in `.env` behaves exactly like the absent line.
 - `.env.example` ships no placeholder credential. An empty value is honest
-  about being unset; a fake token would pass a presence check and fail only
+  about being unset. A fake token would pass a presence check and fail only
   after a generation has been spent.
 
 ### 2.4 Dependencies and I/O
 - Runtime dependencies are declared in `requirements.txt` and pinned to a
   compatible range, so that a future major release cannot break a running
-  service. Add a dependency only when it earns its place; prefer the standard
+  service. Add a dependency only when it earns its place. Prefer the standard
   library otherwise.
 - Always pass `encoding="utf-8"` for a text file operation.
 - Every outbound request carries an explicit timeout, which `GENERATION_TIMEOUT`
@@ -652,7 +652,7 @@ Before a change is proposed, it answers these:
 - Run them with `python -m unittest discover -s tests`.
 - The runner exits `0` only when every test passed, which is what a service
   check or a CI step reads. A passing suite says nothing about the endpoint
-  being reachable; only an actual generation does.
+  being reachable. Only an actual generation does.
 - A fix for a defect arrives with the test that fails without it.
 - Assume unattended execution as a service by default. The process reads its
   configuration from the environment or `.env`, so every required variable is
@@ -661,7 +661,7 @@ Before a change is proposed, it answers these:
   safe to run twice. Check the current state before changing it, rather than
   assuming the state a previous run left behind.
 - The service runs with the privileges its work needs and no more. A step that
-  needs a raised privilege takes it for that step; the process does not run its
+  needs a raised privilege takes it for that step. The process does not run its
   whole body under it.
 
 ### 2.6 Documentation and Versioning
@@ -672,7 +672,7 @@ Before a change is proposed, it answers these:
   that can end the process with more than one status), `Requirements`,
   `Environment Variables` (`config.py` only), `Version History`.
 - `Routes` sits next to `Description` because it says what the module serves,
-  which is part of what it is; `Usage`, `Options` and `Exit Codes` say how it
+  which is part of what it is. `Usage`, `Options` and `Exit Codes` say how it
   is driven, and follow the identifying block.
 - Every setting is documented in three places that must agree: the
   `Environment Variables` block of `config.py` (the name, what it decides,

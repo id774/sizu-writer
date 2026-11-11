@@ -7,8 +7,8 @@
 #  Description:
 #  This test suite covers the two stages of configuration handling.
 #  load_config() converts the environment and refuses a value that is
-#  malformed on its own terms; validate_generation_config() refuses a
-#  configuration that cannot address an endpoint. The suite also pins
+#  malformed on its own terms. The function validate_generation_config()
+#  refuses a configuration that cannot address an endpoint. The suite also pins
 #  the documented defaults, the reading of a blank value as unset, and
 #  the refusal of a legacy OPENAI_* variable, which is reported by name
 #  rather than translated silently into its replacement.

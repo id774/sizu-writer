@@ -21,7 +21,7 @@
 #  Adding a backend is three steps: write a module in this package
 #  exposing a class with complete(), register it in BACKENDS below, and
 #  name the value in GENERATION_BACKENDS of config.py. Nothing else in
-#  the repository has to change; see
+#  the repository has to change. See
 #  doc/DETAILED_DESIGN_GENERATION_API.md.
 #
 #  Author: id774 (More info: https://id774.net)
@@ -31,7 +31,7 @@
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
-#  - Standard library only; a provider module brings its own client
+#  - Standard library only. A provider module brings its own client
 #
 #  Version History:
 #  v1.2 2026-11-11
@@ -121,7 +121,7 @@ def build_provider(config: Config) -> GenerationProvider:
     Raises:
         InternalError: The backend is unknown. config.validate_
             generation_config() refuses that earlier and with a better
-            message; reaching here means the two lists disagree, which
+            message. Reaching here means the two lists disagree, which
             is a fault of this repository and not of the operator.
     """
     loader = BACKENDS.get(config.generation_backend)
@@ -142,7 +142,7 @@ def _log_atom(value: object) -> str:
 
 
 def _log_count(value: object) -> Optional[int]:
-    """ Keep a realistic nonnegative usage integer; never coerce values. """
+    """ Keep a realistic nonnegative usage integer. Never coerce values. """
     return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
 
 
@@ -170,7 +170,7 @@ def log_response(config: Config, result: CompletionResult) -> None:
 
     The elapsed seconds are part of that shape. They measure the whole
     provider SDK call. With retries disabled they can be compared directly
-    with the per-attempt GENERATION_TIMEOUT as an operational margin; with
+    with the per-attempt GENERATION_TIMEOUT as an operational margin. With
     retries enabled they may include several attempts and retry waits, so
     the pair alone does not describe one attempt.
     """

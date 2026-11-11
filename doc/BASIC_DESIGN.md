@@ -2,7 +2,11 @@
 
 Requirements: [`REQUIREMENTS.md`](REQUIREMENTS.md) (2026-08-04).
 
-This document takes the requirements down to units that can be implemented. Detailed design — the body of each function, the fine points of the CSS, the final wording of the prompts — follows the decisions made here. The system is developed in a new repository, and its design philosophy, coding rules and document layout are the ones stated in [`POLICY.md`](POLICY.md).
+This document takes the requirements down to units that can be implemented.
+Detailed design — the body of each function, the fine points of the CSS, the
+final wording of the prompts — follows the decisions made here. The system is
+developed in a new repository, and its design philosophy, coding rules and
+document layout are the ones stated in [`POLICY.md`](POLICY.md).
 
 ---
 
@@ -14,15 +18,18 @@ This document takes the requirements down to units that can be implemented. Deta
 | `sizu-draft` | Says in the name that the output is a draft, not a post | Puts the line this system draws into its name. Second choice |
 | `quiet-writer` | The English reading of the medium | Does not age if the system later serves another medium, but loses what it is for |
 | `sizuka-compose` | Names the medium and stresses assembling | Slightly long |
-| `shizuka-writer` | Hepburn spelling | Overlaps `sizu-writer`; pick one |
+| `shizuka-writer` | Hepburn spelling | Overlaps `sizu-writer`. Pick one |
 
 **`sizu-writer`** is recommended, for three reasons.
 
 - It carries over the name used in the requirements document (`20260804_sizu_writer_requirements.md`).
 - The Python package `sizu_writer` and the systemd unit `sizu-writer.service` follow mechanically.
-- Like `ai-digest`, it is "purpose plus action" in two words, so it does not stand out among the id774 repositories.
+- Like `ai-digest`, it is "purpose plus action" in two words, so it does not
+  stand out among the id774 repositories.
 
-The rest of this document assumes the repository `sizu-writer` and the Python package `sizu_writer`. Changing the name means replacing those two and the file names under `deploy/`.
+The rest of this document assumes the repository `sizu-writer` and the Python
+package `sizu_writer`. Changing the name means replacing those two and the file
+names under `deploy/`.
 
 ---
 
@@ -32,39 +39,73 @@ The rest of this document assumes the repository `sizu-writer` and the Python pa
 
 From requirements 2, 13 and 14, the invariants come first. Neither a setting nor an extension crosses them.
 
-1. Send nothing to the posting site. The only host an HTTP client here talks to is the generation endpoint the configuration names.
+1. Send nothing to the posting site. The only host an HTTP client here talks to
+   is the generation endpoint the configuration names. A redirect from that
+   endpoint is refused and never followed, not even within the same host, so the
+   memo and the token reach no other destination.
 2. Accept no credential of the posting site. It exists neither as a setting nor as a form field.
 3. Bring in no browser automation. `playwright` and `selenium` do not belong in `requirements.txt`.
-4. Keep the API token inside the server process. It appears in no template, no JavaScript, no response header and no error page.
-5. Let no instruction, editing note, internal remark or review result into the generated body. On the screen, the body area and the supporting area are separated structurally, not only visually.
-6. Choose no endpoint implicitly. The base URL, the backend, the token and the model are all required, and a process missing one of them does not start. An endpoint reached because a setting was left blank is an endpoint nobody chose. (Added in the redesign.)
-7. Fall back to no second endpoint. One generation uses one route, so which service received the memo and whose failure ended the run stay answerable. (Added in the redesign.)
+4. Keep the API token inside the server process. It appears in no template, no
+   JavaScript, no response header and no error page.
+5. Let no instruction, editing note, internal remark or review result into the
+   generated body. On the screen, the body area and the supporting area are
+   separated structurally, not only visually.
+6. Choose no endpoint implicitly. The base URL, the backend, the token and the
+   model are all required, and a process missing one of them does not start. An
+   endpoint reached because a setting was left blank is an endpoint nobody
+   chose. (Added in the redesign.)
+7. Fall back to no second endpoint. One generation uses one route, so which
+   service received the memo and whose failure ended the run stay answerable.
+   (Added in the redesign.)
 
 ### 2.2 What is inherited from ai-digest
 
 The new repository also carries a `doc/POLICY.md`, and inherits the following. The one difference follows.
 
-- The header block at the top of each module: Description, Routes (the web application only), the Author / Source Code / License / Contact block, Usage, Options, Exit Codes, Requirements, Environment Variables (`config.py` only), Version History.
+- The header block at the top of each module: Description, Routes (the web
+  application only), the Author / Source Code / License / Contact block, Usage,
+  Options, Exit Codes, Requirements, Environment Variables (`config.py` only),
+  Version History.
 - Comments in English, imperative, short.
-- Settings collected in the `Config` dataclass of `config.py`, read from the environment (optionally from `.env`). `config.py` touches neither the network nor any file but `.env`.
-- `logging` rather than `print`. Logging is configured once, at the entry point, and `INFO`, `WARNING` and `ERROR` keep their usual meanings.
-- The CLI conventions: `-h`/`--help` and `-v`/`--version` through `argparse`, both exiting `0`, and exit codes documented in the module header.
-- The shape of an executable: `#!/usr/bin/env python`, the UTF-8 encoding header, `main() -> int` and `sys.exit(main())`.
+- Settings collected in the `Config` dataclass of `config.py`, read from the
+  environment (optionally from `.env`). `config.py` touches neither the network
+  nor any file but `.env`.
+- `logging` rather than `print`. Logging is configured once, at the entry point,
+  and `INFO`, `WARNING` and `ERROR` keep their usual meanings.
+- The CLI conventions: `-h`/`--help` and `-v`/`--version` through `argparse`,
+  both exiting `0`, and exit codes documented in the module header.
+- The shape of an executable: `#!/usr/bin/env python`, the UTF-8 encoding
+  header, `main() -> int` and `sys.exit(main())`.
 - Runtime dependencies pinned to a compatible range in `requirements.txt`.
 - Tests in `tests/test_*.py`, `unittest` and `unittest.mock` only, with no network and no API call.
-- Module versions as `major.minor`, `minor` carried over before it reaches 10, bumped for a change in behaviour and not for a documentation edit. Repository release versions are independent of them: they are recorded in `doc/VERSIONS`, may be three-level, are what a Git tag carries, and start at v1.0 with v1.0.1 after it. Work that is not released yet takes no version of its own.
+- Module versions as `major.minor`, `minor` carried over before it reaches 10,
+  bumped for a change in behaviour and not for a documentation edit. Repository
+  release versions are independent of them: they are recorded in `doc/VERSIONS`,
+  may be three-level, are what a Git tag carries, and start at v1.0 with v1.0.1
+  after it. Work that is not released yet takes no version of its own.
 - Python 3.9 or later, `str.format()` preferred over an f-string, type hints.
 - Dual licensed under GPLv3 and LGPLv3.
 
-The difference from ai-digest is this. ai-digest keeps the batch (`cli.py`) and the read only viewer (`app.py`) independent, so that a failed batch never takes the site down. Here the API is called inside a web request, so that separation does not hold. Instead, **the generation core (`sizu_writer/`) is independent from Flask, and both `app.py` and `cli.py` call it**. Adjusting a prompt and checking the output can then be done with `cli.py`, without a web server.
+The difference from ai-digest is this. ai-digest keeps the batch (`cli.py`) and
+the read only viewer (`app.py`) independent, so that a failed batch never takes
+the site down. Here the API is called inside a web request, so that separation
+does not hold. Instead, **the generation core (`sizu_writer/`) is independent
+from Flask, and both `app.py` and `cli.py` call it**. Adjusting a prompt and
+checking the output can then be done with `cli.py`, without a web server.
 
 ### 2.3 No state
 
-Requirement 11 does not ask for persistence. This design uses that: **the server holds neither a session nor a temporary file**.
+Requirement 11 does not ask for persistence. This design uses that: **the server
+holds neither a session nor a temporary file**.
 
-- The memo and the current body, both needed for a regeneration, ride on the result form as a `textarea` and a `hidden` field, and travel with each request.
-- So Flask's `SECRET_KEY`, a session cookie and a store shared between workers are all unnecessary. Adding gunicorn workers or restarting the process changes nothing.
-- Persistence is not implemented. Section 10.3 records only the boundary that a future persistence design must preserve.
+- The memo and the current body, both needed for a regeneration, ride on the
+  result form as a `textarea` and a `hidden` field, and travel with each
+  request.
+- So Flask's `SECRET_KEY`, a session cookie and a store shared between workers
+  are all unnecessary. Adding gunicorn workers or restarting the process changes
+  nothing.
+- Persistence is not implemented. Section 10.3 records only the boundary that a
+  future persistence design must preserve.
 
 ---
 
@@ -91,7 +132,8 @@ Requirement 11 does not ask for persistence. This design uses that: **the server
                      [cli.py]  <- maintenance and prompt work
 ```
 
-The generation core is itself in two layers, so that the transport can change without touching what a draft has to look like:
+The generation core is itself in two layers, so that the transport can change
+without touching what a draft has to look like:
 
 ```
 [sizu_writer/generator.py]        messages, and the object it expects back
@@ -104,7 +146,11 @@ The generation core is itself in two layers, so that the transport can change wi
                                   OpenAI compatible service
 ```
 
-- Apache and Flask are connected by **a reverse proxy in front of gunicorn**. Requirement 5.1 also allows `mod_wsgi`, but `mod_wsgi` ties the Apache build to a Python version and cannot replace the application without restarting Apache. Behind a reverse proxy, `systemctl restart sizu-writer` is enough, which matches the operation of ai-digest.
+- Apache and Flask are connected by **a reverse proxy in front of gunicorn**.
+  Requirement 5.1 also allows `mod_wsgi`, but `mod_wsgi` ties the Apache build
+  to a Python version and cannot replace the application without restarting
+  Apache. Behind a reverse proxy, `systemctl restart sizu-writer` is enough,
+  which matches the operation of ai-digest.
 - gunicorn listens on `127.0.0.1` only, so nothing reaches it directly from outside.
 - The Flask development server is for development. The `__main__` block of `app.py` binds `127.0.0.1` as well.
 
@@ -114,11 +160,18 @@ One generation can take tens of seconds, so the timeouts widen from the inside o
 
 | Layer | Setting | Default | Why |
 | --- | --- | --- | --- |
-| Generation client | `GENERATION_TIMEOUT` | 120s | Timeout applied to each SDK request attempt. With zero retries it is the only attempt; retries add later attempts under the same per-attempt limit |
-| gunicorn | `--timeout` | 240s | Room above the default single client request; raising retries requires revisiting this value |
+| Generation client | `GENERATION_TIMEOUT` | 120s | Timeout applied to each connect, write, read and pool wait of an SDK request attempt. The read wait is the gap between chunks, so it is not a limit on the whole operation |
+| gunicorn | `--timeout` | 240s | Room above the default single client request. Raising retries requires revisiting this value |
 | Apache | `ProxyTimeout` | 300s | The outermost layer. A request cut here never reaches the Flask error handling and returns a bare 504 |
 
-Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values. Up to `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)` seconds may be spent inside the request attempts themselves, and the SDK may additionally wait between attempts for retry backoff or an accepted `Retry-After`. The product is therefore the request-attempt timeout budget, not a wall-clock upper bound. With the default of 0 retries there is no retry wait, so 120 seconds sits comfortably inside gunicorn's 240. The exact SDK retry-delay constants are dependency-owned behavior and are not duplicated in this design.
+Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache
+values. The client timeout is not a bound on the total time of an operation.
+Later attempts, the SDK's retry backoff, an accepted `Retry-After` and a
+response that keeps arriving in chunks all lengthen it, so no product of the
+timeout and the retry count is used as an expected or maximum run time. With the
+default of 0 retries there is no retry wait, and the 240 seconds of gunicorn is
+a margin over the usual generation, not a guarantee. The exact SDK retry-delay
+constants are dependency-owned behavior and are not duplicated in this design.
 
 ---
 
@@ -176,7 +229,10 @@ Raising `GENERATION_MAX_RETRIES` means revisiting the gunicorn and Apache values
     └── COPYING.LESSER
 ```
 
-`prompts/` sits outside the package so that requirement 10.3, keeping the prompt out of the application code, holds in operation too. Editing a prompt needs no reinstall, and pointing `PROMPT_DIR` elsewhere runs the system on a different set of prompts.
+`prompts/` sits outside the package so that requirement 10.3, keeping the prompt
+out of the application code, holds in operation too. Editing a prompt needs no
+reinstall, and pointing `PROMPT_DIR` elsewhere runs the system on a different
+set of prompts.
 
 ---
 
@@ -197,7 +253,9 @@ class Draft:
     notices: List[str]              # what the inspection found; never mixed into the body
 ```
 
-`notices` carries findings such as "a `#` heading was demoted to `##`" or "a formulaic closing was detected". **They are shown outside the body area and are not part of what is copied** (requirement 6.3).
+`notices` carries findings such as "a `#` heading was demoted to `##`" or "a
+formulaic closing was detected". **They are shown outside the body area and are
+not part of what is copied** (requirement 6.3).
 
 ### 5.2 `sizu_writer/errors.py`
 
@@ -224,10 +282,18 @@ class SizuWriterError(Exception):
 
 These properties matter.
 
-- **Only `user_message` reaches the screen.** Internal causes, tracebacks, prompt paths, the endpoint host and the model name may remain in the server log for diagnosis. The API token, the memo, the prompts and the generated text never appear in the log.
-- Each error answer carries an eight digit **reference id** (random per request), which also goes to the log. The user only has to quote "error id: 3f9c1a72" for the operator to find the entry.
-- An authentication failure (401 / 403) and a rate limit (429) are not distinguished for the user. Writing a misconfiguration onto the screen is leaking internal information. The log does distinguish them.
-- The provider logs an upstream status where it is known; `UpstreamStatusError` itself does not carry the status code.
+- **Only `user_message` reaches the screen.** Internal causes, tracebacks,
+  prompt paths, the endpoint host and the model name may remain in the server
+  log for diagnosis. The API token, the memo, the prompts and the generated text
+  never appear in the log.
+- Each error answer carries an eight digit **reference id** (random per
+  request), which also goes to the log. The user only has to quote "error id:
+  3f9c1a72" for the operator to find the entry.
+- An authentication failure (401 / 403) and a rate limit (429) are not
+  distinguished for the user. Writing a misconfiguration onto the screen is
+  leaking internal information. The log does distinguish them.
+- The provider logs an upstream status where it is known. `UpstreamStatusError`
+  itself does not carry the status code.
 
 ### 5.3 `sizu_writer/prompts.py`
 
@@ -251,7 +317,7 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str, direction
   pass one keeps its current behavior unchanged. `{{direction}}` is not a
   required placeholder of the loader: a custom `PROMPT_DIR` that does not use
   it keeps working exactly as it did before this placeholder existed. The
-  optional Web Direction (section 7.2) is not a second memo; it shapes how the
+  optional Web Direction (section 7.2) is not a second memo. It shapes how the
   memo is handled for one request and carries no new fact of its own.
 - `load_prompt()` reads each prompt file on every generation, so prompt edits
   take effect without a restart. There is no prompt cache or built-in fallback.
@@ -264,26 +330,31 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str, direction
 
 | Section | Requirement | Content |
 | --- | --- | --- |
-| Role and medium | 2, 7.1 | A piece of a few paragraphs for Shizuka na Internet; neither a stretched microblog post nor a shrunk article |
+| Role and medium | 2, 7.1 | A piece of a few paragraphs for Shizuka na Internet. Neither a stretched microblog post nor a shrunk article |
 | What this is not | 3 | Not a primary source, a draft, material, a systematic essay, a survey, a how-to or an explainer. No point, evidence or generalization added for a future article |
-| The grain of the material | 3 | What one line would exhaust stays short; what an article would argue is written as the memo carries it. Unfinished, inconclusive and personal are not faults |
+| The grain of the material | 3 | What one line would exhaust stays short. What an article would argue is written as the memo carries it. Unfinished, inconclusive and personal are not faults |
 | Stance | 7.2 | A familiar theme is not a discovery. Sort the thinking out, check where the interest lies, separate the points, state what can and cannot be said |
 | Keeping the material | 7.3 | Keep the scene, the subject, the wording, the hesitation, the discomfort, the question, the unsettled. Invent no experience, emotion, fact or causal link |
 | What you do not look up | 7.10 | No research, no references. What has not been checked is not stated as established |
 | How much to explain | 7.4 | Background only as far as the text requires. No generalities, systems, glossary, history, case lists, bibliography or systematic argument. No move to a wide subject beyond what the observation supports |
 | Shape | 7.9 | Three to six paragraphs, fewer when the material is short. The usual order given, to follow the material rather than be applied mechanically |
-| Register | 7.5 | Desu/masu throughout, never the plain form, whichever form the memo uses; the memo's voice followed in every other respect. Not academic, advertising or social media. Avoid what is typical of generated text. No bait, no conclusion first, no keyword repetition, no call to act |
+| Register | 7.5 | Desu/masu throughout, never the plain form, whichever form the memo uses. The memo's voice followed in every other respect. Not academic, advertising or social media. Avoid what is typical of generated text. No bait, no conclusion first, no keyword repetition, no call to act |
 | Opening | 7.6 | Start from a concrete scene, subject, word or sensation. The forbidden openings are listed |
 | Ending | 7.7 | No manufactured lesson, recommendation or conclusion. The undecided stays undecided, without reading as abandoned. The forbidden closings are listed |
-| Markdown | 7.8 | No heading in a short text; `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. A link only where the reader needs it, no bibliography. A space between full width characters and ASCII |
-| Titles | 8 | Stay close to the scene, the subject, the words, the question, the point of attention, where the thinking started. No word for search, spread or clicks. Not settled looking, not symbolic, literary or sensational; a date when nothing else is natural |
+| Markdown | 7.8 | No heading in a short text. `##` and `###` only when needed, never `#`. Lists, quotes and emphasis only where needed. A link only where the reader needs it, no bibliography. A space between full width characters and ASCII |
+| Titles | 8 | Stay close to the scene, the subject, the words, the question, the point of attention, where the thinking started. No word for search, spread or clicks. Not settled looking, not symbolic, literary or sensational. A date when nothing else is natural |
 | What matters most | 7.11 | The five points in order, the first three never given up for readability or notation |
 | Output format | 5.3 | Follow the given JSON schema, keeping the body and the titles apart. No instruction or annotation inside the body |
 | Before you answer | 3, 7 | A short recap of the checks that decide whether the answer is usable at all |
 
-Length is written as an instruction that **sets no lower bound**: "a few paragraphs to a few thousand characters as a guide; do not add background, generalities, examples or a conclusion to reach a length; what holds in a short text stays short" (requirement 7.1).
+Length is written as an instruction that **sets no lower bound**: "a few
+paragraphs to a few thousand characters as a guide. Do not add background,
+generalities, examples or a conclusion to reach a length. What holds in a short
+text stays short" (requirement 7.1).
 
-`prompts/titles_system.md` takes only the title section and the position of the medium from the table above, and says nothing about writing the body, because the body is already settled when the titles alone are regenerated.
+`prompts/titles_system.md` takes only the title section and the position of the
+medium from the table above, and says nothing about writing the body, because
+the body is already settled when the titles alone are regenerated.
 
 ### 5.4 `sizu_writer/generator.py`
 
@@ -296,7 +367,7 @@ def regenerate_titles(input_text: str, body: str, config: Config, direction: str
 ```
 
 `generate_draft()` always computes fresh notices from the body `normalize_body()`
-returns; it never receives a `notices` argument. `regenerate_titles()` does not
+returns. It never receives a `notices` argument. `regenerate_titles()` does not
 touch the body, so it cannot recompute the notices `normalize_body()` found for
 it earlier — an already-demoted heading, for instance, cannot be rediscovered
 from the settled body. It therefore accepts the caller's existing `notices` and
@@ -318,7 +389,7 @@ nothing about HTTP, authentication, the base URL or SDK exceptions.
 #### 5.4.1 Calling the provider
 
 `_complete()` calls `build_provider(config).complete(messages, config)`.
-`GENERATION_BACKEND` selects the provider; the current accepted value is
+`GENERATION_BACKEND` selects the provider. The current accepted value is
 `openai-compatible`.
 
 The OpenAI-compatible provider sends `model`, `messages` and `max_tokens` on
@@ -328,6 +399,13 @@ Under `GENERATION_RESPONSE_MODE=json-object` it also sends
 `GENERATION_RESPONSE_MODE=prompt-json` it sends no `response_format` parameter.
 There is no automatic retry with another response mode and no fallback to a
 second endpoint.
+
+The provider builds one SDK client for each operation and passes it an HTTP
+client that does not follow redirects. A response hook removes `x-should-retry`
+from 3xx responses only, so the SDK cannot send a redirected request again. The
+client is closed after the operation, whether it succeeded or failed. A redirect
+response is therefore a failed status, not a success, and no request is sent to
+its `Location`.
 
 The provider maps SDK timeout, connection and status failures to the repository's
 upstream exception types. It also refuses an answer with no choice, no usable
@@ -341,7 +419,7 @@ subclass it raises, and `app.py` or `cli.py` logs that diagnostic once.
 
 Provider log fields are sanitized at the logging boundary. Metadata atoms
 must be ASCII tokens of 1 to 128 characters, using letters, digits and the
-specified punctuation; unsafe values are displayed as `-`. Usage counters
+specified punctuation. Unsafe values are displayed as `-`. Usage counters
 must be exact nonnegative integers no larger than 2^63 - 1, or they are
 logged as `None`. Invalid HTTP statuses and non-finite measurements become
 `-`. Ordinary valid identifiers, statuses and counts are retained.
@@ -373,8 +451,8 @@ the first configured number of remaining alternatives is retained.
 
 Before title-only regeneration builds a prompt, `regenerate_titles()` requires
 the settled body to be a string with at least one non-whitespace character. An
-unusable body raises `EmptyBodyError` before message assembly or a provider call;
-it is never treated as a request to generate a whole draft.
+unusable body raises `EmptyBodyError` before message assembly or a provider call.
+It is never treated as a request to generate a whole draft.
 
 The check may inspect stripped text to decide whether content exists, but it does
 not strip or normalize the body itself. The exact body is handed to
@@ -402,7 +480,7 @@ Body validation runs in this order:
 
 #### 5.4.4 Retries
 
-Retries belong to the SDK through `GENERATION_MAX_RETRIES`; there is no retry
+Retries belong to the SDK through `GENERATION_MAX_RETRIES`. There is no retry
 loop in `generator.py` or in the provider. The default is zero retries, so a
 normal screen action or CLI generation spends one request. A retry repeats the
 same configured request and never changes the endpoint or response mode. The
@@ -423,7 +501,7 @@ The rewrites are:
    body, there is no separate inner fence, and its info string is empty,
    `markdown` or `md` (case-insensitive). A single fenced block with any other
    info string is literal content and is kept with its fences. A fence marker
-   is recognized only up to 3 leading ASCII spaces of indentation; a marker
+   is recognized only up to 3 leading ASCII spaces of indentation. A marker
    indented 4 spaces or more is indented code, not a fence boundary, and
    never opens or closes fence tracking.
 2. Demote a level-one Markdown heading to level two outside backtick and tilde
@@ -450,8 +528,8 @@ The Flask application. Four routes.
 | Method | Path | Role |
 | --- | --- | --- |
 | GET | `/` | Input screen |
-| POST | `/generate` | Generate and render the result; `mode` selects a whole draft or the titles only |
-| GET | `/healthz` | Liveness; no API call |
+| POST | `/generate` | Generate and render the result. The `mode` field selects a whole draft or the titles only |
+| GET | `/healthz` | Liveness. No API call |
 | GET | `/static/<file>` | CSS and JS |
 
 - Before the form is read, the application checks Origin when
@@ -460,15 +538,25 @@ The Flask application. Four routes.
   request reference has been established and before memo/Direction parsing
   or generation.
 - Generation and regeneration share one endpoint, so the form always posts to
-  the same place. `mode=titles` always means title-only regeneration; the
+  the same place. `mode=titles` always means title-only regeneration. The
   presence of `body` does not turn that operation into a full generation.
   Missing or unrecognized `mode` keeps the existing full-generation behavior,
   while a missing or blank title body is refused by the generation core.
-- The POST renders the result directly, without PRG. The server holds no state, so there is nothing to carry to a redirect target. Reloading the result asks for a resubmission, and a resubmission is "regenerate from the same input", which destroys nothing.
-- `SizuWriterError` is caught by an `errorhandler`. A correctable 400 response is rendered on `index.html`; other known application errors are rendered on `error.html`, each with `user_message` plus the reference id. An unexpected exception is caught by its own `errorhandler(Exception)`, logged once and rendered through the same `_render_sizu_error()` helper as a generic `InternalError`, without calling the known-error handler a second time. `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left alone, so no traceback reaches the screen.
+- The POST renders the result directly, without PRG. The server holds no state,
+  so there is nothing to carry to a redirect target. Reloading the result asks
+  for a resubmission, and a resubmission is "regenerate from the same input",
+  which destroys nothing.
+- `SizuWriterError` is caught by an `errorhandler`. A correctable 400 response
+  is rendered on `index.html`. Other known application errors are rendered on
+  `error.html`, each with `user_message` plus the reference id. An unexpected
+  exception is caught by its own `errorhandler(Exception)`, logged once and
+  rendered through the same `_render_sizu_error()` helper as a generic
+  `InternalError`, without calling the known-error handler a second time.
+  `DEBUG` is off in production and `app.config["PROPAGATE_EXCEPTIONS"]` is left
+  alone, so no traceback reaches the screen.
 - Each error handler logs its failure exactly once, before rendering. A known
   `SizuWriterError` logs `type(error).__name__`, the reference id and
-  `error.diagnostic or error.user_message`; a library module that raised the
+  `error.diagnostic or error.user_message`. A library module that raised the
   error does not log it a second time (section 5.4 and 5.4.1). An unexpected
   exception logs the exception's class name and its traceback stack frames
   through `traceback.format_tb()`, never `str(error)`, `repr(error)` or
@@ -476,7 +564,7 @@ The Flask application. Four routes.
 - `error.html` shows the generation retry form (the memo, the Direction, the
   hidden body, the notices and the mode-appropriate button) only when
   `retryable` is true. The known-error and unexpected-error handlers set it to
-  whether the failing request was a `POST` to `/generate`; the routing
+  whether the failing request was a `POST` to `/generate`. The routing
   (`HTTPException`) and oversized-request (`RequestEntityTooLarge`) handlers
   always set it to `False`, since there is no generation attempt to retry.
   When `retryable` is false the page offers only a link back to `/`.
@@ -484,7 +572,7 @@ The Flask application. Four routes.
   passes `mode=titles`, the exact body and the existing notices to
   `error.html`, so the user's retry remains title-only and does not lose the
   notices attached to that body. A full-generation failure retries with
-  `mode=full`. Neither path is an automatic retry; a new request is made only
+  `mode=full`. Neither path is an automatic retry. A new request is made only
   when the user presses the button.
 - A correctable memo validation error (an empty or overlong memo) on a
   title-only request is rendered on `index.html` the same way: when the
@@ -494,8 +582,14 @@ The Flask application. Four routes.
   cannot run regardless of the memo, so the screen falls back to `mode=full`.
   Neither case triggers `generate_draft()` or `regenerate_titles()` while
   handling the error.
-- `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST from reaching the application logic.
-- An address the application does not serve answers 404, and a method an address does not accept answers 405, each on `error.html` with wording of its own. Flask looks a handler up along the class hierarchy, so without one for `HTTPException` a routing failure reached the handler for `Exception`: a browser asking for `/favicon.ico` was logged as a traceback and answered 500. A page that is not there is not a failure of the server.
+- `MAX_CONTENT_LENGTH` is set in `app.py` to 1 MiB and keeps an oversized POST
+  from reaching the application logic.
+- An address the application does not serve answers 404, and a method an address
+  does not accept answers 405, each on `error.html` with wording of its own.
+  Flask looks a handler up along the class hierarchy, so without one for
+  `HTTPException` a routing failure reached the handler for `Exception`: a
+  browser asking for `/favicon.ico` was logged as a traceback and answered 500.
+  A page that is not there is not a failure of the server.
 - The optional Direction is read the same way the memo is: the raw form value
   is measured with the same browser-equivalent textarea length used for
   `MAX_INPUT_CHARS`, and a value over `MAX_POLICY_CHARS` raises
@@ -510,7 +604,9 @@ The Flask application. Four routes.
 
 ### 5.7 `cli.py`
 
-Calls the same core without the web. Used for prompt work, for verifying a compatible endpoint and for acceptance checks. Following POLICY: `main() -> int`, `sys.exit(main())`, `-h` and `-v`.
+Calls the same core without the web. Used for prompt work, for verifying a
+compatible endpoint and for acceptance checks. Following POLICY:
+`main() -> int`, `sys.exit(main())`, `-h` and `-v`.
 
 ```sh
 python cli.py generate --input memo.txt          # read a file, print the result
@@ -538,16 +634,21 @@ reset_reference_id(token: Token) -> None
 
 `app.py` sets the reference id at the start of a request and resets it to the
 prior context on request teardown. The provider no longer logs a failure of
-its own (section 5.4.1); it carries a safe diagnostic on the `SizuWriterError`
+its own (section 5.4.1). It carries a safe diagnostic on the `SizuWriterError`
 it raises, and `app.py` is the one layer that logs it, next to this same
 reference id, so the log line and the error page shown for the same request
 always carry the same reference. The module keeps only the reference id: it
 holds no API token, memo, prompt or generated text, and it imports neither
 Flask nor a provider SDK.
 
-As in ai-digest, the main settings can be overridden by options of the same name (`--model`, `--timeout`, `--prompt-dir`). **No option exists for a credential**: a command line is readable by others.
+As in ai-digest, the main settings can be overridden by options of the same name
+(`--model`, `--timeout`, `--prompt-dir`). **No option exists for a credential**:
+a command line is readable by others.
 
-Exit codes, as POLICY prescribes: `0` success, including `-h` and `-v`; `1` failure, a refused setting or a generation that produced no draft; `2` a command line argparse rejected. The list is repeated in the header of `cli.py`.
+Exit codes, as POLICY prescribes: `0` means success, including `-h` and `-v`.
+`1` means failure, a refused setting or a generation that produced no draft. `2`
+means a command line that argparse rejected. The list is repeated in the header
+of `cli.py`.
 
 ---
 
@@ -555,7 +656,7 @@ Exit codes, as POLICY prescribes: `0` success, including `-h` and `-v`; `1` fail
 
 `config.py` is the single implementation source for runtime setting names,
 defaults and validation. The operator-facing copy is the Configuration table in
-README.md; this basic design does not maintain a second table of the same current
+README.md. This basic design does not maintain a second table of the same current
 defaults.
 
 The endpoint identity is explicit: `GENERATION_BACKEND`,
@@ -570,7 +671,7 @@ before a generation request can be made and have no implicit endpoint fallback.
 the same browser-textarea length definition, checked before a generation
 request is made. `REQUIRE_SAME_ORIGIN` is a strict boolean, default true.
 `load_config()` accepts `1`/`0`, `true`/`false`, `yes`/`no` and `on`/`off`
-case-insensitively; blank means the default and any other value is refused.
+case-insensitively. Blank means the default and any other value is refused.
 It controls only the Web `POST /generate` Origin guard and is not part of
 `validate_generation_config()`.
 
@@ -580,10 +681,17 @@ selected endpoint. This separation lets `cli.py --version` and the offline test
 suite run without a token while every path that reaches generation validates the
 endpoint first.
 
-Legacy `OPENAI_*` settings are refused by `config.py`; they are not translated
+Legacy `OPENAI_*` settings are refused by `config.py`. They are not translated
 into the current names.
 
-`PORT` configures the development server and the `Procfile` gunicorn bind. The `Procfile` reads it with the shell fallback `${PORT:-8090}`, so an unset `PORT` still binds gunicorn to the documented default of 8090 instead of failing with an empty bind address. The bundled systemd unit and Apache configuration deliberately carry explicit matching port values instead of interpolating this setting; `PORT` never rewrites those files. A deployment that chooses another port changes both explicit deployment values to the same port; this is deployment configuration, not runtime rewriting by `config.py`.
+`PORT` configures the development server and the `Procfile` gunicorn bind. The
+`Procfile` reads it with the shell fallback `${PORT:-8090}`, so an unset `PORT`
+still binds gunicorn to the documented default of 8090 instead of failing with
+an empty bind address. The bundled systemd unit and Apache configuration
+deliberately carry explicit matching port values instead of interpolating this
+setting. `PORT` never rewrites those files. A deployment that chooses another
+port changes both explicit deployment values to the same port. This is
+deployment configuration, not runtime rewriting by `config.py`.
 
 ---
 
@@ -592,23 +700,33 @@ into the current names.
 ### 7.1 Shared
 
 - `base.html` carries `index.html`, `result.html` and `error.html`, as in ai-digest.
-- The CSS uses system fonts only and makes no external request. A `max-width` and a single column serve both a phone and a desktop (requirement 10.4). One breakpoint, stacking the buttons on a narrow screen, is enough.
-- The page declares the light color scheme, and every foreground color it relies on is stated beside its background rather than left to a system color. A phone in dark appearance otherwise renders the form controls with its own colors, which is what put white button labels on the near-white button background.
-- The generation / regeneration submit button (`button[type="submit"]`, carrying `name="mode"`) is styled as the primary action on every screen it appears on: a filled color pair, a larger touch target than the generic button, and no reliance on hover to be found. Copy and Clear stay the generic secondary button. This is a CSS-only distinction; the submit-state and `mode`-handling behavior below is unchanged by it.
+- The CSS uses system fonts only and makes no external request. A `max-width`
+  and a single column serve both a phone and a desktop (requirement 10.4). One
+  breakpoint, stacking the buttons on a narrow screen, is enough.
+- The page declares the light color scheme, and every foreground color it relies
+  on is stated beside its background rather than left to a system color. A phone
+  in dark appearance otherwise renders the form controls with its own colors,
+  which is what put white button labels on the near-white button background.
+- The generation / regeneration submit button (`button[type="submit"]`, carrying
+  `name="mode"`) is styled as the primary action on every screen it appears on:
+  a filled color pair, a larger touch target than the generic button, and no
+  reliance on hover to be found. Copy and Clear stay the generic secondary
+  button. This is a CSS-only distinction. The submit-state and `mode`-handling
+  behavior below is unchanged by it.
 - The only JavaScript file is `copy.js`. Generation, regeneration and
   navigation are plain HTML forms and links, and stay usable with JavaScript
   disabled. What is JavaScript-only, and therefore lost without it, is the
   copy buttons, the Clear button, the character count, the submit
-  disable/waiting state and the post body's automatic growth; the browser's
+  disable/waiting state and the post body's automatic growth. The browser's
   own scrolling and resizing of a `textarea` remain available regardless.
 - After a generation submit button is pressed, `copy.js` disables every submit
   button in that form and shows a "Generating..." waiting state, to prevent a
-  double submission (with JavaScript only; without it the submission still
+  double submission (with JavaScript only. Without it the submission still
   works). Because a disabled button's `name=value` is dropped from a form
   submission, the clicked button's `mode` value is copied into a hidden field
   before it is disabled, so the disable/waiting behavior does not change
   whether a full or a title-only generation was requested. The first submit
-  still reaches the server as a native form submission; only a second submit
+  still reaches the server as a native form submission. Only a second submit
   on the same form, while the first is still in flight, is suppressed.
 
 ### 7.2 Input screen (`/`)
@@ -617,7 +735,7 @@ into the current names.
 | --- | --- |
 | Page title | The name of the service and a one line description |
 | Memo field | `<textarea name="input_text">`, several paragraphs, about 12 rows initially, resizable, `maxlength` of `MAX_INPUT_CHARS`. The limit follows the textarea value length: UTF-16 code units after newline normalization. |
-| Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the memo. JavaScript-only; without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
+| Character count | The current textarea length and `MAX_INPUT_CHARS`, as `<length> / <limit>` below the field. `copy.js` uses the browser string length, sets it on page load and every `input` event, and resets it when Clear empties the memo. JavaScript-only. Without it the field still carries its `maxlength` and the server still checks. The server uses the same UTF-16-code-unit count with textarea newlines normalized, so the display, native limit and authoritative validation use one length definition. |
 | Direction field | `<textarea name="direction">`, below the memo field, labelled `Direction (optional)`, a few rows, resizable, `maxlength` of `MAX_POLICY_CHARS`, using the same length definition as the memo field. Blank is the ordinary case. |
 | Direction character count | The same `<length> / <limit>` hook as the memo field's, using the shared `data-character-count-target` mechanism of `copy.js` against `MAX_POLICY_CHARS`, and likewise reset to `0 / MAX_POLICY_CHARS` when Clear empties the Direction. |
 | Generate button | `<button name="mode" value="full">` |
@@ -625,22 +743,35 @@ into the current names.
 
 ### 7.3 Result screen (the answer of `/generate`)
 
-From top to bottom. **What is posted and what merely supports it are separated visually and in the DOM** (requirement 10.4).
+From top to bottom. **What is posted and what merely supports it are separated
+visually and in the DOM** (requirement 10.4).
 
 1. **The leading title**: a label, the title, a copy button beside it.
 2. **Other candidates**: a title and its own copy button per row. The section disappears when there are none.
 3. **Regenerate the titles**: `<button name="mode" value="titles">`, leaving the body as it is.
 4. **The post body**: a heading, then a `readonly` `<textarea>` holding the Markdown as it is.
-   - `readonly` for three reasons: line breaks and Markdown are not lost to visual rendering; the text can be selected by hand when a copy button fails (requirement 9.3); and no label or explanation can slip in structurally (requirement 6.3).
+   - `readonly` for three reasons: line breaks and Markdown are not lost to
+     visual rendering. The text can be selected by hand when a copy button fails
+     (requirement 9.3), and no label or explanation can slip in structurally
+     (requirement 6.3).
    - It grows with the content, to minimize scrolling: `copy.js` sets its
      height to its `scrollHeight` on page load and recalculates it for every
-     field marked `data-auto-grow` on a viewport resize. JavaScript-only;
-     without it the fixed `rows="24"` and the browser's own scrolling and
+     field marked `data-auto-grow` on a viewport resize. JavaScript-only.
+     Without it the fixed `rows="24"` and the browser's own scrolling and
      resizing are the fallback.
 5. **Copy the body**: copies the value of the textarea only.
 6. **Notices**: outside the body area, below it. Empty means hidden.
 7. **Regenerate the whole draft**: `<button name="mode" value="full">`.
-8. **The memo**: inside a `<details>`, an editable `<textarea name="input_text">` holding this run's input, with the same `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. The same browser/server length definition applies here. Editing it and regenerating avoids a trip back to the input screen. Server-side validation applies to it exactly as it does to the input screen. Below it, inside the same `<details>`, an editable `<textarea name="direction">` holds this run's Direction with the same `maxlength` of `MAX_POLICY_CHARS` and the same character-count hook as the input screen's Direction field. A "start a new one" link (`GET /`) sits next to it (requirement 9.2).
+8. **The memo**: inside a `<details>`, an editable
+   `<textarea name="input_text">` holding this run's input, with the same
+   `maxlength` of `MAX_INPUT_CHARS` as the input screen's memo field. The same
+   browser/server length definition applies here. Editing it and regenerating
+   avoids a trip back to the input screen. Server-side validation applies to it
+   exactly as it does to the input screen. Below it, inside the same
+   `<details>`, an editable `<textarea name="direction">` holds this run's
+   Direction with the same `maxlength` of `MAX_POLICY_CHARS` and the same
+   character-count hook as the input screen's Direction field. A "start a new
+   one" link (`GET /`) sits next to it (requirement 9.2).
 9. **Supporting information**: the model name and the time of generation, in small type.
 
 What the result form carries for a regeneration:
@@ -648,9 +779,9 @@ What the result form carries for a regeneration:
 | Field | Kind | Use |
 | --- | --- | --- |
 | `input_text` | `textarea` (inside the details) | Sent by both regenerations |
-| `direction` | `textarea` (inside the details) | Sent by both regenerations; blank means no additional instruction |
+| `direction` | `textarea` (inside the details) | Sent by both regenerations. Blank means no additional instruction |
 | `body` | `hidden` | The current body, handed to the model when only the titles are regenerated |
-| `notice` | `hidden`, zero or more | The current body's notices; passed to `regenerate_titles()` so a title-only regeneration keeps them, and ignored by `generate_draft()` on a full regeneration |
+| `notice` | `hidden`, zero or more | The current body's notices. Passed to `regenerate_titles()` so a title-only regeneration keeps them, and ignored by `generate_draft()` on a full regeneration |
 | `mode` | The value of the submit button | `full` / `titles` |
 
 ### 7.4 Copying (`copy.js`)
@@ -665,8 +796,12 @@ click
      failure -> show "Could not copy. Select the text and copy it by hand." and keep the selection
 ```
 
-- Over HTTP (not a secure context) `navigator.clipboard` is unavailable, so the fallback is required. Publication assumes HTTPS, but the system stays usable over HTTP on a LAN.
-- What is copied is the `value` (a `textarea`) or the `textContent` (a title) of the element named by `data-copy-target`. A label, a button caption or a notice lies outside that element and cannot be copied.
+- Over HTTP (not a secure context) `navigator.clipboard` is unavailable, so the
+  fallback is required. Publication assumes HTTPS, but the system stays usable
+  over HTTP on a LAN.
+- What is copied is the `value` (a `textarea`) or the `textContent` (a title) of
+  the element named by `data-copy-target`. A label, a button caption or a notice
+  lies outside that element and cannot be copied.
 
 ### 7.5 Errors
 
@@ -681,7 +816,7 @@ click
 - An error while processing a `POST /generate` renders `error.html` with its
   generation retry form, keeping the last input, Direction and notices. A
   title-only failure also keeps the exact body and renders a `mode=titles`
-  button labelled "Regenerate the titles only"; a full-generation failure
+  button labelled "Regenerate the titles only". A full-generation failure
   renders `mode=full` and "Generate once more". Retrying therefore repeats
   the failed operation instead of changing its scope, with the same
   Direction reused.
@@ -703,11 +838,17 @@ click
 
 ### 8.1 Security
 
-- The generation API token comes from the environment of the server process (or from `.env`, mode `600`, owned by the service user). It is not handed to a template. `Config.__repr__` hides it.
-- When published, Apache terminates HTTPS. Basic authentication, IP restriction and a VPN are operational choices; `deploy/sizu-writer.conf` holds a commented template.
+- The generation API token comes from the environment of the server process (or
+  from `.env`, mode `600`, owned by the service user). It is not handed to a
+  template. `Config.__repr__` hides it.
+- When published, Apache terminates HTTPS. Basic authentication, IP restriction
+  and a VPN are operational choices. The file `deploy/sizu-writer.conf` holds a
+  commented template.
 - gunicorn listens on `127.0.0.1` only.
 - `MAX_CONTENT_LENGTH` and `MAX_INPUT_CHARS` bound the input.
-- The body is shown as the value of a `textarea`, so with Jinja2 autoescaping no HTML from the model is ever executed. **Rendering model output with `|safe` is forbidden by design.**
+- The body is shown as the value of a `textarea`, so with Jinja2 autoescaping no
+  HTML from the model is ever executed. **Rendering model output with `|safe` is
+  forbidden by design.**
 - Rate limiting is not implemented in the application: it cannot count across
   gunicorn workers and would not hold. Use Apache request controls such as
   `mod_qos`, another shared request limiter, or access control such as
@@ -722,7 +863,7 @@ click
   guard. No `X-Forwarded-Proto`, `ProxyFix`, `Referer` fallback, session,
   cookie or CSRF token is introduced.
 - The guard logs only the fixed reason `missing Origin`, `invalid Origin` or
-  `foreign Origin`; raw Origin and Host values are not logged.
+  `foreign Origin`. Raw Origin and Host values are not logged.
 
 ### 8.2 Availability
 
@@ -743,16 +884,25 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-- `Restart=always` brings the process back, and `systemctl enable` starts it after a reboot (requirement 10.2).
+- `Restart=always` brings the process back, and `systemctl enable` starts it
+  after a reboot (requirement 10.2).
 - `/healthz` answers immediately without calling the API, so monitoring costs nothing.
-- On an API failure there is no subsequent step; the error is returned and that is the end. Retrying is the user's decision (requirement 10.2).
+- On an API failure there is no subsequent step. The error is returned and that
+  is the end. Retrying is the user's decision (requirement 10.2).
 
 ### 8.3 Maintainability
 
-- The prompts live outside the code (`prompts/*.md`). The model name, the timeout and the output limit are environment variables (section 6).
+- The prompts live outside the code (`prompts/*.md`). The model name, the
+  timeout and the output limit are environment variables (section 6).
 - The HTML templates, the CSS, the JS, the Python and the prompts are separate files (section 4).
-- The application log goes to stderr and lands in the systemd journal, in a different file and a different process from the Apache log (requirement 10.3). The format is that of ai-digest: `%(asctime)s %(levelname)s %(name)s: %(message)s`.
-- Persistence is not implemented. The current `Draft` carries the generated body, titles, model, generation time and notices; the memo remains on the request/form path. Neither is written to durable storage. Requirement 11 leaves persistence to a future design.
+- The application log goes to stderr and lands in the systemd journal, in a
+  different file and a different process from the Apache log (requirement 10.3).
+  The format is that of ai-digest:
+  `%(asctime)s %(levelname)s %(name)s: %(message)s`.
+- Persistence is not implemented. The current `Draft` carries the generated
+  body, titles, model, generation time and notices. The memo remains on the
+  request/form path. Neither is written to durable storage. Requirement 11
+  leaves persistence to a future design.
 
 ### 8.4 Usability
 
@@ -790,19 +940,19 @@ than being duplicated here.
   fence and heading indentation boundary, preservation of leading indentation
   and whitespace-only blank-line normalization, and notices.
 - `test_web.py` covers routes, rendering, user-visible failures and the health
-  endpoint without a live generation service; the optional Direction field's
+  endpoint without a live generation service. The optional Direction field's
   rendering, blank and overlong validation, propagation to both generation
   modes, preservation across regeneration and retries, and its absence from
-  the application log; body notice preservation across title-only
-  regeneration and retries; a single sanitized application log record per
-  failure; and generation retry controls shown only for a retryable
+  the application log. Body notice preservation across title-only
+  regeneration and retries. A single sanitized application log record per
+  failure, and generation retry controls shown only for a retryable
   generation error, never on the 404, 405 or 413 error pages.
 - `test_cli.py` covers command-line input, overrides and exit status behavior,
-  and a single sanitized CLI log record per `SizuWriterError` failure; the
+  and a single sanitized CLI log record per `SizuWriterError` failure. The
   optional Direction adds no CLI option and is out of this suite's scope.
 
-Writing-quality acceptance remains a manual check through `cli.py generate`;
-the offline test suite verifies the software contract, not whether a generated
+Writing-quality acceptance remains a manual check through `cli.py generate`.
+The offline test suite verifies the software contract, not whether a generated
 post reads well.
 
 ---
@@ -834,13 +984,14 @@ post reads well.
 | 3. The whole body is shown | Section 7.3 item 4 |
 | 4. It can be copied and pasted as it stands | The Markdown held in a `textarea`, section 7.4 |
 | 5. The leading title and several candidates are shown | The schema of section 5.4.2, section 7.3 items 1 to 2 |
-| 6. The body and each title can be copied individually | Section 7.4; what is copied is limited to the `data-copy-target` element |
+| 6. The body and each title can be copied individually | Section 7.4. What is copied is limited to the `data-copy-target` element |
 | 7. No internal instruction leaks into the body | The separate field of section 5.4.2, the inspection of section 5.5, the separation of section 7.3 |
 | 8. No inflation into an explainer or an essay | "What this is not" and "How much to explain" in section 5.3, the absence of a lower bound in 7.1 |
 | 9. A familiar theme is not a discovery | "Stance" in section 5.3 |
 | 10. Copy, paste and read is enough to post | Section 8.4 |
-| 11. Nothing is posted automatically | Invariants 1 to 3 of section 2.1; no path to the posting site exists in the code |
+| 11. Nothing is posted automatically | Invariants 1 to 3 of section 2.1. No path to the posting site exists in the code |
 | 12. The generation API token never reaches the browser | Invariant 4 of section 2.1, section 8.1 |
+| 13. A redirect is refused and nothing is forwarded | Invariant 1 of section 2.1, the HTTP client of section 5.4.1 |
 
 ### 10.3 Persistence boundary (requirement 11)
 

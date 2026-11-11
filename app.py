@@ -22,7 +22,7 @@
 #  Routes:
 #      /            input screen
 #      /generate    generate a body and titles, or titles only
-#      /healthz     liveness probe; it calls no API
+#      /healthz     liveness probe. It calls no API
 #
 #  Author: id774 (More info: https://id774.net)
 #  Source Code: https://github.com/id774/sizu-writer
@@ -43,8 +43,8 @@
 #
 #  Version History:
 #  v1.5 2026-09-21
-#       Add per-request Direction and default-on same-origin POST protection;
-#       preserve title-only notices and sanitized failure/retry handling.
+#       Add per-request Direction and default-on same-origin POST protection.
+#       Preserve title-only notices and sanitized failure/retry handling.
 #  v1.4 2026-09-11
 #       Match server input length validation to the browser textarea.
 #  v1.3 2026-09-10
@@ -87,7 +87,7 @@ logger = logging.getLogger(__name__)
 
 # Refuse the process rather than the request. A screen offering to
 # generate for someone whose server cannot reach an endpoint wastes
-# their memo; the operator sees the setting named in the journal.
+# their memo. The operator sees the setting named in the journal.
 validate_generation_config(config)
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)

@@ -13,7 +13,7 @@
 #  without touching what a body and its titles have to look like.
 #
 #  The answer is requested as JSON so that the body and the titles
-#  arrive as separate fields; splitting prose by heuristic is what lets
+#  arrive as separate fields. Splitting prose by heuristic is what lets
 #  an instruction leak into a post. For the same reason nothing here
 #  digs a JSON object out of surrounding prose. Either the whole answer
 #  is the object — or, under prompt-json, a single fenced block holding
@@ -27,7 +27,7 @@
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
-#  - Standard library only; the provider brings the client
+#  - Standard library only. The provider brings the client
 #
 #  Version History:
 #  v1.4 2026-09-21

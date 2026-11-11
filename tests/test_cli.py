@@ -189,8 +189,8 @@ class MainTest(unittest.TestCase):
             stub.assert_not_called()
 
     def test_refuses_a_non_finite_timeout(self):
-        # argparse converts "nan" and "inf" to a float without complaint;
-        # only the finite check catches what a bare positivity check does
+        # argparse converts "nan" and "inf" to a float without complaint.
+        # Only the finite check catches what a bare positivity check does
         # not, so a non-finite override reached the SDK before it existed.
         for value in ("nan", "inf"):
             status, stub = self.run_cli("generate", "--text", "a memo",

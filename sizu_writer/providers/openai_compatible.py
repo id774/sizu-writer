@@ -6,7 +6,7 @@
 #
 #  Description:
 #  This module speaks the OpenAI compatible Chat Completions API through
-#  the openai package. The package is the client; it is not the choice
+#  the openai package. The package is the client. It is not the choice
 #  of an endpoint. Which service answers is decided by
 #  GENERATION_BASE_URL alone, and that value is always passed to the
 #  SDK, so the default URL compiled into the client can never be reached
@@ -20,7 +20,7 @@
 #
 #  The answer is normalized into a CompletionResult and nothing else is
 #  read from it. Metadata a compatible endpoint may omit — the usage
-#  counts, the request id — is carried as it comes; the finish reason is
+#  counts, the request id — is carried as it comes. The finish reason is
 #  not: an answer with no usable text, no usable finish reason, or one
 #  cut off by the output limit, is refused.
 #
@@ -35,7 +35,7 @@
 #
 #  Version History:
 #  v1.3 2026-11-11
-#       Sanitize upstream identifiers and status in failure diagnostics.
+#       Sanitize failure diagnostics, refuse redirects and close each client.
 #  v1.2 2026-09-21
 #       Carry sanitized provider failure diagnostics to the entry point for one log.
 #  v1.1 2026-09-09
@@ -67,6 +67,13 @@ logger = logging.getLogger(__name__)
 TRUNCATED_REASONS = ("length", "max_tokens")
 
 
+def _drop_redirect_retry_hint(response: Any) -> None:
+    """ Keep an x-should-retry header from re-sending a 3xx response. """
+    redirected = 300 <= response.status_code < 400
+    if redirected and "x-should-retry" in response.headers:
+        del response.headers["x-should-retry"]
+
+
 class OpenAICompatibleProvider:
     """ Provider for an OpenAI compatible Chat Completions endpoint. """
 
@@ -74,35 +81,49 @@ class OpenAICompatibleProvider:
                  config: Config) -> CompletionResult:
         """ Run one Chat Completions SDK operation and normalize its answer. """
         client = self._client(config)
-        request = self._request(messages, config)
+        try:
+            request = self._request(messages, config)
 
-        # Start the clock immediately around the SDK call. The elapsed value
-        # is the wait experienced by this provider operation. With SDK retries
-        # enabled it includes later attempts and the waits between them, while
-        # GENERATION_TIMEOUT remains the timeout configured for each attempt.
-        started = time.monotonic()
-        response = self._create(client, request, config, started)
-        result = self._result(response, config)
-        result.elapsed_seconds = self._elapsed(started)
-        log_response(config, result)
-        return result
+            # Start the clock immediately around the SDK call. The elapsed
+            # value is the wait experienced by this provider operation. With
+            # SDK retries enabled it includes later attempts and the waits
+            # between them, while GENERATION_TIMEOUT remains the timeout
+            # configured for each phase of an attempt.
+            started = time.monotonic()
+            response = self._create(client, request, config, started)
+            result = self._result(response, config)
+            result.elapsed_seconds = self._elapsed(started)
+            log_response(config, result)
+            return result
+        finally:
+            # The client is built for this operation alone, so its
+            # connection pool is released on success and on every failure.
+            client.close()
 
     def _client(self, config: Config) -> Any:
         """ Build the client described by the configuration. """
         try:
-            from openai import OpenAI
+            from openai import DefaultHttpxClient, OpenAI
         except ImportError:
             raise InternalError("openai package missing")
 
         # base_url is passed unconditionally. An empty value would let
         # the SDK fall back to its own endpoint, which is the one thing
-        # this design refuses to allow; config.py has already rejected
-        # that case, and this keeps the guarantee local as well.
+        # this design refuses to allow. The config.py module has already
+        # rejected that case, and this keeps the guarantee local as well.
+        # Redirects are never followed, not even within the same host. The
+        # request carries the memo and the token, and only the configured
+        # URL may receive them. The response hook removes the retry hint
+        # that would let the SDK send a redirected request again.
         return OpenAI(
             api_key=config.generation_api_token,
             base_url=config.generation_base_url,
             timeout=config.generation_timeout,
             max_retries=config.generation_max_retries,
+            http_client=DefaultHttpxClient(
+                follow_redirects=False,
+                event_hooks={"response": [_drop_redirect_retry_hint]},
+            ),
         )
 
     def _request(self, messages: List[Dict[str, str]],
@@ -154,13 +175,13 @@ class OpenAICompatibleProvider:
         apart: 401 is a token to replace, 403 a plan that does not cover the
         model, 429 a rate limit or an exhausted monthly allowance, and only
         the entry point's log can say which happened. The raw exception
-        message and any upstream response body are never included; only the
+        message and any upstream response body are never included. Only the
         exception's class name is.
 
         The elapsed seconds sit next to the configured timeout as operational
         context. GENERATION_TIMEOUT is a per-attempt setting, while elapsed
         covers the whole SDK call. With retries disabled their comparison can
-        show how much margin one attempt had; with retries enabled elapsed may
+        show how much margin one attempt had. With retries enabled elapsed may
         also contain earlier attempts and retry waits, so the pair alone does
         not identify the failing attempt or its cause.
         """

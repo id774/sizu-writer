@@ -23,7 +23,7 @@
 #  The log cases are part of the contract rather than an extra: a line
 #  records the shape of an exchange and never its content. The elapsed
 #  seconds appear next to the per-attempt timeout on success and
-#  failure; with retries enabled elapsed can cover several attempts and
+#  failure. With retries enabled elapsed can cover several attempts and
 #  retry waits, so the pair is context rather than a cause classifier.
 #
 #  Author: id774 (More info: https://id774.net)
@@ -61,10 +61,14 @@
 #    - Record the shape of an answer without its content or the token.
 #    - Record the wait next to the limit on an answer and on a timeout.
 #    - Keep the token out of a failure diagnostic.
-#    - Do not log a provider failure; the entry point logs it once instead.
+#    - Do not log a provider failure. The entry point logs it once instead.
 #    - Keep raw upstream error text out of a failure diagnostic.
 #    - Keep valid metadata visible and sanitize malformed response log fields.
 #    - Prevent upstream request ids and HTTP statuses from forging failure logs.
+#    - Hand the SDK a client that never follows a redirect.
+#    - Refuse every redirect status without leaking its target or body.
+#    - Drop the retry hint from 3xx responses only.
+#    - Close the client once after a success and after every failure.
 #
 #  Requirements:
 #  - Python Version: 3.9 or later
@@ -72,7 +76,7 @@
 #
 #  Version History:
 #  v1.3 2026-11-11
-#       Cover safe and malformed provider metadata in operational logging.
+#       Cover log metadata, refused redirects and per-operation client cleanup.
 #  v1.2 2026-09-21
 #       Cover sanitized provider diagnostics without provider-side failure logging.
 #  v1.1 2026-09-09
@@ -148,10 +152,21 @@ def fake_openai(response=None, error=None):
 
     def client(**options):
         calls["options"] = options
+        calls["closed"] = 0
+
+        def close():
+            calls["closed"] += 1
+
         return SimpleNamespace(
+            close=close,
             chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
 
+    def http_client(**options):
+        calls["http_client"] = options
+        return SimpleNamespace(**options)
+
     module.OpenAI = client
+    module.DefaultHttpxClient = http_client
     module.calls = calls
     return module
 
@@ -218,6 +233,24 @@ class ClientTest(ProviderTest):
 
         self.assertEqual(0, module.calls["options"]["max_retries"])
         self.assertEqual(120.0, module.calls["options"]["timeout"])
+
+
+    def test_hands_the_sdk_a_client_that_never_follows_a_redirect(self):
+        module = fake_openai(answer())
+
+        self.complete(module)
+
+        options = module.calls["options"]
+        self.assertEqual(TOKEN, options["api_key"])
+        self.assertEqual("https://api.ai.sakura.ad.jp/v1", options["base_url"])
+        self.assertEqual(120.0, options["timeout"])
+        self.assertEqual(0, options["max_retries"])
+        http_client = module.calls["http_client"]
+        self.assertIs(False, http_client["follow_redirects"])
+        self.assertEqual(
+            [openai_compatible._drop_redirect_retry_hint],
+            http_client["event_hooks"]["response"])
+        self.assertIs(options["http_client"].follow_redirects, False)
 
 
 class RequestTest(ProviderTest):
@@ -360,6 +393,91 @@ class FailureTest(ProviderTest):
                 self.raise_from_sdk(FakeStatusError(status))
 
 
+class RedirectTest(ProviderTest):
+
+    def test_refuses_every_redirect_status_without_leaking_it(self):
+        for status in (301, 302, 303, 307, 308):
+            with self.subTest(status=status):
+                error = FakeStatusError(
+                    status, "Location: https://elsewhere.example/SECRET_PATH")
+                module = fake_openai(error=error)
+
+                with mock.patch.dict(sys.modules, {"openai": module}):
+                    with self.assertRaises(UpstreamStatusError) as refused:
+                        OpenAICompatibleProvider().complete(
+                            [{"role": "user", "content": "SECRET_MEMO"}],
+                            settings())
+
+                diagnostic = refused.exception.diagnostic
+                self.assertIn("status={0}".format(status), diagnostic)
+                for forbidden in ("elsewhere.example", "SECRET_PATH",
+                                  "SECRET_MEMO", TOKEN):
+                    self.assertNotIn(forbidden, diagnostic)
+                self.assertEqual(UpstreamStatusError.user_message,
+                                 str(refused.exception))
+
+    def test_drops_the_retry_hint_from_every_3xx_response_only(self):
+        hook = openai_compatible._drop_redirect_retry_hint
+
+        for status in range(300, 400):
+            with self.subTest(status=status):
+                response = SimpleNamespace(
+                    status_code=status,
+                    headers={"x-should-retry": "true", "location": "/x"})
+
+                hook(response)
+
+                self.assertNotIn("x-should-retry", response.headers)
+                self.assertIn("location", response.headers)
+
+        for status in (200, 429, 500):
+            with self.subTest(status=status):
+                response = SimpleNamespace(
+                    status_code=status, headers={"x-should-retry": "true"})
+
+                hook(response)
+
+                self.assertEqual("true", response.headers["x-should-retry"])
+
+        bare = SimpleNamespace(status_code=302, headers={})
+        hook(bare)
+        self.assertEqual({}, bare.headers)
+
+    def test_closes_the_client_once_after_a_success(self):
+        module = fake_openai(answer())
+
+        self.complete(module)
+
+        self.assertEqual(1, module.calls["closed"])
+
+    def test_closes_the_client_once_after_every_kind_of_failure(self):
+        cases = (
+            (FakeTimeoutError("too slow"), UpstreamTimeoutError),
+            (FakeConnectionError("down"), UpstreamConnectionError),
+            (FakeStatusError(500), UpstreamStatusError),
+            (FakeStatusError(302), UpstreamStatusError),
+        )
+        for error, expected in cases:
+            with self.subTest(error=type(error).__name__):
+                module = fake_openai(error=error)
+
+                with mock.patch.dict(sys.modules, {"openai": module}):
+                    with self.assertRaises(expected):
+                        OpenAICompatibleProvider().complete([], settings())
+
+                self.assertEqual(1, module.calls["closed"])
+
+    def test_closes_the_client_when_the_answer_is_refused(self):
+        module = fake_openai(answer(choices=[SimpleNamespace(
+            message=SimpleNamespace(content=""), finish_reason="stop")]))
+
+        with mock.patch.dict(sys.modules, {"openai": module}):
+            with self.assertRaises(InvalidResponseError):
+                OpenAICompatibleProvider().complete([], settings())
+
+        self.assertEqual(1, module.calls["closed"])
+
+
 class LogTest(ProviderTest):
 
     def test_records_the_shape_of_an_answer_without_its_content(self):
@@ -389,7 +507,7 @@ class LogTest(ProviderTest):
         self.assertIn("timeout=120.0", recorded)
 
     def test_does_not_log_a_provider_failure(self):
-        # The entry point logs the failure once; a provider-level log of
+        # The entry point logs the failure once. A provider-level log of
         # the same failure would duplicate that diagnostic.
         with mock.patch.object(openai_compatible.logger, "error") as error_log:
             with self.assertRaises(UpstreamTimeoutError):
@@ -399,7 +517,7 @@ class LogTest(ProviderTest):
 
     def test_records_the_wait_of_a_timeout_next_to_the_limit(self):
         # Keep operation elapsed next to the per-attempt timeout setting.
-        # With the fake SDK there is only one attempt; a real SDK call may
+        # With the fake SDK there is only one attempt. A real SDK call may
         # include retries and waits when the configured retry count is nonzero.
         with self.assertRaises(UpstreamTimeoutError) as refused:
             self.raise_from_sdk(FakeTimeoutError("too slow"))

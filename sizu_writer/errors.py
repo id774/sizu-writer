@@ -98,7 +98,7 @@ class UpstreamTimeoutError(SizuWriterError):
 
     The message asks for another attempt and nothing else. Shortening the
     memo was the earlier advice and it does not address a provider timeout.
-    GENERATION_TIMEOUT is configured per SDK request attempt; retry and
+    GENERATION_TIMEOUT is configured per SDK request attempt. Retry and
     operation timing details stay in the operator diagnostics rather than
     being turned into advice about the memo.
     """

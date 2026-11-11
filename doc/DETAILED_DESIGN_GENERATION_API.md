@@ -57,7 +57,7 @@ were not:
 
 Sakura AI Engine offers an OpenAI-compatible Chat Completions API and
 authenticates with an account token used as a Bearer token. Current plan limits,
-rate limits and model availability are service-owned information; consult the
+rate limits and model availability are service-owned information. Consult the
 [official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html)
 and the control panel for their current values instead of copying them into this
 design.
@@ -91,7 +91,7 @@ other endpoint.
 | `openai-compatible` | Speak the OpenAI-compatible Chat Completions API |
 
 A future Anthropic-compatible Messages API would be a new value and a new
-provider module. An unknown value is refused; it is never read as the default
+provider module. An unknown value is refused. It is never read as the default
 one.
 
 ### 3.4 No automatic fallback
@@ -133,17 +133,17 @@ timeouts at the same time (section 12).
 
 ## 4. Scope
 
-**In scope.** Switching the OpenAI-compatible endpoint; Sakura AI Engine
-account token authentication; the structured response mode; configuration
-validation; separation of the transport; response normalization; error
-classification; logging; unit tests; and the README, `.env.example`, design
+**In scope.** Switching the OpenAI-compatible endpoint. Sakura AI Engine
+account token authentication. The structured response mode. Configuration
+validation. Separation of the transport. Response normalization. Error
+classification. Logging. Unit tests, and the README, `.env.example`, design
 documents and version history.
 
-**Out of scope.** The Anthropic-compatible Messages API; the Responses API; the
-RAG API; embeddings; speech to text; text to speech; sending to several
-endpoints at once; automatic fallback; automatic comparison of models; storing
-a monthly request count locally; computing a charge; managing a Sakura AI
-Engine subscription; posting to the publishing site; and entering a token in
+**Out of scope.** The Anthropic-compatible Messages API. The Responses API. The
+RAG API. Embeddings. Speech to text. Text to speech. Sending to several
+endpoints at once. Automatic fallback. Automatic comparison of models. Storing
+a monthly request count locally. Computing a charge. Managing a Sakura AI
+Engine subscription. Posting to the publishing site, and entering a token in
 the browser.
 
 ---
@@ -194,12 +194,12 @@ and the control panel for those limits. In sizu-writer:
 
 Even at `GENERATION_MAX_RETRIES=0`, a connection dropped at the wrong moment
 leaves it unknowable locally whether the service accepted the request. Local
-success counts are an estimate; the control panel is the record.
+success counts are an estimate. The control panel is the record.
 
 ### 5.3 Model names
 
 No active default model is shipped. `.env.example` ships `GENERATION_MODEL=`
-blank, and `Config.generation_model` defaults to empty; the setting stays
+blank, and `Config.generation_model` defaults to empty. The setting stays
 required at runtime.
 
 Concrete model names may appear in comments and worked examples when it is
@@ -208,7 +208,7 @@ keeps a commented worked example next to the blank active setting, and this
 document and README carry worked examples of their own (for instance the
 Kimi K3 endpoint example, `GENERATION_MODEL=kimi-k3`). An example names one
 endpoint configuration at the time it was written, not an endpoint's full
-catalogue; when the endpoint changes the models it offers, the example itself
+catalogue. When the endpoint changes the models it offers, the example itself
 may need a documentation update, but that is separate from shipping an active
 default.
 
@@ -216,8 +216,8 @@ Models are added, renamed and withdrawn on the endpoint's own schedule. Read
 the name to actually use off the endpoint's current list of available models
 and put it in `GENERATION_MODEL`. For Sakura AI Engine, verify the model and
 its plan availability in the current control panel and the
-[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html);
-this repository does not maintain an exhaustive copy of a model or plan
+[official Sakura AI Engine documentation](https://manual.sakura.ad.jp/cloud/manual-ai-engine.html).
+This repository does not maintain an exhaustive copy of a model or plan
 catalogue.
 
 ---
@@ -252,7 +252,7 @@ model nor the token can be changed from a screen.
 
 `app.py` sets a request-scoped diagnostic reference in
 `sizu_writer/diagnostics.py` before generation runs. The provider does not log
-a failure itself; it raises a `SizuWriterError` carrying a sanitized
+a failure itself. It raises a `SizuWriterError` carrying a sanitized
 diagnostic, and `app.py` logs it once, next to the same reference id read
 from `sizu_writer/diagnostics.py`. The memo, the prompt and the completion
 data never pass through that module, and the generator and provider
@@ -331,7 +331,7 @@ the timeouts are all unaffected by it either way.
 | `GENERATION_BASE_URL` | yes | none | Base URL. Required so that no endpoint is implied |
 | `GENERATION_MODEL` | yes | none | Model name as the endpoint spells it |
 | `GENERATION_RESPONSE_MODE` | no | `prompt-json` | `json-object` or `prompt-json` |
-| `GENERATION_TIMEOUT` | no | `120` | Seconds for each SDK request attempt |
+| `GENERATION_TIMEOUT` | no | `120` | Seconds for each connect, write, read and pool wait of an SDK request attempt |
 | `GENERATION_MAX_RETRIES` | no | `0` | Retry attempts the SDK may make after the initial request |
 | `GENERATION_TEMPERATURE` | no | not sent | Sent only when set |
 | `MAX_OUTPUT_TOKENS` | no | `6000` | Upper bound of one answer |
@@ -341,9 +341,14 @@ the timeouts are all unaffected by it either way.
 | `MAX_ALT_TITLES` | no | `4` | Alternative titles kept |
 | `PROMPT_DIR` | no | `prompts` | Where the prompts live |
 | `LOG_LEVEL` | no | `INFO` | Level of the application log |
-| `PORT` | no | `8090` | Development-server and Procfile gunicorn port; bundled deployment examples use explicit matching values |
+| `PORT` | no | `8090` | Development-server and Procfile gunicorn port. Bundled deployment examples use explicit matching values |
 
-`PORT` does not interpolate into `deploy/sizu-writer.service` or `deploy/sizu-writer.conf`. Those examples use explicit matching ports by design; an operator choosing another deployment port changes both examples consistently. The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so an unset `PORT` still binds gunicorn to the documented default of 8090 instead of an empty bind address.
+`PORT` does not interpolate into `deploy/sizu-writer.service` or
+`deploy/sizu-writer.conf`. Those examples use explicit matching ports by design.
+An operator choosing another deployment port changes both examples consistently.
+The `Procfile` reads `PORT` through the shell fallback `${PORT:-8090}`, so an
+unset `PORT` still binds gunicorn to the documented default of 8090 instead of
+an empty bind address.
 
 ### 8.2 Sakura AI Engine
 
@@ -459,12 +464,12 @@ parsed as a URL, uses `http`, is not an absolute `https` URL, has no host,
 carries user information, carries a query or a fragment, has an empty, zero,
 non-numeric or out-of-range explicit port, or ends with `/chat/completions` —
 the SDK appends the resource path itself. URL parsing and host/port parsing
-failures are converted to `ConfigError`; a raw parser `ValueError` does not
+failures are converted to `ConfigError`. A raw parser `ValueError` does not
 escape configuration validation.
 
 `LOG_LEVEL` is matched case-insensitively against `CRITICAL`, `FATAL`,
 `ERROR`, `WARNING`, `WARN`, `INFO`, `DEBUG` and `NOTSET`. An unset, empty or
-whitespace-only value falls back to `INFO`; any other value is refused rather
+whitespace-only value falls back to `INFO`. Any other value is refused rather
 than read as `INFO`, the same as every other malformed setting.
 
 ### 9.3 When each runs
@@ -473,7 +478,7 @@ than read as `INFO`, the same as every other malformed setting.
   endpoint never starts and systemd shows the message.
 - `cli.py` calls `load_config()`, applies `--model`, `--prompt-dir` and
   `--timeout`, then calls `validate_generation_config()` before reading the
-  input. `--model` can therefore stand in for a missing `GENERATION_MODEL`; it
+  input. `--model` can therefore stand in for a missing `GENERATION_MODEL`. It
   is trimmed of surrounding whitespace, and an explicit value that is blank
   once trimmed is refused rather than treated as no override. `--timeout` is
   checked where it is applied, under the same finite-positive rule
@@ -556,11 +561,22 @@ OpenAI(
     base_url=config.generation_base_url,
     timeout=config.generation_timeout,
     max_retries=config.generation_max_retries,
+    http_client=DefaultHttpxClient(
+        follow_redirects=False,
+        event_hooks={"response": [_drop_redirect_retry_hint]},
+    ),
 )
 ```
 
+The injected HTTP client never follows a redirect, including one to the same
+host, because the request carries the memo and the token and only the
+configured URL may receive them. `_drop_redirect_retry_hint()` is the response
+hook. For a status from 300 up to 399 it deletes the `x-should-retry` header,
+so that an endpoint cannot make the SDK retry a redirect, and it leaves every
+other status and header alone.
+
 `base_url` is passed unconditionally, including when it is empty. `config.py`
-has already refused an empty one; passing it anyway keeps the guarantee local,
+has already refused an empty one. Passing it anyway keeps the guarantee local,
 so that the endpoint compiled into the SDK cannot be reached by any path.
 
 ### 11.2 The request
@@ -580,8 +596,15 @@ request = {
 ### 11.3 The call
 
 `client.chat.completions.create(**request)` runs once per `complete()`. There
-is no retry loop of our own; retries are the SDK's, bounded by
+is no retry loop of our own. Retries are the SDK's, bounded by
 `GENERATION_MAX_RETRIES`.
+
+The client is built for each `complete()` call and closed in a `finally` block,
+so its connection pool is released after a success and after every failure.
+A redirect is returned by the SDK as an `APIStatusError` carrying the 3xx
+status, and `_failure_diagnostic()` reports it as an `UpstreamStatusError`
+like any other status. Neither the `Location` header nor the response body
+reaches the diagnostic.
 
 ### 11.4 The answer
 
@@ -617,7 +640,7 @@ max_tokens
 Both mean a truncated body, which is not offered as a draft. The list is
 explicit: a different non-empty value remains unchanged in the
 `CompletionResult`. Its log representation is preserved when it is a safe
-metadata token according to section 13; otherwise the log displays `-`.
+metadata token according to section 13. Otherwise the log displays `-`.
 Unknown non-empty finish reasons are not reclassified as truncation.
 
 A response whose finish reason is missing or blank is refused before it
@@ -638,9 +661,11 @@ check and is kept as itself on the `CompletionResult`.
    given: a nonblank direction changes what the messages say, never how many
    requests are made.
 3. Read the whole answer as the JSON object allowed by the configured response mode.
-4. For body generation, validate the raw `body_markdown`, normalize it mechanically, and refuse it if normalization leaves no usable body.
-5. Validate the title fields, including the required `alternative_titles` list, then drop blank and duplicate candidates and keep at most `MAX_ALT_TITLES`.
-6. Return a `Draft`; title regeneration keeps the already settled body unchanged, whatever the direction says.
+4. For body generation, validate the raw `body_markdown`, normalize it
+   mechanically, and refuse it if normalization leaves no usable body.
+5. Validate the title fields, including the required `alternative_titles` list,
+   then drop blank and duplicate candidates and keep at most `MAX_ALT_TITLES`.
+6. Return a `Draft`. Title regeneration keeps the already settled body unchanged, whatever the direction says.
 
 It handles no HTTP client, no authentication, no base URL and no SDK exception.
 
@@ -653,7 +678,7 @@ def _payload(content: str, response_mode: str) -> Dict[str, Any]
 Under `json-object`, `json.loads()` is applied to the whole answer.
 
 Both modes use standard JSON syntax. Python's decoder extensions `NaN`,
-`Infinity` and `-Infinity` are refused through `parse_constant`; accepting
+`Infinity` and `-Infinity` are refused through `parse_constant`. Accepting
 them merely because the standard-library decoder recognizes them would widen
 the endpoint contract beyond JSON.
 
@@ -714,7 +739,7 @@ Title regeneration asks for the same object without `body_markdown`.
 Body generation first requires raw `body_markdown` to be a non-empty string,
 then runs the mechanical body normalization and refuses the answer again if
 nothing usable remains. Both generation modes require a non-empty
-`primary_title` and the `alternative_titles` field itself; that field must be a
+`primary_title` and the `alternative_titles` field itself. That field must be a
 list containing strings only. Blank alternatives, duplicates and repeats of the
 primary title are dropped, and at most `MAX_ALT_TITLES` are kept. Title
 regeneration does not normalize or rewrite the already settled body.
@@ -737,9 +762,9 @@ All log field values are kept single-line. A metadata atom is retained only
 when its type is exactly `str`, its length is 1 to 128 characters, it starts
 with an ASCII letter or digit, and every later character is an ASCII letter,
 digit, `.`, `_`, `:`, `/`, `@`, `+` or `-`. Any other atom appears as `-`.
-Usage counters are recorded only for exact integers from 0 to 2^63 - 1;
-invalid counters appear as `None`. Elapsed seconds and timeout are recorded
-only as finite nonnegative floats or bounded nonnegative integers; others
+Usage counters are recorded only for exact integers from 0 to 2^63 - 1.
+Invalid counters appear as `None`. Elapsed seconds and timeout are recorded
+only as finite nonnegative floats or bounded nonnegative integers. Others
 appear as `-`.
 Normal response identifiers, model names and finish reasons remain visible.
 These restrictions apply at the log boundary, not to `CompletionResult`.
@@ -748,8 +773,8 @@ These restrictions apply at the log boundary, not to `CompletionResult`.
 `create()` call and rounded to a tenth. With `GENERATION_MAX_RETRIES=0` it
 covers the single request attempt. With retries enabled it may include several
 request attempts and SDK-controlled waits between them. `GENERATION_TIMEOUT`
-remains the timeout setting for each attempt, so the two fields are not the
-same kind of bound when retries are enabled.
+is applied to each wait inside an attempt, so the two fields are not the same
+kind of bound and `elapsed` may exceed `timeout`.
 
 Never recorded, at any level: the API token, the memo, the optional Direction,
 the generated body, the titles, the prompts, the `Authorization` header and
@@ -770,7 +795,7 @@ generation failure: backend=... endpoint_host=... model=... error=... status=...
 
 `error` is the SDK exception's class name, not its raw message, passed
 through the same metadata atom rule as INFO fields. `status` is an exact
-integer from 100 to 599, or `-`; `request_id` is the upstream identifier
+integer from 100 to 599, or `-`. The `request_id` field is the upstream identifier
 only when it meets the metadata atom rule, otherwise `-`. Backend, host and
 model are also formatted as safe single-line atoms. With the shipped
 zero-retry default, `elapsed` close to `timeout` is useful evidence that the
@@ -783,7 +808,7 @@ The entry point that catches the error — `app.py`'s `errorhandler(SizuWriterEr
 for the Web application, `cli.py`'s `except SizuWriterError` for the command
 line — logs this diagnostic exactly once, as one `ERROR` (or `INFO` for a
 400) record: `type(error).__name__`, the request reference from
-`sizu_writer/diagnostics.py` (the Web application only; the field is absent
+`sizu_writer/diagnostics.py` (the Web application only. The field is absent
 outside a Web request) and `error.diagnostic or error.user_message`. The
 provider raising the error and the entry point logging it never both log the
 same failure, so there is exactly one record per failure rather than one from
@@ -829,6 +854,7 @@ the cause.
 | 429 | a rate limit, or the monthly allowance is used up |
 | 500 | the endpoint failed internally |
 | 504 | the endpoint timed out on its own side |
+| 301, 302, 303, 307, 308 | the endpoint redirected the request, which is refused and not followed |
 
 ### 14.3 Configuration errors
 
@@ -854,14 +880,19 @@ No message quotes a secret.
 | gunicorn `--timeout` | 240s |
 | Apache `ProxyTimeout` | 300s |
 
-With `GENERATION_MAX_RETRIES=0` one API call has the innermost 120-second timeout and there is no retry wait. Raising the retries increases the time that can be spent inside request attempts:
+`GENERATION_TIMEOUT` is passed to the SDK as a single number, which applies it
+to the connect, write, read and pool waits separately. The read wait is the time
+spent waiting for the next piece of the response, so it is not a limit on the
+time the whole answer takes. With `GENERATION_MAX_RETRIES=0` there is no retry
+wait. Raising the retries adds attempts, the SDK's backoff and any accepted
+`Retry-After`, and slow chunks lengthen an attempt as well. No product of the
+timeout and the retry count is a bound on the operation, and none is used as an
+expected run time.
 
-```text
-request-attempt timeout budget =
-    GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)
-```
-
-The product counts only the timeout budget of the attempts. The SDK may additionally wait between attempts for retry backoff or an accepted `Retry-After`, so it is not a wall-clock upper bound. The gunicorn and Apache timeouts must cover the possible attempt time, those SDK-controlled retry waits and operational margin. Retry-delay constants are not duplicated here because they belong to the installed SDK version and the upstream response.
+The gunicorn and Apache timeouts are sized from the time the endpoint is
+observed to take, with operational margin. Retry-delay constants are not
+duplicated here because they belong to the installed SDK version and the
+upstream response.
 
 ---
 
@@ -877,7 +908,7 @@ The product counts only the timeout budget of the attempts. The SDK may addition
   URL, so there is no path by which someone could have the server relay a
   request to a service of their choosing.
 - Only `https` is accepted. If a local compatible endpoint is ever needed for
-  development, that requirement gets its own design; this version adds no
+  development, that requirement gets its own design. This version adds no
   `ALLOW_INSECURE_GENERATION_URL` escape hatch.
 - The token format is documented as `<UUID>:<secret>` but not enforced by a
   regular expression. Checking a colon count would make sizu-writer reject a
@@ -895,7 +926,7 @@ The product counts only the timeout budget of the attempts. The SDK may addition
   `ProxyPreserveHost On`.
 - Missing, null, malformed, user-info-bearing, path/query/fragment-bearing and
   foreign Origins are refused.
-- The refusal records only one fixed reason and the request reference; raw
+- The refusal records only one fixed reason and the request reference. Raw
   Origin, Host and form content are not logged.
 - `REQUIRE_SAME_ORIGIN=off` is an explicit controlled-client escape hatch, not
   an API, authentication or CORS feature.
@@ -943,7 +974,7 @@ screens offer no way to switch endpoints.
 The error id's display format is unchanged as well. What changed is only where
 it comes from: it is established once, in the request scope, before generation
 runs, and the same value is what the error handler's single log record and the
-error page both use. The provider no longer logs on its own; it only raises
+error page both use. The provider no longer logs on its own. It only raises
 the error the handler logs (section 13.2).
 
 ---
@@ -995,15 +1026,15 @@ never carries that raw message either.
 `POST /generate` whose Origin authority matches `request.host` is accepted
 and reaches `generate_draft()`/`regenerate_titles()`, including an `https://`
 Origin against a same-host request pinning that the scheme is validated but
-never compared to `request.scheme`; a request with no Origin, a malformed one
+never compared to `request.scheme`. A request with no Origin, a malformed one
 (`null`, a non-`http(s)` scheme, one carrying userinfo, a path, a query, a
 fragment or embedded whitespace), a foreign host or a foreign explicit port
-is refused with status 400 before either generation function is called; the
+is refused with status 400 before either generation function is called. The
 rejection page and its one `app` INFO log record carry none of the submitted
-form values and none of the raw Origin header; `REQUIRE_SAME_ORIGIN=False`
+form values and none of the raw Origin header. `REQUIRE_SAME_ORIGIN=False`
 restores the pre-guard behavior for both a same-origin and a foreign
-request; a non-`/generate` route such as `POST /healthz` keeps its own
-status (405) rather than being intercepted by the guard; and a foreign
+request. A non-`/generate` route such as `POST /healthz` keeps its own
+status (405) rather than being intercepted by the guard, and a foreign
 Origin is refused before an oversized form is parsed, while a same-origin
 oversized request still answers 413.
 
@@ -1091,11 +1122,11 @@ max retries: 0
   --text "子どもと歩いていて、同じ道でも急いでいる日とそうでない日では見えるものが違うと思った。"
 ```
 
-Check that the exit status is 0; that the primary title, the alternatives and
-the body are printed; that no JSON, explanation or editing note is inside the
-body; that the log names `api.ai.sakura.ad.jp` as the endpoint host; that no
-token appears in the log; that the application made one API call; and that the
-control panel shows the usage increase.
+Check these points. The exit status is 0. The primary title, the alternatives
+and the body are printed. No JSON, explanation or editing note is inside the
+body. The log names `api.ai.sakura.ad.jp` as the endpoint host. No token
+appears in the log. The application made one API call, and the control panel
+shows the usage increase.
 
 ### 20.4 The screens
 
@@ -1103,18 +1134,18 @@ control panel shows the usage increase.
 .venv/bin/python app.py
 ```
 
-Check that the input screen renders; that a body and titles can be generated;
-that the titles alone can be regenerated; that the body does not change when
-they are; that the body and each title copy separately; that no endpoint
-information or token appears in the HTML; that a 429 exposes nothing internal;
-and that the reference id on the error screen finds the log entry.
+Check these points. The input screen renders. A body and titles can be
+generated. The titles alone can be regenerated, and the body does not change
+when they are. The body and each title copy separately. No endpoint
+information or token appears in the HTML. A 429 exposes nothing internal. The
+reference id on the error screen finds the log entry.
 
 ### 20.5 That OpenAI is not contacted
 
 With the Sakura settings: `GENERATION_BASE_URL` is
-`https://api.ai.sakura.ad.jp/v1`; no OpenAI API key is configured; no `OPENAI_*`
-variable is set — the process would refuse to start if one were; the log names
-`api.ai.sakura.ad.jp`; and where traffic can be audited, no connection to
+`https://api.ai.sakura.ad.jp/v1`. No OpenAI API key is configured. No `OPENAI_*`
+variable is set — the process would refuse to start if one were. The log names
+`api.ai.sakura.ad.jp`, and where traffic can be audited, no connection to
 `api.openai.com` occurs.
 
 ---
@@ -1161,10 +1192,16 @@ manual acceptance run — not hidden behind a guess or a silent retry.
 ## 23. References
 
 1. id774, `sizu-writer` — https://github.com/id774/sizu-writer
-2. id774, "ai-digest v1.1 をリリースして Anthropic 互換 API と外部入力の扱いを改善した" — https://qiita.com/ynakayama/items/beadd112dbf4788daa20
-3. id774, "さくらの AI Engine の Anthropic 互換 API で ai-digest を動かす" — https://qiita.com/ynakayama/items/d486fc70c8a29f5f765c
+2. id774, "ai-digest v1.1 をリリースして Anthropic 互換 API と外部入力の扱いを改善した" —
+   https://qiita.com/ynakayama/items/beadd112dbf4788daa20
+3. id774, "さくらの AI Engine の Anthropic 互換 API で ai-digest を動かす" —
+   https://qiita.com/ynakayama/items/d486fc70c8a29f5f765c
 4. Sakura Internet, Sakura AI Engine, how to use — https://manual.sakura.ad.jp/cloud/ai-engine/02-howto.html
-5. Sakura Internet, Sakura AI Engine, service basics — https://manual.sakura.ad.jp/cloud/ai-engine/01-basics.html
-6. Sakura Internet, Sakura AI Engine, operation guide — https://manual.sakura.ad.jp/cloud/ai-engine/03-operation-guide.html
-7. Sakura Internet, Sakura AI Engine, Inference API — https://manual.sakura.ad.jp/api/cloud/ai-engine/inference.html
-8. Sakura Internet, on the use of closed models — https://manual.sakura.ad.jp/cloud/ai-engine/06-closed-model.html
+5. Sakura Internet, Sakura AI Engine, service basics —
+   https://manual.sakura.ad.jp/cloud/ai-engine/01-basics.html
+6. Sakura Internet, Sakura AI Engine, operation guide —
+   https://manual.sakura.ad.jp/cloud/ai-engine/03-operation-guide.html
+7. Sakura Internet, Sakura AI Engine, Inference API —
+   https://manual.sakura.ad.jp/api/cloud/ai-engine/inference.html
+8. Sakura Internet, on the use of closed models —
+   https://manual.sakura.ad.jp/cloud/ai-engine/06-closed-model.html

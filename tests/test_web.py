@@ -10,7 +10,7 @@
 #  modes, and the refusals the screen has to make on its own: an empty
 #  memo, a memo longer than MAX_INPUT_CHARS, and a request larger than
 #  the server limit. Correctable memo validation errors keep the input
-#  on the page; an oversized request is handled without reparsing its
+#  on the page. An oversized request is handled without reparsing its
 #  form.
 #
 #  It also pins the error handling. Each failure is answered with its
