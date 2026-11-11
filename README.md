@@ -57,7 +57,8 @@ See [The Japanese that stays](#the-japanese-that-stays).
 
 ## Features
 
-- **One memo in, a postable draft out**: the whole body and the title candidates from a single generation
+- **One memo in, a postable draft out**: the whole body and the title candidates
+  from a single generation
 - **An optional Direction for this generation only**: a field below the memo for
   a focus, a length, a tone or a title preference that applies to one run and is
   never saved
@@ -74,7 +75,8 @@ See [The Japanese that stays](#the-japanese-that-stays).
   reinstall
 - **Copy without picking**: the body and each title have their own copy button,
   and the copied text never carries a label or an explanation from the screen
-- **Regenerate at two scales**: the whole draft, or the titles alone against a body already settled
+- **Regenerate at two scales**: the whole draft, or the titles alone against a
+  body already settled
 - **Mechanical cleanup only**: an outer unlabelled, `markdown` or `md` code
   fence, a `#` heading and runs of blank lines outside indented code are
   rewritten. A single code block with another language label and the blank lines
@@ -82,7 +84,8 @@ See [The Japanese that stays](#the-japanese-that-stays).
   a sentence is reported as a notice instead
 - **No state on the server**: the memo and the body travel with the form, so any
   worker answers any request and a restart loses nothing
-- **The token stays in the process**: it reaches neither a template, nor JavaScript, nor an error page
+- **The token stays in the process**: it reaches neither a template, nor
+  JavaScript, nor an error page
 - **Deployable as is**: `systemd` and Apache examples in [deploy/](deploy), a
   `Procfile` for a platform that wants one
 
@@ -111,7 +114,8 @@ them cannot break a running service.
 
 ## Installation
 
-The following steps assume Debian or Ubuntu. Adjust the package manager commands for other systems.
+The following steps assume Debian or Ubuntu. Adjust the package manager commands
+for other systems.
 
 ### 1. Install the system packages
 
@@ -485,7 +489,8 @@ alternative candidates and the body — so it is not a file to pass to `--body`.
 notices — which is what to look at when the question is whether the model filled
 the right field rather than whether the writing is good.
 
-The exit status is 0 on success, 1 when generation failed, and 2 when the command line itself was wrong.
+The exit status is 0 on success, 1 when generation failed, and 2 when the
+command line itself was wrong.
 
 ### Overriding a setting for one run
 
@@ -548,8 +553,9 @@ controlled non-browser client intentionally posting the existing HTML form
 endpoint. It does not turn the endpoint into a public API and does not
 replace authentication or rate limiting.
 
-Any other address answers 404, and a method an address does not accept answers 405. Both keep their own status rather than being reported as a server failure,
-so a browser asking for `/favicon.ico` costs a note in the log instead of a
+Any other address answers 404, and a method an address does not accept answers 405.
+Both keep their own status rather than being reported as a server failure, so a
+browser asking for `/favicon.ico` costs a note in the log instead of a
 traceback. Neither page, nor the 413 page for an oversized request, offers a
 generation retry button: there was no generation attempt in progress to repeat,
 only a link back to the input screen. A failure while generating or regenerating
@@ -896,7 +902,8 @@ the authentication, the base URL, the shape of a request and the exceptions the
 client raises. Above it, `generator.py` hands over a message list and receives a
 `CompletionResult`.
 
-Supporting a genuinely different protocol — an Anthropic compatible Messages API, say — is three steps:
+Supporting a genuinely different protocol — an Anthropic compatible Messages
+API, say — is three steps:
 
 1. Write `sizu_writer/providers/<name>.py` with a class exposing
    `complete(messages, config) -> CompletionResult`, raising the `Upstream*`
@@ -939,7 +946,8 @@ Possible future extensions that are not part of the current implementation:
 
 - the `json_schema` response format mode, for endpoints supporting Structured
   Outputs. The `json-object` and `prompt-json` modes are the two that exist
-- a second backend in `providers/`. The `openai-compatible` provider is the only one sizu-writer speaks
+- a second backend in `providers/`. The `openai-compatible` provider is the only
+  one sizu-writer speaks
 - persistence of the generated drafts (requirement 11, a future extension)
 
 `PROMPT_RELOAD` is not a setting because no prompt cache exists. The prompts are

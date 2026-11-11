@@ -22,8 +22,10 @@ document layout are the ones stated in [`POLICY.md`](POLICY.md).
 
 **`sizu-writer`** is recommended, for three reasons.
 
-- It carries over the name used in the requirements document (`20260804_sizu_writer_requirements.md`).
-- The Python package `sizu_writer` and the systemd unit `sizu-writer.service` follow mechanically.
+- It carries over the name used in the requirements document
+  (`20260804_sizu_writer_requirements.md`).
+- The Python package `sizu_writer` and the systemd unit `sizu-writer.service`
+  follow mechanically.
 - Like `ai-digest`, it is "purpose plus action" in two words, so it does not
   stand out among the id774 repositories.
 
@@ -37,14 +39,17 @@ names under `deploy/`.
 
 ### 2.1 The lines this system draws
 
-From requirements 2, 13 and 14, the invariants come first. Neither a setting nor an extension crosses them.
+From requirements 2, 13 and 14, the invariants come first. Neither a setting nor
+an extension crosses them.
 
 1. Send nothing to the posting site. The only host an HTTP client here talks to
    is the generation endpoint the configuration names. A redirect from that
    endpoint is refused and never followed, not even within the same host, so the
    memo and the token reach no other destination.
-2. Accept no credential of the posting site. It exists neither as a setting nor as a form field.
-3. Bring in no browser automation. `playwright` and `selenium` do not belong in `requirements.txt`.
+2. Accept no credential of the posting site. It exists neither as a setting nor
+   as a form field.
+3. Bring in no browser automation. `playwright` and `selenium` do not belong in
+   `requirements.txt`.
 4. Keep the API token inside the server process. It appears in no template, no
    JavaScript, no response header and no error page.
 5. Let no instruction, editing note, internal remark or review result into the
@@ -60,7 +65,8 @@ From requirements 2, 13 and 14, the invariants come first. Neither a setting nor
 
 ### 2.2 What is inherited from ai-digest
 
-The new repository also carries a `doc/POLICY.md`, and inherits the following. The one difference follows.
+The new repository also carries a `doc/POLICY.md`, and inherits the following.
+The one difference follows.
 
 - The header block at the top of each module: Description, Routes (the web
   application only), the Author / Source Code / License / Contact block, Usage,
@@ -77,7 +83,8 @@ The new repository also carries a `doc/POLICY.md`, and inherits the following. T
 - The shape of an executable: `#!/usr/bin/env python`, the UTF-8 encoding
   header, `main() -> int` and `sys.exit(main())`.
 - Runtime dependencies pinned to a compatible range in `requirements.txt`.
-- Tests in `tests/test_*.py`, `unittest` and `unittest.mock` only, with no network and no API call.
+- Tests in `tests/test_*.py`, `unittest` and `unittest.mock` only, with no
+  network and no API call.
 - Module versions as `major.minor`, `minor` carried over before it reaches 10,
   bumped for a change in behaviour and not for a documentation edit. Repository
   release versions are independent of them: they are recorded in `doc/VERSIONS`,
@@ -152,7 +159,8 @@ without touching what a draft has to look like:
   Apache. Behind a reverse proxy, `systemctl restart sizu-writer` is enough,
   which matches the operation of ai-digest.
 - gunicorn listens on `127.0.0.1` only, so nothing reaches it directly from outside.
-- The Flask development server is for development. The `__main__` block of `app.py` binds `127.0.0.1` as well.
+- The Flask development server is for development. The `__main__` block of
+  `app.py` binds `127.0.0.1` as well.
 
 ### 3.1 Timeouts that agree with each other
 
@@ -259,7 +267,8 @@ not part of what is copied** (requirement 6.3).
 
 ### 5.2 `sizu_writer/errors.py`
 
-Each error of requirement 6.6 becomes a type. The message, the HTTP status and the log level live here.
+Each error of requirement 6.6 becomes a type. The message, the HTTP status and
+the log level live here.
 
 ```python
 class SizuWriterError(Exception):
@@ -297,7 +306,8 @@ These properties matter.
 
 ### 5.3 `sizu_writer/prompts.py`
 
-Its only job is reading the prompt files and assembling the messages. It performs no API call.
+Its only job is reading the prompt files and assembling the messages. It
+performs no API call.
 
 ```python
 def load_prompt(name: str, prompt_dir: str) -> str
@@ -326,7 +336,8 @@ def build_titles_messages(input_text: str, body: str, prompt_dir: str, direction
 
 #### The shape of the prompt
 
-`prompts/system.md` writes requirements 3, 7 and 8 out as instructions to the model, in these sections.
+`prompts/system.md` writes requirements 3, 7 and 8 out as instructions to the
+model, in these sections.
 
 | Section | Requirement | Content |
 | --- | --- | --- |
@@ -747,9 +758,12 @@ From top to bottom. **What is posted and what merely supports it are separated
 visually and in the DOM** (requirement 10.4).
 
 1. **The leading title**: a label, the title, a copy button beside it.
-2. **Other candidates**: a title and its own copy button per row. The section disappears when there are none.
-3. **Regenerate the titles**: `<button name="mode" value="titles">`, leaving the body as it is.
-4. **The post body**: a heading, then a `readonly` `<textarea>` holding the Markdown as it is.
+2. **Other candidates**: a title and its own copy button per row. The section
+   disappears when there are none.
+3. **Regenerate the titles**: `<button name="mode" value="titles">`, leaving the
+   body as it is.
+4. **The post body**: a heading, then a `readonly` `<textarea>` holding the
+   Markdown as it is.
    - `readonly` for three reasons: line breaks and Markdown are not lost to
      visual rendering. The text can be selected by hand when a copy button fails
      (requirement 9.3), and no label or explanation can slip in structurally
@@ -894,7 +908,8 @@ WantedBy=multi-user.target
 
 - The prompts live outside the code (`prompts/*.md`). The model name, the
   timeout and the output limit are environment variables (section 6).
-- The HTML templates, the CSS, the JS, the Python and the prompts are separate files (section 4).
+- The HTML templates, the CSS, the JS, the Python and the prompts are separate
+  files (section 4).
 - The application log goes to stderr and lands in the systemd journal, in a
   different file and a different process from the Apache log (requirement 10.3).
   The format is that of ai-digest:
@@ -906,7 +921,8 @@ WantedBy=multi-user.target
 
 ### 8.4 Usability
 
-- One input and one click yield the whole body and the title candidates (requirement 10.4).
+- One input and one click yield the whole body and the title candidates
+  (requirement 10.4).
 - Posting is "copy the body, paste, copy a title, paste, read, publish".
 - A single column layout, with no horizontal scrolling on a phone.
 

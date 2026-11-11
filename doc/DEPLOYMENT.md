@@ -48,8 +48,12 @@ Set `GENERATION_BACKEND`, `GENERATION_API_TOKEN`, `GENERATION_BASE_URL` and
 `GENERATION_MODEL`.
 None of them has a default, and the service refuses to start without them.
 The shipped example is filled in for Sakura AI Engine except for the token and
-the model; the README lists worked examples for other endpoints.
-`PORT` configures the development server and the `Procfile`; it does not rewrite the bundled systemd or Apache examples. Those two deployment files deliberately use explicit matching `8090` values. Keep `PORT=8090` when using them as shipped, or change the gunicorn bind and Apache upstream to the same chosen port before enabling the deployment.
+the model. The README lists worked examples for other endpoints.
+`PORT` configures the development server and the `Procfile`.
+The bundled systemd and Apache examples use matching `8090` values
+independently of this setting. Keep `PORT=8090` when using those files
+unchanged. To use another port, change the gunicorn bind and the Apache
+upstream to that port before enabling the deployment.
 
 The legacy `OPENAI_*` variables are refused. Check that none survives in the
 unit's `EnvironmentFile`, in the service account's shell profile or in the
@@ -70,7 +74,7 @@ endpoint together. A `Draft` is the success condition, not an HTTP 200.
 
 Review `deploy/sizu-writer.service` before copying it.
 Its user and paths must match the installation. Its explicit gunicorn bind port
-must match the Apache upstream and the deployment's intended `PORT`; the
+must match the Apache upstream and the deployment's intended `PORT`. The
 bundled examples use `8090` on both sides.
 
 ```sh
@@ -121,7 +125,7 @@ Run `apache2ctl configtest` before every Apache reload.
 
 The same-origin guard compares the browser Origin authority with the Host
 seen by Flask, so Apache must preserve the public Host. The bundled
-virtual-host example already sets `ProxyPreserveHost On`; do not remove it.
+virtual-host example already sets `ProxyPreserveHost On`. Do not remove it.
 TLS still terminates at Apache, so the application does not compare the
 Origin scheme with the backend request scheme.
 
@@ -161,7 +165,7 @@ sudo -u sizu .venv/bin/python cli.py generate --text "An API test memo."
 ```
 
 Supply the configured authentication option to the external `curl` command.
-The first two checks test liveness only; the third makes a real API request.
+The first two checks test liveness only. The third makes a real API request.
 Finally, generate a draft in the browser to test Apache, gunicorn and the API together.
 
 ## API integration
@@ -203,7 +207,17 @@ with a sentence before or after the object is refused rather than trimmed.
 Change one compatibility setting at a time and test it with `cli.py generate`.
 Leave `GENERATION_TEMPERATURE` empty when the selected model rejects that parameter.
 Use `prompt-json` when the endpoint or the model rejects `response_format`.
-Keep the timeout order `GENERATION_TIMEOUT` < gunicorn < Apache `ProxyTimeout`. With retries enabled, up to `GENERATION_TIMEOUT × (GENERATION_MAX_RETRIES + 1)` is the timeout budget inside request attempts, not a wall-clock upper bound. Size the outer timeouts for that attempt budget plus SDK-controlled retry backoff or `Retry-After` waits and operational margin.
+Keep the timeout order `GENERATION_TIMEOUT` < gunicorn < Apache
+`ProxyTimeout`. This ordering is a starting point, not a guarantee that
+the outer timeouts will outlast generation. The SDK applies
+`GENERATION_TIMEOUT` separately to connect, write, read and pool waits
+within each request attempt. The read timeout measures the wait between
+successive chunks of a response. Retries can add request attempts and
+SDK-controlled backoff or `Retry-After` waits. Multiplying
+`GENERATION_TIMEOUT` by the number of attempts therefore neither bounds
+nor predicts the total wall-clock time. Size the gunicorn and Apache
+timeouts using observed endpoint latency, retry behavior and operational
+margin.
 
 ### Request budget
 
@@ -231,7 +245,7 @@ text, at any log level.
 ### Calling sizu-writer from another system
 
 sizu-writer does not expose a public JSON API.
-`POST /generate` accepts a browser form and returns HTML; it is not a REST contract.
+`POST /generate` accepts a browser form and returns HTML. It is not a REST contract.
 
 For a local process, use the CLI's stable JSON output:
 
@@ -270,9 +284,9 @@ Changing the Apache virtual host requires a config test and reload.
 
 Rotate the API token by replacing it in `.env` and restarting the service.
 Never put the token in a command line, a repository, a template or an Apache log.
-Changing the endpoint means changing `GENERATION_BASE_URL`, `GENERATION_MODEL`
-and the token together, and restarting; there is no runtime switch and no
-fallback to a second endpoint.
+Changing the endpoint requires updating `GENERATION_BASE_URL`,
+`GENERATION_MODEL` and the token together, followed by a service restart.
+There is no runtime switch or fallback to a second endpoint.
 
 Generated drafts are not persisted on the server.
 Back up `.env` securely and back up any custom prompt directory.

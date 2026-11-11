@@ -665,7 +665,8 @@ check and is kept as itself on the `CompletionResult`.
    mechanically, and refuse it if normalization leaves no usable body.
 5. Validate the title fields, including the required `alternative_titles` list,
    then drop blank and duplicate candidates and keep at most `MAX_ALT_TITLES`.
-6. Return a `Draft`. Title regeneration keeps the already settled body unchanged, whatever the direction says.
+6. Return a `Draft`. Title regeneration keeps the already settled body
+   unchanged, whatever the direction says.
 
 It handles no HTTP client, no authentication, no base URL and no SDK exception.
 
