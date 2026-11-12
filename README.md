@@ -16,9 +16,8 @@
 12. [Repository Structure](#repository-structure)
 13. [The Japanese that stays](#the-japanese-that-stays)
 14. [Not implemented yet](#not-implemented-yet)
-15. [Contribution](#contribution)
-16. [Primary Branch](#primary-branch)
-17. [License](#license)
+15. [Primary Branch](#primary-branch)
+16. [License](#license)
 
 ## Overview
 
@@ -953,20 +952,6 @@ Possible future extensions that are not part of the current implementation:
 `PROMPT_RELOAD` is not a setting because no prompt cache exists. The prompts are
 read on every generation, so there is no cache behavior for such a setting to
 control.
-
-## Contribution
-
-Contributions are welcome. You can help by:
-
-- Improving the prompts, which is where the quality of the output actually lives
-- Adding the parts listed under [Not implemented yet](#not-implemented-yet)
-- Reporting bugs or feature requests
-
-Please follow the style used in this repository: module level header comments
-describing purpose, requirements and version history, English comments, and
-documentation updated together with the code. [doc/POLICY.md](doc/POLICY.md)
-states the rules, including the invariants a change must not cross — above all,
-that nothing in this system posts to the site or holds a credential for it.
 
 ## Primary Branch
 
