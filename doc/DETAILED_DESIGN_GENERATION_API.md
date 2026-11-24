@@ -639,9 +639,9 @@ max_tokens
 
 Both mean a truncated body, which is not offered as a draft. The list is
 explicit: a different non-empty value remains unchanged in the
-`CompletionResult`. Its log representation is preserved when it is a safe
-metadata token according to section 13. Otherwise the log displays `-`.
-Unknown non-empty finish reasons are not reclassified as truncation.
+`CompletionResult`. In the log, `stop` is recorded as `stop` and any other
+value is recorded as `other`. Unknown non-empty finish reasons are not
+reclassified as truncation.
 
 A response whose finish reason is missing or blank is refused before it
 reaches this list, as an invalid response rather than a truncated one — see
@@ -755,19 +755,26 @@ One line per answer:
 
 ```text
 generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp
-request_id=... model=... finish_reason=... prompt_tokens=... completion_tokens=...
+request_id=present model=... finish_reason=stop prompt_tokens=... completion_tokens=...
 total_tokens=... elapsed=... timeout=...
 ```
 
-All log field values are kept single-line. A metadata atom is retained only
-when its type is exactly `str`, its length is 1 to 128 characters, it starts
-with an ASCII letter or digit, and every later character is an ASCII letter,
-digit, `.`, `_`, `:`, `/`, `@`, `+` or `-`. Any other atom appears as `-`.
+All log field values are kept single-line. The backend, endpoint host,
+configured model and SDK exception class are retained as metadata atoms only
+when their type is exactly `str`, their length is 1 to 128 characters, they
+start with an ASCII letter or digit, and every later character is an ASCII
+letter, digit, `.`, `_`, `:`, `/`, `@`, `+` or `-`. Any other atom appears as
+`-`.
+
+The logged model comes from `GENERATION_MODEL`, not the response. The upstream
+request id is `present` for a nonempty exact string and `-` otherwise. The
+finish reason is `stop` for the exact string `stop` and `other` otherwise.
+Raw upstream request ids, model names and finish reasons are never logged.
 Usage counters are recorded only for exact integers from 0 to 2^63 - 1.
 Invalid counters appear as `None`. Elapsed seconds and timeout are recorded
 only as finite nonnegative floats or bounded nonnegative integers. Others
 appear as `-`.
-Normal response identifiers, model names and finish reasons remain visible.
+
 These restrictions apply at the log boundary, not to `CompletionResult`.
 
 `elapsed` is the wall-clock time measured on this side around the SDK
@@ -791,19 +798,19 @@ provider's own response validation failures, and raise the matching
 string built by `_failure_diagnostic()`:
 
 ```text
-generation failure: backend=... endpoint_host=... model=... error=... status=... request_id=... elapsed=... timeout=...
+generation failure: backend=... endpoint_host=... model=... error=... status=... request_id=present elapsed=... timeout=...
 ```
 
 `error` is the SDK exception's class name, not its raw message, passed
 through the same metadata atom rule as INFO fields. `status` is an exact
-integer from 100 to 599, or `-`. The `request_id` field is the upstream identifier
-only when it meets the metadata atom rule, otherwise `-`. Backend, host and
-model are also formatted as safe single-line atoms. With the shipped
-zero-retry default, `elapsed` close to `timeout` is useful evidence that the
-single attempt had little margin. With retries enabled, `elapsed` may also
-contain earlier attempts and retry waits, so the pair alone does not identify
-the failing attempt or distinguish endpoint slowness from a connection
-failure.
+integer from 100 to 599, or `-`. The `request_id` field indicates only the
+presence of a nonempty upstream string. It is `present` or `-`, never the
+identifier itself. Backend, host and the configured model retain the same
+single-line atom checks as on success. With the shipped zero-retry default,
+`elapsed` close to `timeout` is useful operational context. With retries
+enabled, elapsed may also contain earlier attempts and retry waits, so the
+pair alone does not identify the failing attempt or distinguish endpoint
+slowness from a connection failure.
 
 The entry point that catches the error — `app.py`'s `errorhandler(SizuWriterError)`
 for the Web application, `cli.py`'s `except SizuWriterError` for the command
@@ -1008,9 +1015,10 @@ reason, an unknown non-empty finish reason surviving unchanged onto the
 diagnostic carried on the raised exception, and that the provider itself
 never logs the failure — `sizu_writer.providers.openai_compatible`'s logger is
 asserted not called on every mapped failure.
-It also verifies that valid provider metadata stays visible, while unsafe
-metadata tokens, malformed usage counters, invalid HTTP statuses and
-non-finite log measurements cannot create forged log fields or lines.
+It also verifies that the configured model, fixed finish reason class and
+request id presence replace free-form upstream strings in logs, including
+strings that satisfy the atom format. Malformed usage counters, invalid HTTP
+statuses and invalid measurements cannot create forged log fields or lines.
 
 `tests/test_web.py` additionally covers a single request reference: the same
 id the Web application establishes before calling into generation is what a

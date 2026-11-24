@@ -63,8 +63,8 @@
 #    - Keep the token out of a failure diagnostic.
 #    - Do not log a provider failure. The entry point logs it once instead.
 #    - Keep raw upstream error text out of a failure diagnostic.
-#    - Keep valid metadata visible and sanitize malformed response log fields.
-#    - Prevent upstream request ids and HTTP statuses from forging failure logs.
+#    - Classify upstream log metadata without exposing private strings.
+#    - Record request id presence and reject malformed HTTP status values.
 #    - Hand the SDK a client that never follows a redirect.
 #    - Refuse every redirect status without leaking its target or body.
 #    - Drop the retry hint from 3xx responses only.
@@ -75,8 +75,8 @@
 #  - Standard library only (the openai package is stubbed, never imported)
 #
 #  Version History:
-#  v1.3 2026-11-11
-#       Cover log metadata, refused redirects and per-operation client cleanup.
+#  v1.3 2026-11-24
+#       Cover log privacy, refused redirects and per-operation client cleanup.
 #  v1.2 2026-09-21
 #       Cover sanitized provider diagnostics without provider-side failure logging.
 #  v1.1 2026-09-09
@@ -491,8 +491,11 @@ class LogTest(ProviderTest):
 
         recorded = "\n".join(logged.output)
         self.assertIn("endpoint_host=api.ai.sakura.ad.jp", recorded)
-        self.assertIn("request_id=resp_1", recorded)
-        self.assertIn("model=served-model", recorded)
+        self.assertIn("request_id=present", recorded)
+        self.assertIn("model=a-model", recorded)
+        self.assertIn("finish_reason=stop", recorded)
+        self.assertNotIn("resp_1", recorded)
+        self.assertNotIn("served-model", recorded)
         self.assertNotIn(TOKEN, recorded)
         self.assertNotIn("secret text", recorded)
 
@@ -542,7 +545,8 @@ class LogTest(ProviderTest):
         diagnostic = refused.exception.diagnostic
         self.assertIn("error=FakeStatusError", diagnostic)
         self.assertIn("status=500", diagnostic)
-        self.assertIn("request_id=req_1", diagnostic)
+        self.assertIn("request_id=present", diagnostic)
+        self.assertNotIn("req_1", diagnostic)
         self.assertIn("endpoint_host=api.ai.sakura.ad.jp", diagnostic)
         self.assertIn("model=a-model", diagnostic)
         self.assertIn("elapsed=", diagnostic)
@@ -564,7 +568,7 @@ class LogTest(ProviderTest):
         self.assertEqual(1, len(logged.output))
         recorded = logged.output[0]
         self.assertIn(
-            "request_id=- model=- finish_reason=- prompt_tokens=11 "
+            "request_id=present model=a-model finish_reason=other prompt_tokens=11 "
             "completion_tokens=22 total_tokens=33", recorded)
         for forbidden in ("SENSITIVE_MODEL", "FORGED_MODEL", "FORGED_ID",
                           "FORGED_REASON", "SECRET_BODY", TOKEN, "\r", "\n"):
@@ -573,7 +577,7 @@ class LogTest(ProviderTest):
         self.assertEqual("req_1\nFORGED_ID", result.request_id)
         self.assertEqual("stop\r\nFORGED_REASON", result.finish_reason)
 
-    def test_preserves_safe_unknown_finish_reason_and_identifiers_in_log(self):
+    def test_classifies_unknown_finish_reason_without_logging_identifiers(self):
         usage = SimpleNamespace(prompt_tokens=0, completion_tokens=12,
                                 total_tokens=2**63 - 1)
         module = fake_openai(answer(
@@ -585,11 +589,16 @@ class LogTest(ProviderTest):
 
         self.assertEqual(1, len(logged.output))
         self.assertIn(
-            "request_id=req_abc-123 model=provider/model-v1 "
-            "finish_reason=provider-specific prompt_tokens=0 "
+            "request_id=present model=a-model "
+            "finish_reason=other prompt_tokens=0 "
             "completion_tokens=12 total_tokens=9223372036854775807",
             logged.output[0])
         self.assertEqual("provider-specific", result.finish_reason)
+        self.assertEqual("provider/model-v1", result.model)
+        self.assertEqual("req_abc-123", result.request_id)
+        self.assertNotIn("provider/model-v1", logged.output[0])
+        self.assertNotIn("req_abc-123", logged.output[0])
+        self.assertNotIn("provider-specific", logged.output[0])
 
     def test_rejects_invalid_usage_metadata_in_log_only(self):
         fields = ("prompt_tokens", "completion_tokens", "total_tokens")
@@ -654,7 +663,7 @@ class LogTest(ProviderTest):
                     OpenAICompatibleProvider().complete([], config)
 
         diagnostic = refused.exception.diagnostic
-        for expected in ("model=-", "status=-", "request_id=-",
+        for expected in ("model=-", "status=-", "request_id=present",
                          "error=FakeStatusError", "elapsed=", "timeout=120.0"):
             self.assertIn(expected, diagnostic)
         for forbidden in ("FORGED_FAILURE", "FORGED_STATUS", "FORGED_CONFIG",
@@ -665,8 +674,73 @@ class LogTest(ProviderTest):
         with self.assertRaises(UpstreamStatusError) as ordinary:
             self.raise_from_sdk(FakeStatusError(429))
 
-        self.assertIn("status=429 request_id=req_1",
+        self.assertIn("status=429 request_id=present",
                       ordinary.exception.diagnostic)
+        self.assertNotIn("req_1", ordinary.exception.diagnostic)
+
+    def test_excludes_private_strings_from_success_log_metadata(self):
+        for value in (TOKEN, "PRIVATE_MESSAGE", "private@example.com"):
+            with self.subTest(value=value):
+                module = fake_openai(answer(
+                    content="{}", model=value, identifier=value,
+                    finish_reason=value))
+
+                with self.assertLogs("sizu_writer.providers",
+                                     level=logging.INFO) as logged:
+                    result = self.complete(module)
+
+                self.assertEqual(1, len(logged.output))
+                recorded = logged.output[0]
+                self.assertNotIn(value, recorded)
+                self.assertIn(
+                    "request_id=present model=a-model finish_reason=other ",
+                    recorded)
+                self.assertEqual(value, result.model)
+                self.assertEqual(value, result.request_id)
+                self.assertEqual(value, result.finish_reason)
+                self.assertEqual("{}", result.content)
+                self.assertEqual(1, module.calls["closed"])
+
+    def test_excludes_private_strings_from_failure_request_ids(self):
+        for value in (TOKEN, "PRIVATE_MESSAGE", "private@example.com"):
+            with self.subTest(value=value):
+                error = FakeStatusError(429, value)
+                error.request_id = value
+
+                with mock.patch.object(openai_compatible.logger,
+                                       "error") as error_log:
+                    with self.assertRaises(UpstreamStatusError) as refused:
+                        self.raise_from_sdk(error)
+
+                diagnostic = refused.exception.diagnostic
+                self.assertNotIn(value, diagnostic)
+                self.assertIn("model=a-model", diagnostic)
+                self.assertIn("status=429 request_id=present", diagnostic)
+                self.assertEqual(UpstreamStatusError.user_message,
+                                 str(refused.exception))
+                error_log.assert_not_called()
+
+    def test_reports_missing_or_non_string_request_ids(self):
+        for value, expected in (("", "-"), (None, "-"), (17, "-"),
+                                (True, "-"), (" ", "present")):
+            with self.subTest(value=value):
+                result = CompletionResult(content="{}", request_id=value,
+                                          finish_reason="stop")
+                with self.assertLogs("sizu_writer.providers",
+                                     level=logging.INFO) as logged:
+                    log_response(settings(), result)
+                self.assertEqual(1, len(logged.output))
+                self.assertIn("request_id={0} model=a-model ".format(expected),
+                              logged.output[0])
+                self.assertIn("finish_reason=stop ", logged.output[0])
+                self.assertIs(value, result.request_id)
+
+                error = FakeStatusError(429)
+                error.request_id = value
+                with self.assertRaises(UpstreamStatusError) as refused:
+                    self.raise_from_sdk(error)
+                self.assertIn("status=429 request_id={0} ".format(expected),
+                              refused.exception.diagnostic)
 
 
 if __name__ == "__main__":

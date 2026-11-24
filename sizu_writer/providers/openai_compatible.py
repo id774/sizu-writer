@@ -34,8 +34,9 @@
 #  - openai
 #
 #  Version History:
-#  v1.3 2026-11-11
-#       Sanitize failure diagnostics, refuse redirects and close each client.
+#  v1.3 2026-11-24
+#       Protect failure diagnostics from sensitive upstream metadata,
+#       refuse redirects and close each client.
 #  v1.2 2026-09-21
 #       Carry sanitized provider failure diagnostics to the entry point for one log.
 #  v1.1 2026-09-09
@@ -55,15 +56,13 @@ from sizu_writer.errors import (InternalError, InvalidResponseError,
                                 UpstreamTimeoutError)
 from sizu_writer.providers import (CompletionResult, _log_atom,
                                     _log_http_status, _log_measure,
-                                    log_response)
+                                    _log_request_id_presence, log_response)
 
 logger = logging.getLogger(__name__)
 
 # Finish reasons that mean the output hit its limit. A truncated body is
-# not offered as a draft. The list is explicit: an unknown reason from a
-# compatible endpoint stays unchanged in the CompletionResult, and only a
-# safe metadata token is shown in the log, rather than guessed to mean
-# the same as 'length'.
+# not offered as a draft. An unknown reason remains in CompletionResult,
+# but the log carries only a fixed class, not the upstream string.
 TRUNCATED_REASONS = ("length", "max_tokens")
 
 
@@ -177,6 +176,8 @@ class OpenAICompatibleProvider:
         the entry point's log can say which happened. The raw exception
         message and any upstream response body are never included. Only the
         exception's class name is.
+        The upstream request id is represented by its presence only, never
+        by the identifier itself.
 
         The elapsed seconds sit next to the configured timeout as operational
         context. GENERATION_TIMEOUT is a per-attempt setting, while elapsed
@@ -194,7 +195,7 @@ class OpenAICompatibleProvider:
             _log_atom(config.generation_model),
             _log_atom(type(error).__name__),
             _log_http_status(status_code),
-            _log_atom(getattr(error, "request_id", None)),
+            _log_request_id_presence(getattr(error, "request_id", None)),
             _log_measure(self._elapsed(started)),
             _log_measure(config.generation_timeout),
         )

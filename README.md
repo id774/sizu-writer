@@ -743,9 +743,9 @@ reproduced from the command line reads the same as the one from the screen, once
 the reference id is set aside:
 
 ```
-2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=... model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=... elapsed=47.2 timeout=120.0
-2026-08-05 09:42:44,913 ERROR app: UpstreamStatusError (reference 3f9c1a72): generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
-2026-08-05 09:42:44,913 ERROR cli: UpstreamStatusError: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=... elapsed=0.4 timeout=120.0
+2026-08-05 09:42:01,727 INFO  sizu_writer.providers: generation response: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp request_id=present model=... finish_reason=stop prompt_tokens=... completion_tokens=... total_tokens=... elapsed=47.2 timeout=120.0
+2026-08-05 09:42:44,913 ERROR app: UpstreamStatusError (reference 3f9c1a72): generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=present elapsed=0.4 timeout=120.0
+2026-08-05 09:42:44,913 ERROR cli: UpstreamStatusError: generation failure: backend=openai-compatible endpoint_host=api.ai.sakura.ad.jp model=... error=APIStatusError status=429 request_id=present elapsed=0.4 timeout=120.0
 ```
 
 The success line still comes from the provider, `sizu_writer.providers`, which
@@ -756,21 +756,21 @@ second time. `reference` is the Web application's 8-hex error-page reference id,
 shown next to the exception's class name, so a person reporting an error page
 and an operator reading the log are looking at the same event. `cli.py` has no
 Web request to attach one to, so its failure lines carry no `(reference ...)` at
-all. `request_id` is a separate field inside the diagnostic: it is the id the
-upstream endpoint itself assigned to the exchange, and it is not a stand-in for
-the Web reference id.
+all. `request_id` is a separate field inside the diagnostic. It is `present`
+when the upstream endpoint supplies a nonempty string and `-` otherwise.
+It does not reveal the upstream id or replace the Web reference id.
 
 The token, memo, prompts, generated body, titles, raw upstream exception text
-and raw upstream response body appear at no level. What is left is the shape of
-the exchange, which is what matches a run against the usage the endpoint
-counted.
+and raw upstream response body appear at no level. The log carries the shape
+of the exchange and usage counts for operational diagnosis.
 
-Provider-supplied metadata is checked before it reaches an operational log.
-Only bounded ASCII identifiers are printed as log field values. Unsafe
-identifiers are replaced with `-`, and malformed usage counters with `None`.
-HTTP statuses are numeric only within 100 to 599. Normal identifiers and
-counts remain visible, and no generated content or raw exception text is
-added. This changes logs, not the returned draft or the request behavior.
+The log uses the configured model, a fixed finish reason class (`stop` or
+`other`) and upstream request id presence (`present` or `-`). It never records
+free-form upstream model names, finish reasons or request ids, even when they
+fit the identifier format. Other log atoms retain the bounded ASCII checks.
+Malformed usage counters become `None`, and HTTP statuses are numeric only
+within 100 to 599. These rules change logs, not the returned draft or the
+request behavior.
 
 ## Tests
 

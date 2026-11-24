@@ -34,8 +34,8 @@
 #  - Standard library only. A provider module brings its own client
 #
 #  Version History:
-#  v1.2 2026-11-11
-#       Sanitize provider response metadata before writing success logs.
+#  v1.2 2026-11-24
+#       Classify upstream log metadata without exposing sensitive strings.
 #  v1.1 2026-09-21
 #       Carry provider-selection diagnostics through InternalError without logging twice.
 #  v1.0 2026-08-05
@@ -141,6 +141,11 @@ def _log_atom(value: object) -> str:
     ) is not None else "-"
 
 
+def _log_request_id_presence(value: object) -> str:
+    """ Report whether an upstream request id is present without logging it. """
+    return "present" if type(value) is str and value else "-"
+
+
 def _log_count(value: object) -> Optional[int]:
     """ Keep a realistic nonnegative usage integer. Never coerce values. """
     return value if type(value) is int and 0 <= value <= 2**63 - 1 else None
@@ -164,15 +169,13 @@ def log_response(config: Config, result: CompletionResult) -> None:
     """
     Record the shape of one answer, and none of its content.
 
-    The memo, the prompt, the generated body and the token stay out of
-    the log at every level. What is left is what an operator needs to
-    match a run against the usage counted by the provider.
+    Use the configured model, a fixed finish reason class and the presence
+    of an upstream request id. A syntactically valid upstream string can
+    still contain private input or a credential.
 
-    The elapsed seconds are part of that shape. They measure the whole
-    provider SDK call. With retries disabled they can be compared directly
-    with the per-attempt GENERATION_TIMEOUT as an operational margin. With
-    retries enabled they may include several attempts and retry waits, so
-    the pair alone does not describe one attempt.
+    Keep usage counts and operation elapsed time for operational diagnosis.
+    GENERATION_TIMEOUT bounds each SDK wait, not the whole operation.
+    With retries enabled, elapsed may include several attempts and waits.
     """
     logger.info(
         "generation response: backend=%s endpoint_host=%s request_id=%s "
@@ -180,9 +183,10 @@ def log_response(config: Config, result: CompletionResult) -> None:
         "total_tokens=%s elapsed=%s timeout=%s",
         _log_atom(config.generation_backend),
         _log_atom(config.endpoint_host),
-        _log_atom(result.request_id),
-        _log_atom(result.model),
-        _log_atom(result.finish_reason),
+        _log_request_id_presence(result.request_id),
+        _log_atom(config.generation_model),
+        ("stop" if type(result.finish_reason) is str
+         and result.finish_reason == "stop" else "other"),
         _log_count(result.prompt_tokens),
         _log_count(result.completion_tokens),
         _log_count(result.total_tokens),

@@ -163,9 +163,12 @@ The settings decide where a memo is sent, so they are read strictly.
   by name, so that a stale value cannot decide where a memo goes.
 - Do not vary the number of API requests silently. Retries are the SDK's, and
   the count is a setting an operator can see.
-- Do not log the API token, the memo, the prompts or the generated text. What
-  a log line carries is the shape of the exchange: the backend, the endpoint
-  host, the model, the request id, the finish reason and the token counts.
+- Do not log the API token, the memo, the prompts or the generated text. Record
+  the shape of the exchange: the backend, endpoint host, configured model,
+  upstream request id presence, fixed finish reason class and token counts.
+  Do not log free-form upstream model names, finish reasons or request ids,
+  even when they have a valid identifier format. The finish reason class is
+  `stop` or `other`. An upstream request id is `present` or `-` in the log.
 - Do not accept part of an answer. A structured answer is the whole response,
   or the whole inside of one code fence. An object cut out of surrounding
   prose is refused, because that is the heuristic which lets a remark become
