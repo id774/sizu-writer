@@ -1,8 +1,8 @@
 sizu-writer Repository Version History
 ======================================
 
-v1.1.1 (Release Date: TBD)
---------------------------
+v1.1.1 (2026-11-24)
+-------------------
 - Clarify repository policy governance and agent pull request workflows.
 - Preserve literal code fences and indented-code blank lines in post bodies.
 - Correct CLI guidance for title-only body files and invalid JSON diagnostics.
