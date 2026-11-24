@@ -422,18 +422,20 @@ The provider maps SDK timeout, connection and status failures to the repository'
 upstream exception types. It also refuses an answer with no choice, no usable
 content, or a truncation finish reason before returning `CompletionResult` to
 `generator.py`. None of these failures are logged by the provider itself: each
-one carries a sanitized diagnostic (the backend, the endpoint host, the model,
-the exception's class name, the HTTP status when there is one, the upstream
-request id, the elapsed seconds and the configured timeout, never the raw
+one carries a sanitized diagnostic (the backend, the endpoint host, the configured
+model, the exception's class name, the HTTP status when there is one, upstream
+request id presence, the elapsed seconds and the configured timeout, never the raw
 exception message or an upstream response body) on the `SizuWriterError`
 subclass it raises, and `app.py` or `cli.py` logs that diagnostic once.
 
-Provider log fields are sanitized at the logging boundary. Metadata atoms
-must be ASCII tokens of 1 to 128 characters, using letters, digits and the
-specified punctuation. Unsafe values are displayed as `-`. Usage counters
-must be exact nonnegative integers no larger than 2^63 - 1, or they are
-logged as `None`. Invalid HTTP statuses and non-finite measurements become
-`-`. Ordinary valid identifiers, statuses and counts are retained.
+Provider log fields are sanitized at the logging boundary. Log the configured
+model rather than the model reported by the endpoint. The upstream request id
+is recorded as `present` for a nonempty string and `-` otherwise. The finish
+reason is classified as `stop` or `other`. Do not log the raw upstream strings.
+The backend, endpoint host, configured model and exception class retain the
+existing bounded ASCII atom checks. Usage counters must be exact nonnegative
+integers no larger than 2^63 - 1, or they are logged as `None`. Invalid HTTP
+statuses and invalid measurements become `-`.
 
 This affects log presentation and failure diagnostics only. The fields in
 `CompletionResult`, response acceptance, generated drafts and the number
